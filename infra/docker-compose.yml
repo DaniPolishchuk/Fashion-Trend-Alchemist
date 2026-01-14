@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:16-alpine
+    container_name: fashion-postgres
+    environment:
+      POSTGRES_USER: ${PGUSER:-postgres}
+      POSTGRES_PASSWORD: ${PGPASSWORD:-postgres}
+      POSTGRES_DB: ${PGDATABASE:-fashion_db}
+    ports:
+      - "${PGPORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fashion-network
+
+  # SeaweedFS Master
+  seaweed-master:
+    image: chrislusf/seaweedfs:latest
+    container_name: fashion-seaweed-master
+    command: "master -ip=seaweed-master -port=9333"
+    ports:
+      - "9333:9333"
+    networks:
+      - fashion-network
+
+  # SeaweedFS Volume Server
+  seaweed-volume:
+    image: chrislusf/seaweedfs:latest
+    container_name: fashion-seaweed-volume
+    command: 'volume -mserver="seaweed-master:9333" -port=8080 -ip=seaweed-volume'
+    ports:
+      - "8080:8080"
+    volumes:
+      - seaweed_data:/data
+    depends_on:
+      - seaweed-master
+    networks:
+      - fashion-network
+
+  # SeaweedFS S3 Gateway
+  seaweed-s3:
+    image: chrislusf/seaweedfs:latest
+    container_name: fashion-seaweed-s3
+    command: 's3 -filer="seaweed-filer:8888" -config=/etc/seaweedfs/s3.json'
+    ports:
+      - "${S3_PORT:-8333}:8333"
+    depends_on:
+      - seaweed-filer
+    volumes:
+      - ./s3-config.json:/etc/seaweedfs/s3.json
+    networks:
+      - fashion-network
+
+  # SeaweedFS Filer
+  seaweed-filer:
+    image: chrislusf/seaweedfs:latest
+    container_name: fashion-seaweed-filer
+    command: 'filer -master="seaweed-master:9333" -ip=seaweed-filer'
+    ports:
+      - "8888:8888"
+    depends_on:
+      - seaweed-master
+      - seaweed-volume
+    networks:
+      - fashion-network
+
+  # pgAdmin (optional - for database management)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: fashion-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@fashion.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - fashion-network
+    profiles:
+      - admin
+
+volumes:
+  postgres_data:
+  seaweed_data:
+
+networks:
+  fashion-network:
+    driver: bridge

@@ -1,0 +1,33 @@
+{
+  "name": "@fashion/db",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "generate": "drizzle-kit generate",
+    "migrate": "drizzle-kit migrate",
+    "studio": "drizzle-kit studio",
+    "push": "drizzle-kit push"
+  },
+  "dependencies": {
+    "@fashion/config": "workspace:*",
+    "@fashion/types": "workspace:*",
+    "drizzle-orm": "^0.29.2",
+    "pg": "^8.11.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.6",
+    "@types/pg": "^8.10.9",
+    "drizzle-kit": "^0.20.9",
+    "typescript": "^5.3.3"
+  }
+}
