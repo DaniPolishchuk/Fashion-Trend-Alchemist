@@ -11,20 +11,30 @@ import type { TopBottomQuery } from '@fashion/types';
  */
 interface TopBottomRow {
   kind: 'top' | 'bottom';
-  article_id: number;
-  prod_name: string;
-  product_type_name: string;
+  article_id: string;
+  virality_score: number;
   units_sold: string;
   revenue: string;
+  detail_desc: string | null;
+  product_type: string;
+  product_group: string | null;
+  pattern_style: string | null;
+  specific_color: string | null;
+  color_intensity: string | null;
+  color_family: string | null;
+  product_family: string | null;
+  customer_segment: string | null;
+  style_concept: string | null;
+  fabric_type_base: string | null;
 }
 
 /**
  * Fetch top and bottom sellers by product type
  * 
  * This function executes an optimized SQL query that:
- * 1. Filters articles by product type (name or number)
+ * 1. Filters articles by product type
  * 2. Aggregates transactions to calculate units sold and revenue
- * 3. Ranks articles using window functions (RANK OVER)
+ * 3. Ranks articles using window functions (ROW_NUMBER OVER)
  * 4. Returns top N and bottom N performers
  * 5. Includes articles with zero sales when includeZero is true
  * 
@@ -34,21 +44,19 @@ interface TopBottomRow {
  * @example
  * ```typescript
  * const result = await fetchTopBottomByProductType({
- *   productTypeName: 'Sweater',
+ *   productType: 'Sweater',
  *   metric: 'units',
  *   limit: 500,
  *   includeZero: true
  * });
- * console.log(`Top seller: ${result.top[0].prodName}`);
+ * console.log(`Top seller: ${result.top[0].detailDesc}`);
  * ```
  */
 export async function fetchTopBottomByProductType(query: TopBottomQuery) {
   const {
-    productTypeName,
-    productTypeNo,
+    productType,
     startDate,
     endDate,
-    salesChannelId,
     metric = 'units',
     limit = 500,
     includeZero = true,
@@ -59,16 +67,10 @@ export async function fetchTopBottomByProductType(query: TopBottomQuery) {
   const params: any[] = [];
   let paramIndex = 0;
 
-  // Filter by product type name (exact match)
-  if (productTypeName) {
-    articleWhereClauses.push(`a.product_type_name = $${++paramIndex}`);
-    params.push(productTypeName);
-  }
-
-  // Filter by product type number (alternative to name)
-  if (productTypeNo != null) {
-    articleWhereClauses.push(`a.product_type_no = $${++paramIndex}`);
-    params.push(productTypeNo);
+  // Filter by product type (exact match)
+  if (productType) {
+    articleWhereClauses.push(`a.product_type = $${++paramIndex}`);
+    params.push(productType);
   }
 
   // Build dynamic WHERE clauses for transaction filtering
@@ -76,19 +78,13 @@ export async function fetchTopBottomByProductType(query: TopBottomQuery) {
 
   // Filter by date range (inclusive start, exclusive end)
   if (startDate) {
-    transactionWhereClauses.push(`t.t_dat >= $${++paramIndex}`);
+    transactionWhereClauses.push(`t.t_date >= $${++paramIndex}::date`);
     params.push(startDate);
   }
 
   if (endDate) {
-    transactionWhereClauses.push(`t.t_dat < $${++paramIndex}`);
+    transactionWhereClauses.push(`t.t_date < $${++paramIndex}::date`);
     params.push(endDate);
-  }
-
-  // Filter by sales channel (1 = online, 2 = retail)
-  if (salesChannelId != null) {
-    transactionWhereClauses.push(`t.sales_channel_id = $${++paramIndex}`);
-    params.push(salesChannelId);
   }
 
   // Construct transaction filter SQL
@@ -126,22 +122,27 @@ export async function fetchTopBottomByProductType(query: TopBottomQuery) {
    *   - Uses LEFT/INNER JOIN based on includeZero setting
    *   - COALESCE ensures zero values for articles without transactions
    * 
-   * CTE 3 (ranked):
-   *   - Assigns descending rank (rdesc) for top sellers
-   *   - Assigns ascending rank (rasc) for bottom sellers
-   *   - RANK() handles ties by giving same rank to equal values
+   * CTE 3 (stats):
+   *   - Calculates min and max values of the ranking metric
+   *   - Used for virality_score normalization (0-100 scale)
+   * 
+   * CTE 4 (ranked):
+   *   - Assigns descending rank (rn_desc) for top sellers
+   *   - Assigns ascending rank (rn_asc) for bottom sellers
+   *   - ROW_NUMBER() for stable ordering without ties
    *   - Secondary sort by units_sold/revenue for stability
    * 
    * Final SELECT:
    *   - UNION ALL combines top and bottom results
-   *   - Filters using rdesc <= limit for top sellers
-   *   - Filters using rasc <= limit for bottom sellers
+   *   - Filters using rn_desc <= limit for top sellers
+   *   - Filters using rn_asc <= limit for bottom sellers
    *   - Joins back to articles table for display fields
+   *   - Calculates virality_score (0-100) using min-max normalization
    *   - Orders by kind (bottom first, top second) then metric
    */
   const query_sql = `
     WITH filtered_articles AS (
-      SELECT a.article_id, a.prod_name, a.product_type_name
+      SELECT a.article_id, a.detail_desc, a.product_type
       FROM articles a
       ${articleFilter}
     ),
@@ -156,42 +157,82 @@ export async function fetchTopBottomByProductType(query: TopBottomQuery) {
         ${txFilter}
       GROUP BY fa.article_id
     ),
+    stats AS (
+      SELECT 
+        MIN(a.${rankColumn}) AS min_metric,
+        MAX(a.${rankColumn}) AS max_metric
+      FROM agg a
+    ),
     ranked AS (
       SELECT 
         a.article_id,
         a.units_sold,
         a.revenue,
-        RANK() OVER (
-          ORDER BY a.${rankColumn} DESC, a.units_sold DESC
-        ) AS rdesc,
-        RANK() OVER (
-          ORDER BY a.${rankColumn} ASC, a.revenue ASC
-        ) AS rasc
+        ROW_NUMBER() OVER (
+          ORDER BY a.${rankColumn} DESC, a.units_sold DESC, a.revenue DESC, a.article_id ASC
+        ) AS rn_desc,
+        ROW_NUMBER() OVER (
+          ORDER BY a.${rankColumn} ASC, a.revenue ASC, a.units_sold ASC, a.article_id ASC
+        ) AS rn_asc
       FROM agg a
     )
     SELECT 
       'top' AS kind,
       r.article_id,
+      CASE
+        WHEN s.max_metric = s.min_metric THEN 100.0
+        ELSE LEAST(100.0, GREATEST(0.0,
+          100.0 * (r.${rankColumn}::numeric - s.min_metric::numeric) 
+                / NULLIF(s.max_metric::numeric - s.min_metric::numeric, 0)
+        ))
+      END AS virality_score,
       r.units_sold,
       r.revenue,
-      ar.prod_name,
-      ar.product_type_name
+      COALESCE(ar.detail_desc, 'Unknown') AS detail_desc,
+      ar.product_type,
+      ar.product_group,
+      ar.pattern_style,
+      ar.specific_color,
+      ar.color_intensity,
+      ar.color_family,
+      ar.product_family,
+      ar.customer_segment,
+      ar.style_concept,
+      ar.fabric_type_base
     FROM ranked r
+    CROSS JOIN stats s
     JOIN articles ar ON ar.article_id = r.article_id
-    WHERE r.rdesc <= $${limitParamIndex}
+    WHERE r.rn_desc <= $${limitParamIndex}
     
     UNION ALL
     
     SELECT 
       'bottom' AS kind,
       r.article_id,
+      CASE
+        WHEN s.max_metric = s.min_metric THEN 100.0
+        ELSE LEAST(100.0, GREATEST(0.0,
+          100.0 * (r.${rankColumn}::numeric - s.min_metric::numeric) 
+                / NULLIF(s.max_metric::numeric - s.min_metric::numeric, 0)
+        ))
+      END AS virality_score,
       r.units_sold,
       r.revenue,
-      ar.prod_name,
-      ar.product_type_name
+      COALESCE(ar.detail_desc, 'Unknown') AS detail_desc,
+      ar.product_type,
+      ar.product_group,
+      ar.pattern_style,
+      ar.specific_color,
+      ar.color_intensity,
+      ar.color_family,
+      ar.product_family,
+      ar.customer_segment,
+      ar.style_concept,
+      ar.fabric_type_base
     FROM ranked r
+    CROSS JOIN stats s
     JOIN articles ar ON ar.article_id = r.article_id
-    WHERE r.rasc <= $${limitParamIndex}
+    WHERE r.rn_asc <= $${limitParamIndex}
     
     ORDER BY kind ASC, ${rankColumn} DESC
   `;
@@ -202,21 +243,41 @@ export async function fetchTopBottomByProductType(query: TopBottomQuery) {
 
   // Partition results into top and bottom arrays
   const top: Array<{
-    articleId: number;
-    prodName: string;
-    productTypeName: string;
+    articleId: string;
+    viralityScore: number;
     unitsSold: number;
     revenue: number;
     imageKey: string;
+    detailDesc: string | null;
+    productType: string;
+    productGroup: string | null;
+    patternStyle: string | null;
+    specificColor: string | null;
+    colorIntensity: string | null;
+    colorFamily: string | null;
+    productFamily: string | null;
+    customerSegment: string | null;
+    styleConcept: string | null;
+    fabricTypeBase: string | null;
   }> = [];
 
   const bottom: Array<{
-    articleId: number;
-    prodName: string;
-    productTypeName: string;
+    articleId: string;
+    viralityScore: number;
     unitsSold: number;
     revenue: number;
     imageKey: string;
+    detailDesc: string | null;
+    productType: string;
+    productGroup: string | null;
+    patternStyle: string | null;
+    specificColor: string | null;
+    colorIntensity: string | null;
+    colorFamily: string | null;
+    productFamily: string | null;
+    customerSegment: string | null;
+    styleConcept: string | null;
+    fabricTypeBase: string | null;
   }> = [];
 
   // Transform and partition rows
@@ -230,12 +291,22 @@ export async function fetchTopBottomByProductType(query: TopBottomQuery) {
     const imageKey = `${folder}/${articleIdStr}.jpg`;
 
     const item = {
-      articleId: Number(row.article_id),
-      prodName: row.prod_name,
-      productTypeName: row.product_type_name,
+      articleId: row.article_id,
+      viralityScore: row.virality_score,
       unitsSold: Number(row.units_sold),
       revenue: Number(row.revenue),
       imageKey,
+      detailDesc: row.detail_desc,
+      productType: row.product_type,
+      productGroup: row.product_group,
+      patternStyle: row.pattern_style,
+      specificColor: row.specific_color,
+      colorIntensity: row.color_intensity,
+      colorFamily: row.color_family,
+      productFamily: row.product_family,
+      customerSegment: row.customer_segment,
+      styleConcept: row.style_concept,
+      fabricTypeBase: row.fabric_type_base,
     };
 
     if (row.kind === 'top') {

@@ -10,17 +10,14 @@ export type SalesMetric = 'units' | 'revenue';
 
 /**
  * Article sales aggregation with performance metrics
- * Includes image reference for display purposes
+ * Includes image reference for display purposes and all article attributes
  */
 export interface ArticleSales {
   /** Unique article identifier */
-  articleId: number;
+  articleId: string;
   
-  /** Product display name */
-  prodName: string;
-  
-  /** Product type category name */
-  productTypeName: string;
+  /** Virality score (0-100 float) based on min-max normalization */
+  viralityScore: number;
   
   /** Total units sold across all transactions */
   unitsSold: number;
@@ -31,6 +28,39 @@ export interface ArticleSales {
   /** S3-compatible image key (folder/filename pattern) */
   imageKey: string;
   
+  /** Product detail description */
+  detailDesc: string | null;
+  
+  /** Product type category */
+  productType: string;
+  
+  /** Product group */
+  productGroup: string | null;
+  
+  /** Pattern style */
+  patternStyle: string | null;
+  
+  /** Specific color */
+  specificColor: string | null;
+  
+  /** Color intensity */
+  colorIntensity: string | null;
+  
+  /** Color family */
+  colorFamily: string | null;
+  
+  /** Product family */
+  productFamily: string | null;
+  
+  /** Customer segment */
+  customerSegment: string | null;
+  
+  /** Style concept */
+  styleConcept: string | null;
+  
+  /** Fabric type base */
+  fabricTypeBase: string | null;
+  
   /** Presigned URL for image access (optional, added by service layer) */
   imageUrl?: string;
 }
@@ -39,20 +69,14 @@ export interface ArticleSales {
  * Query parameters for top/bottom sellers analysis
  */
 export interface TopBottomQuery {
-  /** Filter by product type name (e.g., "Trousers", "Sweater") */
-  productTypeName?: string;
-  
-  /** Filter by product type number (alternative to productTypeName) */
-  productTypeNo?: number;
+  /** Filter by product type (e.g., "Trousers", "Sweater") */
+  productType?: string;
   
   /** Filter transactions from this date (ISO format: YYYY-MM-DD) */
   startDate?: string;
   
   /** Filter transactions until this date (ISO format: YYYY-MM-DD) */
   endDate?: string;
-  
-  /** Filter by sales channel (1 or 2) */
-  salesChannelId?: number;
   
   /** Ranking metric: 'units' (default) or 'revenue' */
   metric?: SalesMetric;

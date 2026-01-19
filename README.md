@@ -1,6 +1,6 @@
 # Fashion Trend Alchemist
 
-A TypeScript-based fashion analytics platform providing insights on top and bottom performing products by category.
+A TypeScript-based fashion analytics platform for analyzing product trends and sales data.
 
 ## 🏗️ Architecture
 
@@ -8,16 +8,12 @@ A TypeScript-based fashion analytics platform providing insights on top and bott
 
 ```
 fashion-trend-alchemist/
-├── apps/
-│   ├── api/              # Fastify REST API backend
-│   └── web/              # React + Vite frontend (future)
 ├── packages/
 │   ├── db/               # Database schema, migrations, and queries
 │   ├── types/            # Shared TypeScript types
 │   └── config/           # Configuration and environment handling
 ├── infra/                # Docker Compose infrastructure
-├── data/                 # Data files and images
-├── scripts/              # Utility scripts
+├── correration/          # Correlation analysis scripts
 └── docs/                 # Documentation
 ```
 
@@ -25,11 +21,9 @@ fashion-trend-alchemist/
 
 - **Runtime**: Node.js 18+ with TypeScript
 - **Package Manager**: pnpm (workspaces)
-- **API Framework**: Fastify
 - **Database**: PostgreSQL 16
 - **ORM**: Drizzle ORM
 - **Object Storage**: SeaweedFS (S3-compatible)
-- **Frontend**: React + Vite + UI5 Web Components (future)
 
 ## 🚀 Getting Started
 
@@ -76,113 +70,41 @@ fashion-trend-alchemist/
    pnpm db:migrate
    ```
 
-6. **Start the API server**
-   ```bash
-   pnpm dev:api
-   ```
-
-   API will be available at `http://localhost:3000`
-
-## 📊 API Endpoints
-
-### Analytics
-
-#### GET `/analytics/top-bottom`
-
-Retrieve top and bottom performing articles for a product type.
-
-**Query Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `productTypeName` | string | conditional | Filter by product type name (e.g., "Sweater") |
-| `productTypeNo` | number | conditional | Filter by product type number |
-| `startDate` | string | optional | Filter from date (ISO: YYYY-MM-DD) |
-| `endDate` | string | optional | Filter until date (ISO: YYYY-MM-DD) |
-| `salesChannelId` | number | optional | Sales channel (1=online, 2=retail) |
-| `metric` | string | optional | Ranking metric: "units" or "revenue" (default: "units") |
-| `limit` | number | optional | Number of items to return (default: 500) |
-| `includeZero` | boolean | optional | Include zero-sales articles (default: true) |
-
-**Note:** Either `productTypeName` or `productTypeNo` must be provided.
-
-**Example Requests:**
-
-```bash
-# Top 500 sweaters by units sold (including zero sales)
-curl "http://localhost:3000/analytics/top-bottom?productTypeName=Sweater"
-
-# Top 100 trousers by revenue
-curl "http://localhost:3000/analytics/top-bottom?productTypeName=Trousers&metric=revenue&limit=100"
-
-# Date-filtered query
-curl "http://localhost:3000/analytics/top-bottom?productTypeNo=253&startDate=2023-01-01&endDate=2023-12-31"
-
-# Online channel only
-curl "http://localhost:3000/analytics/top-bottom?productTypeName=Sweater&salesChannelId=1"
-```
-
-**Response:**
-
-```json
-{
-  "top": [
-    {
-      "articleId": 108775015,
-      "prodName": "Product Name",
-      "productTypeName": "Sweater",
-      "unitsSold": 1250,
-      "revenue": 49875.50,
-      "imageKey": "10/108775015.jpg",
-      "imageUrl": "http://localhost:8333/images/10/108775015.jpg?X-Amz-..."
-    }
-  ],
-  "bottom": [
-    {
-      "articleId": 108775044,
-      "prodName": "Another Product",
-      "productTypeName": "Sweater",
-      "unitsSold": 0,
-      "revenue": 0.00,
-      "imageKey": "10/108775044.jpg",
-      "imageUrl": "http://localhost:8333/images/10/108775044.jpg?X-Amz-..."
-    }
-  ]
-}
-```
-
-### Health Check
-
-#### GET `/health`
-
-System health check endpoint.
-
-```bash
-curl http://localhost:3000/health
-```
-
-#### GET `/analytics/health`
-
-Analytics module health check.
-
-```bash
-curl http://localhost:3000/analytics/health
-```
-
 ## 🗄️ Database Schema
 
-### Tables
+### Updated Schema (2026)
 
-- **articles**: Product catalog with 23+ attributes
-- **customers**: Customer profiles and preferences
-- **transactions_train**: Historical purchase transactions
+The database schema has been aligned with the new data structure:
+
+#### Articles Table
+- `article_id` (varchar, primary key) - Unique article identifier
+- `product_type` (varchar) - Product type category
+- `product_group` (varchar) - Product group classification
+- `pattern_style` (varchar) - Pattern/style identifier
+- `specific_color` (varchar) - Specific color name
+- `color_intensity` (varchar) - Color intensity level
+- `color_family` (varchar) - Color family classification
+- `product_family` (varchar) - Product family grouping
+- `customer_segment` (varchar) - Target customer segment
+- `style_concept` (varchar) - Style concept category
+- `fabric_type_base` (varchar) - Base fabric type
+- `detail_desc` (text) - Detailed product description
+
+#### Transactions Train Table
+- `t_date` (date) - Transaction date
+- `customer_id` (varchar) - Customer identifier
+- `article_id` (varchar) - Article identifier (FK to articles)
+- `price` (numeric) - Transaction price
+
+#### Customers Table
+- `customer_id` (varchar, primary key) - Unique customer identifier
+- `age` (integer) - Customer age
 
 ### Indexes
 
 Optimized for analytics queries:
 - `idx_transactions_article_id` on `transactions_train(article_id)`
-- `idx_transactions_t_dat` on `transactions_train(t_dat)`
-- `idx_transactions_sales_channel` on `transactions_train(sales_channel_id)`
+- `idx_transactions_t_date` on `transactions_train(t_date)`
 - `idx_transactions_customer_id` on `transactions_train(customer_id)`
 
 ## 🖼️ Image Storage
@@ -206,16 +128,6 @@ bucket: images
 - File name: Article ID + `.jpg`
 - Access: Via S3-compatible presigned URLs
 
-## 🧪 Testing
-
-```bash
-# Run all tests
-pnpm test
-
-# Run API tests only
-pnpm --filter @fashion/api test
-```
-
 ## 📦 Build
 
 ```bash
@@ -223,15 +135,14 @@ pnpm --filter @fashion/api test
 pnpm build
 
 # Build specific package
-pnpm --filter @fashion/api build
+pnpm --filter @fashion/db build
+pnpm --filter @fashion/types build
+pnpm --filter @fashion/config build
 ```
 
 ## 🔧 Development Scripts
 
 ```bash
-# Start API in watch mode
-pnpm dev:api
-
 # Generate database types
 pnpm db:generate
 
@@ -277,14 +188,31 @@ See `.env.example` for all available configuration options.
 Key variables:
 - `PGHOST`, `PGPORT`, `PGDATABASE`: PostgreSQL connection
 - `S3_ENDPOINT`, `S3_BUCKET`: SeaweedFS configuration  
-- `API_PORT`: API server port
 - `NODE_ENV`: Environment (development/production)
+
+## 📚 Package Structure
+
+### @fashion/db
+Database schemas, queries, and connection management.
+- Drizzle ORM schemas for articles, customers, and transactions
+- Optimized analytics queries for trend analysis
+- Connection pooling and client management
+
+### @fashion/types
+Shared TypeScript type definitions.
+- Domain types for articles, customers, and transactions
+- Analytics query and result types
+- Ensures type safety across the monorepo
+
+### @fashion/config
+Configuration and environment variable management.
+- Centralized configuration loading
+- Type-safe environment variables
+- Constants and defaults
 
 ## 📚 Documentation
 
 - [Product Requirements](docs/PRD.md) - Detailed specifications
-- [API Documentation](docs/API.md) - Full endpoint reference (future)
-- [Architecture Guide](docs/ARCHITECTURE.md) - System design (future)
 
 ## 🤝 Contributing
 
@@ -306,4 +234,4 @@ For issues and questions:
 
 ---
 
-**Built with ❤️ using TypeScript, Fastify, and Drizzle ORM**
+**Built with ❤️ using TypeScript and Drizzle ORM**

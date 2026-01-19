@@ -7,39 +7,25 @@
  * Core article entity from the articles table
  */
 export interface Article {
-  articleId: number;
-  productCode: number;
-  prodName: string;
-  productTypeNo: number;
-  productTypeName: string;
-  productGroupName: string;
-  graphicalAppearanceNo: number;
-  graphicalAppearanceName: string;
-  colourGroupCode: number;
-  colourGroupName: string;
-  perceivedColourValueId: number;
-  perceivedColourValueName: string;
-  perceivedColourMasterId: number;
-  perceivedColourMasterName: string;
-  departmentNo: number;
-  departmentName: string;
-  indexCode: string;
-  indexName: string;
-  indexGroupNo: number;
-  indexGroupName: string;
-  sectionNo: number;
-  sectionName: string;
-  garmentGroupNo: number;
-  garmentGroupName: string;
-  detailDesc: string;
+  articleId: string;
+  productType: string;
+  productGroup: string | null;
+  patternStyle: string | null;
+  specificColor: string | null;
+  colorIntensity: string | null;
+  colorFamily: string | null;
+  productFamily: string | null;
+  customerSegment: string | null;
+  styleConcept: string | null;
+  fabricTypeBase: string | null;
+  detailDesc: string | null;
 }
 
 /**
  * Lightweight article reference with essential display fields
  */
 export interface ArticleReference {
-  articleId: number;
-  prodName: string;
-  productTypeName: string;
-  productTypeNo: number;
+  articleId: string;
+  productType: string;
+  detailDesc: string | null;
 }

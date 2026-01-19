@@ -1,0 +1,73 @@
+{
+  "Category": {
+    "dresses": {
+      "style": [
+        "A-line", "Babydoll", "Balloon Skirt", "Bandeau", "Blazer", "Blazer Dress", 
+        "Bodycon", "Boxy", "Circular", "Cocktail Dress", "Corset Dress", "Cut-out", 
+        "Double-breasted", "Draped", "Dress Shirt", "Flapper Dress", "Flared", 
+        "Half-zip", "Jumper", "Keyhole cutout", "Off-the-shoulder", "One-shoulder", 
+        "Open Back", "Open Shoulder", "Pencil Dress", "Peplum", "Plunge Back", 
+        "Racer back", "Romantic Dress", "Shift Dress", "Shirt Dress", "Single-breasted", 
+        "Skater", "Slip Dress", "Slit", "Smocked", "Strapless", "Strappy Dress", 
+        "Sweater Dress", "T-shirt Dress", "Tie-front", "Tiered", "Tube Dress", 
+        "Tulip", "Tunic", "Vest Dress", "Wrapover"
+      ],
+      "length": ["Knee-length", "Long", "Maxi", "Midi", "Mini", "Short"],
+      "sleeve_length": ["3/4 sleeve", "Extra-long sleeve", "Long sleeve", "Short sleeve", "Sleeveless"],
+      "fit": ["Loose fit", "Oversized", "Regular fit", "Slim fit"],
+      "material": [
+        "Bouclé", "Chiffon", "Cotton", "Crepe", "Denim", "French Terry", "Jersey", 
+        "Lace", "Linen", "Lyocell", "Merino", "Mesh", "Microfiber", "Mohair", 
+        "Muslin", "Organza", "Polyurethane Material", "Poplin", "Rayon", "Satin", 
+        "Seersucker", "Twill", "Velour", "Wool"
+      ],
+      "occasion": ["Beach", "Casual", "Formal", "Lounge", "Office Wear", "Party", "Wedding"],
+      "pattern": [
+        "Checked", "Color-block", "Dotted", "Floral", "Houndstooth", "Leopard-print", 
+        "Paisley-patterned", "Patterned", "Pinstriped", "Polka Dot", 
+        "Snakeskin-patterned", "Solid-color", "Striped", "Zebra-print"
+      ],
+      "neckline": [
+        "Asymmetric Neckline", "Ballerina Neckline", "Boat Neck", "Cowl Neck", 
+        "Crew-neck", "Halterneck", "Low-cut Neckline", "Mock Turtleneck", 
+        "Plunge Neckline", "Round Neck", "Square Neckline", "Sweetheart Neckline", 
+        "Turtleneck", "V-neck"
+      ]
+    },
+    "jeans": {
+      "style": [
+        "Baggy", "Balloon Leg", "Barrel Leg", "Bootcut", "Capri Pants", "Flared", 
+        "Jeggings", "Mom", "Palazzo Pants", "Paper-bag", "Pull-on Pants", "Slit", 
+        "Smocked", "Stacked", "Straight Leg", "Tapered", "Wide leg"
+      ],
+      "fit": ["Loose fit", "Regular fit", "Skinny fit", "Slim fit"],
+      "waist": ["High waist", "Low waist", "Regular waist", "Ultra high waist"],
+      "length": ["Ankle-length", "Crop", "Extra-long legs", "Long", "Regular length", "Three-quarter length"],
+      "material": ["Bouclé", "Cotton", "Denim"],
+      "pattern": ["Color-block", "Leopard-print", "Pinstriped", "Solid-color", "Striped"]
+    },
+    "t-shirts": {
+      "style": ["Boxy", "Draped", "Flared", "Peplum"],
+      "fit": ["Loose fit", "Oversized", "Regular fit", "Relaxed fit", "Slim fit"],
+      "material": ["Cotton", "French Terry", "Jersey", "Microfiber", "Silk", "Velour", "Wool"],
+      "length": ["Crop", "Long", "Regular length", "Short"],
+      "neckline": ["Crew-neck", "Low-cut Neckline", "Round Neck", "Square Neckline", "Sweetheart Neckline"],
+      "pattern": ["Color-block", "Dotted", "Floral", "Leopard-print", "Patterned", "Solid-color", "Striped"]
+    },
+    "shoes": {
+      "style_footwear": [
+        "Ankle Boots", "Ballet Flats", "Biker Boots", "Boat Shoes", "Boots", 
+        "Chelsea Boots", "Clogs", "Combat Boots", "Cowboy Boots", "Driving Shoes", 
+        "Flip-flops", "Footbed Sandals", "Heeled ankle boots", "Heeled sandals", 
+        "Lace-up Boots", "Loafers", "Mary Janes", "Mules", "Pumps", "Rope Sandals", 
+        "Sandals", "Slingbacks", "Sneakers", "Sock Boots", "Strappy Sandals"
+      ],
+      "heel": ["High heel", "Low heel", "Mid Heel", "No heel"],
+      "material": ["Leather", "Mesh", "Polyurethane Material", "Satin", "Suede", "Velvet"],
+      "pattern": [
+        "Color-block", "Crocodile-patterned", "Leopard-print", 
+        "Snakeskin-patterned", "Solid-color", "Tiger-striped", "Zebra-print"
+      ]
+    }
+  }
+}

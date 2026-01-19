@@ -7,18 +7,15 @@
  * Transaction record representing a single purchase line item
  */
 export interface Transaction {
-  /** Transaction date (ISO format) */
-  tDat: string;
+  /** Transaction date */
+  tDate: Date;
   
   /** Customer identifier */
   customerId: string;
   
   /** Article identifier */
-  articleId: number;
+  articleId: string;
   
-  /** Transaction price (net) */
+  /** Transaction price */
   price: number;
-  
-  /** Sales channel identifier (1 or 2) */
-  salesChannelId: number;
 }

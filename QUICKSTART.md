@@ -38,6 +38,7 @@ This starts:
 - PostgreSQL on port 5432
 - SeaweedFS S3 on port 8333
 - SeaweedFS Master on port 9333
+- SeaweedFS Filer on port 8888
 
 Verify services are running:
 ```bash
@@ -52,40 +53,37 @@ pnpm build
 
 This compiles TypeScript for all packages.
 
-### 5. Start API Server
+## Database Schema
 
-```bash
-pnpm dev:api
-```
+The system uses the following tables:
 
-The API will start on `http://localhost:3000`
+### Articles
+- `article_id` - Unique product identifier (varchar)
+- `product_type` - Product type category
+- `product_group` - Product group classification
+- `pattern_style` - Pattern/style identifier
+- `specific_color` - Specific color name
+- `color_intensity` - Color intensity level
+- `color_family` - Color family classification
+- `product_family` - Product family grouping
+- `customer_segment` - Target customer segment
+- `style_concept` - Style concept category
+- `fabric_type_base` - Base fabric type
+- `detail_desc` - Detailed product description
 
-### 6. Test the API
+### Transactions Train
+- `t_date` - Transaction date (DATE)
+- `customer_id` - Customer identifier
+- `article_id` - Article identifier
+- `price` - Transaction price
 
-Open a new terminal and test:
-
-```bash
-# Health check
-curl http://localhost:3000/health
-
-# Analytics health
-curl http://localhost:3000/analytics/health
-
-# Top/bottom sellers (will return empty initially - needs data)
-curl "http://localhost:3000/analytics/top-bottom?productTypeName=Sweater"
-```
+### Customers
+- `customer_id` - Unique customer identifier
+- `age` - Customer age
 
 ## Loading Data
 
-### Option 1: Sample Data (Quick Test)
-
-```bash
-pnpm --filter @fashion/scripts seed
-```
-
-This loads a few sample articles and transactions for testing.
-
-### Option 2: Your Data
+### Load Your Data
 
 1. Load your CSV data into PostgreSQL:
    ```bash
@@ -95,38 +93,50 @@ This loads a few sample articles and transactions for testing.
    psql -h localhost -U postgres -d fashion_db -c "\COPY transactions_train FROM 'path/to/transactions.csv' CSV HEADER"
    ```
 
-2. Upload images to SeaweedFS:
-   ```bash
-   pnpm --filter @fashion/scripts migrate-images
-   ```
+2. Upload images to SeaweedFS (if needed):
+   - Images should follow the convention: `{first_2_digits}/{article_id}.jpg`
+   - Example: Article `108775015` → `10/108775015.jpg`
 
-## Test with Real Data
+## Using the Database
 
-```bash
-# Top 500 sweaters by units sold (including zero sales)
-curl "http://localhost:3000/analytics/top-bottom?productTypeName=Sweater"
+### With Drizzle ORM
 
-# Top 100 trousers by revenue
-curl "http://localhost:3000/analytics/top-bottom?productTypeName=Trousers&metric=revenue&limit=100"
+```typescript
+import { db, articles, transactionsTrain } from '@fashion/db';
 
-# Filter by date range
-curl "http://localhost:3000/analytics/top-bottom?productTypeName=Sweater&startDate=2023-01-01&endDate=2023-12-31"
+// Query articles
+const sweaters = await db
+  .select()
+  .from(articles)
+  .where(eq(articles.productType, 'Sweater'))
+  .limit(10);
 
-# Online sales only
-curl "http://localhost:3000/analytics/top-bottom?productTypeName=Dress&salesChannelId=1"
+// Query transactions with date filter
+const recentTransactions = await db
+  .select()
+  .from(transactionsTrain)
+  .where(gte(transactionsTrain.tDate, new Date('2024-01-01')))
+  .limit(100);
+```
+
+### Using Analytics Functions
+
+```typescript
+import { fetchTopBottomByProductType, getDistinctProductTypes } from '@fashion/db';
+
+// Get all product types
+const productTypes = await getDistinctProductTypes();
+
+// Get top/bottom sellers
+const result = await fetchTopBottomByProductType({
+  productType: 'Sweater',
+  metric: 'units',
+  limit: 500,
+  includeZero: true
+});
 ```
 
 ## Development Workflow
-
-### Watch Mode
-
-```bash
-# API with hot reload
-pnpm dev:api
-
-# Specific package
-pnpm --filter @fashion/db dev
-```
 
 ### Database Management
 
@@ -147,15 +157,15 @@ pnpm db:studio
 # Format code
 pnpm format
 
-# Run tests
-pnpm test
+# Build all packages
+pnpm build
 ```
 
 ## Troubleshooting
 
 ### Port Already in Use
 
-If ports 3000, 5432, or 8333 are in use:
+If ports 5432 or 8333 are in use:
 
 1. Edit `.env` to change ports
 2. Update `infra/docker-compose.yml` port mappings
@@ -184,15 +194,26 @@ curl http://localhost:8333
 ### Images Not Loading
 
 1. Verify SeaweedFS is running: `docker ps | grep seaweed`
-2. Check image migration: `pnpm --filter @fashion/scripts migrate-images`
+2. Check folder structure: Images should be in `{first_2_digits}/{article_id}.jpg`
 3. Test S3 access manually with AWS CLI
+
+## Package Structure
+
+### @fashion/db
+Database schemas, queries, and connection management.
+
+### @fashion/types
+Shared TypeScript type definitions for articles, customers, transactions, and analytics.
+
+### @fashion/config
+Configuration and environment variable management.
 
 ## Next Steps
 
 - Read [README.md](README.md) for detailed documentation
 - Check [docs/PRD.md](docs/PRD.md) for architecture details
 - Explore the codebase - it's heavily documented!
-- Build the React frontend (coming soon)
+- Use the database packages in your applications
 
 ## Getting Help
 

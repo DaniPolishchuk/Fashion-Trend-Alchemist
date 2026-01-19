@@ -6,25 +6,25 @@
 import { pool } from '../client.js';
 
 /**
- * Get all distinct product type names from the articles table
+ * Get all distinct product types from the articles table
  * Used for dropdown/selection lists in UIs and CLI tools
  * 
- * @returns Array of unique product type names, sorted alphabetically
+ * @returns Array of unique product types, sorted alphabetically
  * 
  * @example
  * ```typescript
- * const types = await getDistinctProductTypeNames();
+ * const types = await getDistinctProductTypes();
  * console.log(types); // ['Dress', 'Sweater', 'Trousers', ...]
  * ```
  */
-export async function getDistinctProductTypeNames(): Promise<string[]> {
+export async function getDistinctProductTypes(): Promise<string[]> {
   const query = `
-    SELECT DISTINCT product_type_name
+    SELECT DISTINCT product_type
     FROM articles
-    WHERE product_type_name IS NOT NULL
-    ORDER BY product_type_name ASC
+    WHERE product_type IS NOT NULL
+    ORDER BY product_type ASC
   `;
 
-  const result = await pool.query<{ product_type_name: string }>(query);
-  return result.rows.map(row => row.product_type_name);
+  const result = await pool.query<{ product_type: string }>(query);
+  return result.rows.map(row => row.product_type);
 }
