@@ -66,7 +66,18 @@ PGHOST=localhost
 PGPORT=5432
 ```
 
-### 4. Start the Application
+### 4. Build Packages
+
+Build the shared packages before starting the application:
+
+```bash
+# Build all shared packages (@fashion/db, @fashion/types, @fashion/config)
+pnpm build
+```
+
+This compiles the TypeScript packages that both the API and web app depend on.
+
+### 5. Start the Application
 
 Start both the API server and the web application:
 
