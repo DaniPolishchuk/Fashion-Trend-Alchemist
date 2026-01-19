@@ -45,7 +45,6 @@ function Analysis() {
   // --- Global State ---
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   
   // --- Date / Season State ---
   const [selectedSeason, setSelectedSeason] = useState<Season>(null);
@@ -53,7 +52,6 @@ function Analysis() {
   const [startMonth, setStartMonth] = useState<string>('');
   const [endDay, setEndDay] = useState<string>('');
   const [endMonth, setEndMonth] = useState<string>('');
-  const [dateValidationError, setDateValidationError] = useState<string>('');
   
   // --- Filter Options ---
   const [filterOptions, setFilterOptions] = useState<FiltersResponse | null>(null);
@@ -118,7 +116,6 @@ function Analysis() {
         setSelectedTypes(typeNames);
       } catch (e) {
         console.error('Failed to load saved selections', e);
-        setError('Failed to load product type selections');
       }
     }
     setLoading(false);
@@ -299,7 +296,6 @@ function Analysis() {
       setTotalProducts(data.total);
     } catch (err) {
       console.error(err);
-      setError('Failed to load product data');
     } finally {
       setProductsLoading(false);
     }

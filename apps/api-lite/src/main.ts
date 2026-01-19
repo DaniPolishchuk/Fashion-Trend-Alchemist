@@ -38,7 +38,7 @@ fastify.get<{ Reply: Taxonomy }>('/taxonomy', async (request, reply) => {
     return reply.status(200).send({ groups });
   } catch (error) {
     request.log.error({ error }, 'Failed to fetch taxonomy');
-    return reply.status(500).send({ error: 'Internal Server Error', message: 'Failed to fetch taxonomy' });
+    return reply.status(500).send({ error: 'Internal Server Error', message: 'Failed to fetch taxonomy' } as any);
   }
 });
 
