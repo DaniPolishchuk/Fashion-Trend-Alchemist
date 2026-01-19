@@ -1,468 +1,297 @@
-# Product Requirements Document (PRD)
-## Fashion Trend Alchemist - Analytics Platform
+This is the **Master Product Requirements Document (PRD) v5.0**.
 
-**Version:** 1.0.0  
-**Last Updated:** January 14, 2026  
-**Status:** Initial Implementation
+It merges the original business intent, the semantic data analysis, the specific screen flows, and the finalized technical architecture into a single source of truth for the engineering team.
+
+---
+
+# Product Requirements Document (PRD)
+
+## Project: The Fashion Trend Alchemist
+
+**Version:** 5.0 (Master Merged)
+**Status:** Approved for Development
+**Tech Stack:** React (Vite) + Node (Fastify) + Postgres (Drizzle)
 
 ---
 
 ## 1. Executive Summary
 
-The Fashion Trend Alchemist is a data analytics platform designed to provide insights into fashion product performance. The system analyzes historical transaction data to identify top and bottom performing products by category, enabling data-driven merchandising decisions.
+**The Fashion Trend Alchemist** is an AI-powered workstation for **Inverse Design**. Traditional analytics predict sales for _existing_ products. This system analyzes high-velocity sales data ("Context Cohort") to **mathematically generate** the design attributes (Cut, Color, Fabric, Aesthetic) of a _future_ best-seller.
 
-### Key Objectives
+**Core Value Proposition:**
 
-- Provide fast, accurate analytics on product performance
-- Support flexible filtering by product type, date range, and sales channel
-- Enable ranking by multiple metrics (units sold or revenue)
-- Include comprehensive image access for visual product identification
-- Support analysis of zero-sales products for inventory optimization
+1. **Dynamic Context:** Learns from a user-defined cohort (e.g., "Streetwear Coats that sold well in October").
+2. **Semantic Intelligence:** Uses Multimodal LLMs to translate raw catalogue images into structured design attributes ("Ontology").
+3. **One-Shot Inference:** Uses RPT-1 logic to predict missing design variables to maximize a target "Virality Score."
 
 ---
 
-## 2. System Architecture
+## 2. User Personas
 
-### 2.1 High-Level Architecture
+1. **The Merchandiser (The "Scope" Owner):**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        Client Layer                          │
-│                  (React Web Application)                     │
-└────────────────────────┬────────────────────────────────────┘
-                         │ HTTP/REST
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│                       API Layer                              │
-│                  (Fastify + TypeScript)                      │
-│                                                              │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │  Controller  │  │   Service    │  │  S3 Client   │     │
-│  │    Layer     │→ │    Layer     │→ │   (Images)   │     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-         ┌───────────────┴───────────────┐
-         ▼                               ▼
-┌─────────────────────┐      ┌─────────────────────┐
-│   PostgreSQL DB     │      │  SeaweedFS S3       │
-│   (Drizzle ORM)     │      │  (Image Storage)    │
-│                     │      │                     │
-│  • articles         │      │  Folder: XX/        │
-│  • customers        │      │  Files: ID.jpg      │
-│  • transactions     │      │                     │
-└─────────────────────┘      └─────────────────────┘
-```
+- _Goal:_ Ensure the product fills a gap in the assortment plan (e.g., "We need a Winter Jacket for the Youth segment").
+- _Action:_ Defines the Product Group, Seasonality, and Target Filters.
 
-### 2.2 Technology Stack
+2. **The Designer (The "Vibe" Owner):**
 
-#### Backend
-- **Runtime**: Node.js 18+ with TypeScript 5.3+
-- **Framework**: Fastify 4.x (high-performance HTTP server)
-- **ORM**: Drizzle ORM (type-safe SQL queries)
-- **Database**: PostgreSQL 16
-- **Storage**: SeaweedFS S3-compatible object storage
-
-#### Frontend (Future)
-- **Framework**: React 18+ with TypeScript
-- **Build Tool**: Vite 5.x
-- **UI Library**: UI5 Web Components for React
-- **State Management**: TBD (React Query recommended)
-
-#### Infrastructure
-- **Package Manager**: pnpm with workspaces
-- **Containerization**: Docker Compose
-- **Monitoring**: Health check endpoints
+- _Goal:_ Create a visually compelling product that hits trend targets.
+- _Action:_ Defines the Ontology, Locks specific aesthetic constraints, and visualizes the output.
 
 ---
 
-## 3. Functional Requirements
+## 3. System Architecture
 
-### 3.1 Core Analytics Feature
+The system follows a **Modern Monorepo Architecture** to ensure type safety across the full stack.
 
-#### FR-1: Top/Bottom Sellers Endpoint
+### 3.1 Technical Components
 
-**Endpoint**: `GET /analytics/top-bottom`
+| Layer          | Technology                 | Role                                                                                                                             |
+| -------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **Repo**       | **pnpm Workspace**         | Monorepo structure. Shared `packages/types` folder containing **Zod** schemas for API contracts and DB models.                   |
+| **Frontend**   | **React + Vite**           | SPA Framework.                                                                                                                   |
+| **UI Library** | **SAP UI5 Web Components** | Provides Enterprise/SAP look-and-feel (ShellBar, ObjectPage, AnalyticalTable) without Fiori Elements rigidity.                   |
+| **State**      | **TanStack Query**         | Manages async server state (Projects, Context).                                                                                  |
+| **Batching**   | **p-limit / Promise.all**  | **Client-Side Concurrency Control.** The Frontend manages the queue of 100+ LLM enrichment requests to prevent Backend timeouts. |
+| **Backend**    | **Node.js (Fastify)**      | API Server. Chosen for high-throughput JSON serialization.                                                                       |
+| **Database**   | **PostgreSQL**             | Relational DB. Stores Projects, H&M Static Data, and Generated Designs.                                                          |
+| **ORM**        | **Drizzle ORM**            | Type-safe SQL builder.                                                                                                           |
+| **AI Layer**   | **External APIs**          | OpenAI/Gemini (Text/Vision), Stable Diffusion (Image Gen).                                                                       |
 
-**Description**: Returns the top N and bottom N performing articles for a specified product type, ranked by units sold or revenue.
+### 3.2 Data Flow Diagram (Mermaid)
 
-**Requirements**:
-- Must support filtering by product type (name or number)
-- Must support date range filtering (start and end dates)
-- Must support sales channel filtering (online vs retail)
-- Must support two ranking metrics: units sold (default) and revenue
-- Must include articles with zero sales when `includeZero=true` (default)
-- Must return configurable limit (default: 500, max: 10000)
-- Must attach presigned image URLs to all results
-- Must handle missing images gracefully
+```mermaid
+graph TD
+    User[User Interface] -->|HTTP/JSON| API[Fastify API]
+    API -->|Drizzle| DB[(Postgres DB)]
 
-**Input Parameters**:
+    subgraph "Phase 1: Setup"
+        API -->|SQL Filter| DB
+        DB -->|Transactions & Articles| API
+        API -->|Top 50 / Bottom 50| User
+    end
 
-| Parameter | Type | Required | Default | Validation |
-|-----------|------|----------|---------|------------|
-| productTypeName | string | conditional | - | Must exist in articles table |
-| productTypeNo | number | conditional | - | Must be valid product type |
-| startDate | string | optional | - | ISO format YYYY-MM-DD |
-| endDate | string | optional | - | ISO format YYYY-MM-DD |
-| salesChannelId | number | optional | - | 1 (online) or 2 (retail) |
-| metric | string | optional | "units" | "units" or "revenue" |
-| limit | number | optional | 500 | 1-10000 |
-| includeZero | boolean | optional | true | true or false |
+    subgraph "Phase 2: Enrichment"
+        User -->|"Batch Request - 5 concurrent"| API
+        API -->|Image + Ontology| V_LLM[Vision LLM]
+        V_LLM -->|JSON Attributes| API
+        API -->|Enriched Data| User
+    end
 
-**Output Schema**:
+    subgraph "Phase 3: RPT-1 Inference"
+        User -->|Context + Query Mask| API
+        API -->|Statistical Inference| RPT1[RPT-1 Logic]
+        RPT1 -->|Predicted Attributes| API
+        API -->|Prompt| ImgGen[Stable Diffusion]
+        ImgGen -->|Image URL| User
+    end
 
-```typescript
-{
-  top: Array<{
-    articleId: number;
-    prodName: string;
-    productTypeName: string;
-    unitsSold: number;
-    revenue: number;
-    imageKey: string;
-    imageUrl: string;
-  }>;
-  bottom: Array<{
-    // Same structure as top
-  }>;
-}
-```
-
-**Performance Requirements**:
-- Response time: < 2 seconds for 500 items
-- Response time: < 5 seconds for 1000 items
-- Support concurrent requests: 100+ simultaneous users
-
-**Error Handling**:
-- 400: Invalid parameters (missing product type, invalid dates)
-- 500: Database query failure, S3 connection failure
-
-### 3.2 Image Access
-
-#### FR-2: Image URL Generation
-
-**Description**: Generate presigned URLs for article images stored in SeaweedFS.
-
-**Requirements**:
-- Follow folder structure: `{first_2_digits}/{article_id}.jpg`
-- URLs must be valid for 1 hour (configurable)
-- Handle missing images without failing entire request
-- Support batch URL generation for efficiency
-
-**Image Path Convention**:
-- Article ID: 108775015 → Path: `10/108775015.jpg`
-- Article ID: 118458003 → Path: `11/118458003.jpg`
-
-### 3.3 Health Monitoring
-
-#### FR-3: Health Check Endpoints
-
-**Endpoints**:
-- `GET /health`: System-wide health
-- `GET /analytics/health`: Analytics module health
-
-**Response**:
-```json
-{
-  "status": "ok",
-  "timestamp": "2026-01-14T13:00:00.000Z",
-  "uptime": 3600.5
-}
 ```
 
 ---
 
-## 4. Data Model
+## 4. Functional Requirements (Screen Workflow)
 
-### 4.1 Database Schema
+The application uses a **"One-Way Door"** workflow. Projects start in **Draft** (Setup) and move to **Active** (Design Hub). Once Active, the Scope is locked to preserve data integrity.
 
-#### Articles Table
+### Screen 1: The Launchpad
 
-```sql
-CREATE TABLE articles (
-  article_id INTEGER PRIMARY KEY,
-  product_code INTEGER NOT NULL,
-  prod_name VARCHAR(255) NOT NULL,
-  product_type_no INTEGER NOT NULL,
-  product_type_name VARCHAR(100) NOT NULL,
-  product_group_name VARCHAR(100),
-  graphical_appearance_no INTEGER,
-  graphical_appearance_name VARCHAR(100),
-  colour_group_code INTEGER,
-  colour_group_name VARCHAR(100),
-  perceived_colour_value_id INTEGER,
-  perceived_colour_value_name VARCHAR(100),
-  perceived_colour_master_id INTEGER,
-  perceived_colour_master_name VARCHAR(100),
-  department_no INTEGER,
-  department_name VARCHAR(100),
-  index_code VARCHAR(10),
-  index_name VARCHAR(100),
-  index_group_no INTEGER,
-  index_group_name VARCHAR(100),
-  section_no INTEGER,
-  section_name VARCHAR(100),
-  garment_group_no INTEGER,
-  garment_group_name VARCHAR(100),
-  detail_desc TEXT
-);
-```
+- **Type:** List Report.
+- **Data:** List of Projects (`name`, `target_season`, `product_group`, `status`, `last_modified`).
+- **Features:**
+- **Pinning:** Boolean toggle to fix projects to top.
+- **Status Indicators:** "Draft" (Grey), "Active" (Green).
+- **Action:** `[Create New Project]` Navigates to Screen 2.
 
-#### Customers Table
+### Screen 2: Scope Selection (Wizard Step 1)
 
-```sql
-CREATE TABLE customers (
-  customer_id VARCHAR(50) PRIMARY KEY,
-  fn VARCHAR(255),
-  active BOOLEAN,
-  club_member_status VARCHAR(50),
-  fashion_news_frequency VARCHAR(50),
-  age INTEGER,
-  postal_code VARCHAR(20)
-);
-```
+- **Inputs:**
+- `Product Group`: Single Select (e.g., "Garment Upper Body").
+- `Product Type`: Multi-Select (e.g., "Coat", "Outdoor Waistcoat").
 
-#### Transactions Table
+- **Validation:**
+- **Variance Warning:** If >3 distinct types selected, show: _"Warning: High variance reduces RPT-1 precision."_
 
-```sql
-CREATE TABLE transactions_train (
-  t_dat DATE NOT NULL,
-  customer_id VARCHAR(50) NOT NULL REFERENCES customers(customer_id),
-  article_id INTEGER NOT NULL REFERENCES articles(article_id),
-  price NUMERIC(10,2) NOT NULL,
-  sales_channel_id INTEGER NOT NULL
-);
+### Screen 3: Context & Seasonal Filter (Wizard Step 2)
 
--- Performance indexes
-CREATE INDEX idx_transactions_article_id ON transactions_train(article_id);
-CREATE INDEX idx_transactions_t_dat ON transactions_train(t_dat);
-CREATE INDEX idx_transactions_sales_channel ON transactions_train(sales_channel_id);
-CREATE INDEX idx_transactions_customer_id ON transactions_train(customer_id);
-```
+- **The Seasonal Lens:**
+- **Input:** `Target Launch Month` Slider (1–12).
+- **Logic:** System filters `transactions` table to `[Month-1, Month, Month+1]`.
 
-### 4.2 Analytics Query Logic
+- **Attribute Filters:**
+- Dropdowns for `Customer_Segment` (e.g., Menswear) or `Style_Concept`.
 
-The top/bottom sellers query uses a complex SQL pattern with CTEs:
+- **The Cohort Table:**
+- Displays **Top 50** and **Bottom 50** items based on the **Velocity Score**.
+- _Columns:_ Thumb, Name, Product Family, Velocity Score, Days Active.
 
-1. **filtered_articles**: Select articles matching product type
-2. **agg**: Aggregate transactions per article (count units, sum revenue)
-3. **ranked**: Assign descending and ascending ranks using RANK() window function
-4. **Final SELECT**: UNION top N (rdesc <= limit) and bottom N (rasc <= limit)
+### Screen 4: Ontology Creator (Wizard Step 3)
 
-**Key Behaviors**:
-- RANK() assigns same rank to ties (e.g., 5 articles with 100 units all rank #1)
-- includeZero=true uses LEFT JOIN (includes articles with no transactions)
-- includeZero=false uses INNER JOIN (excludes articles with no transactions)
-- Secondary sort by units_sold/revenue ensures stable ranking
+- **State A: Generation**
+- Button `[Generate Schema]`. Calls Text-LLM with `Product_Types`. Returns JSON Schema (Attributes + Enums).
+
+- **State B: Refinement**
+- **Feedback Loop:** Chat input ("Add details about Zippers") `[Regenerate]`.
+- **Manual Edit:** Add/Delete attributes via UI.
+
+- **State C: Finalization (The Lock)**
+- Button `[Lock & Extract]`.
+- **Action:** Saves Schema to DB. Sets Project Status = `Active`. Navigates to Screen 5.
+
+### Screen 5: The Design Hub (RPT-1 Grid)
+
+- **Component:** `ObjectPage` with Tabs.
+- **State 1: Enrichment (Auto-Start)**
+- On entry, Frontend checks if Context Items have `enriched_attributes`.
+- If null, initiates **Client-Side Batching** (sending 5 images at a time to `/api/ai/enrich`).
+- **Progress Bar:** "Analyzing Context: 42/100".
+
+- **State 2: The Transmutation Grid (Tab 1)**
+- **Left Col (Inputs):** Dynamic Form based on Ontology.
+- **Lock Mode:** User selects value (e.g., Color="Green").
+- **Predict Mode:** User selects `[PREDICT]` (Gold visual).
+
+- **Right Col (Target):** `Virality Score` Input (Default: 100).
+- **Action:** `[Transmute]` button.
+
+### Screen 6: Visual Payoff (Result Modal)
+
+- **Output:**
+- **Spec Sheet:** List of predicted attributes (Highlighted in Gold).
+- **Visuals:** 4 AI-Generated images (Stable Diffusion) based on "Ghost Mannequin" prompt structure.
+- **Action:** `[Save to Collection]`.
 
 ---
 
-## 5. Non-Functional Requirements
+## 5. Data Architecture (Schema & Semantics)
 
-### 5.1 Performance
+We use **Semantic Naming** to map H&M's technical columns to Business Design terms.
 
-- API response time: 95th percentile < 2s
-- Database query optimization via indexes
-- Connection pooling (max 10 connections)
-- Efficient batch image URL generation
+### 5.1 Postgres Tables (Drizzle Schema)
 
-### 5.2 Scalability
+**1. `projects**`
 
-- Horizontal scaling via stateless API design
-- Database read replicas for high query load
-- CDN for image delivery (future)
-- Caching layer (Redis, future)
+- `id` (UUID, PK)
+- `name` (String)
+- `status` (Enum: 'draft', 'active')
+- `scope_config` (JSONB) - Stores selected types/groups.
+- `ontology_schema` (JSONB) - The finalized attribute structure.
 
-### 5.3 Security
+**2. `articles` (Static Data)**
 
-- Environment-based configuration (no hardcoded secrets)
-- Presigned URLs for temporary image access
-- CORS configuration for trusted origins
-- Input validation and sanitization
-- SQL injection prevention via parameterized queries
+- `article_id` (String, PK)
+- `product_group` (String)
+- `product_type` (String)
+- `product_family` (String) _[Mapped from: department_name]_
+- `style_concept` (String) _[Mapped from: section_name]_
+- `pattern_style` (String) _[Mapped from: graphical_appearance_name]_
+- `specific_color` (String)
+- `image_path` (String)
 
-### 5.4 Maintainability
+**3. `transactions` (Static Data)**
 
-- Comprehensive inline code documentation
-- TypeScript for type safety
-- Modular architecture (controller/service/repository pattern)
-- Automated testing (unit + integration)
-- Database migrations via Drizzle Kit
+- `t_dat` (Date)
+- `article_id` (FK)
+- `price` (Decimal)
 
-### 5.5 Reliability
+**4. `project_context_items` (Dynamic Link)**
 
-- Graceful shutdown on SIGTERM/SIGINT
-- Database connection error handling
-- Health check endpoints for monitoring
-- Logging with structured format (Pino)
+- `project_id` (FK)
+- `article_id` (FK)
+- `velocity_score` (Decimal) - Snapshot at creation.
+- `enriched_attributes` (JSONB) - Result of Vision LLM (Screen 5).
 
----
+**5. `generated_designs` (Results)**
 
-## 6. API Specifications
-
-### 6.1 Base URL
-
-- Development: `http://localhost:3000`
-- Production: TBD
-
-### 6.2 Authentication
-
-- Current: None (local development)
-- Future: API key or JWT-based authentication
-
-### 6.3 Rate Limiting
-
-- Current: None
-- Future: 1000 requests/minute per client
-
-### 6.4 Versioning
-
-- Current: v1 (implicit)
-- Future: URL-based versioning `/v1/analytics/...`
+- `id` (UUID, PK)
+- `project_id` (FK)
+- `final_attributes` (JSONB) - The RPT-1 Output.
+- `generated_image_url` (String)
 
 ---
 
-## 7. Deployment Strategy
+## 6. Logic & Algorithms
 
-### 7.1 Development Environment
+### 6.1 Velocity Score (The "Success" Metric)
 
-```bash
-# Local development with hot reload
-pnpm dev:api
+To normalize "Success" across different time periods:
 
-# Infrastructure services via Docker Compose
-cd infra && docker-compose up -d
-```
+- **Window:** `[Target Month - 1]` to `[Target Month + 1]`.
+- **Normalization:** Score is relative to the Max Velocity within the selected `Product_Group` for that window.
 
-### 7.2 Production Environment (Future)
+### 6.2 The RPT-1 Logic (Inverse Inference)
 
-- **API**: Containerized deployment (Kubernetes or AWS ECS)
-- **Database**: Managed PostgreSQL (AWS RDS, Azure Database)
-- **Storage**: Managed S3 (AWS S3, MinIO cluster)
-- **Monitoring**: Prometheus + Grafana
-- **Logging**: ELK stack or CloudWatch
+RPT-1 is not a trained model, but an **Inference Engine**:
 
----
+1. **Input:**
 
-## 8. Testing Strategy
+- `Context`: Array of 100 objects (50 High Score, 50 Low Score) with attributes.
+- `Query`: Object with some Fixed attributes and some `null` (Masked).
+- `Target`: Score = 100.
 
-### 8.1 Unit Tests
+2. **Logic:**
 
-- Repository functions (mock database)
-- Service functions (mock repository + S3)
-- Controller validation logic
-
-### 8.2 Integration Tests
-
-- End-to-end API endpoint tests
-- Database query correctness
-- S3 presigned URL generation
-
-### 8.3 Performance Tests
-
-- Load testing with k6 or Artillery
-- Query optimization validation
-- Concurrent user simulation
+- Calculates probability distribution of Masked Attributes appearing in High-Score items vs Low-Score items.
+- Selects attribute values that maximize the likelihood of the Target Score.
 
 ---
 
-## 9. Future Enhancements
+## 7. API Specification (Fastify Routes)
 
-### Phase 2 (Q2 2026)
+### Group 1: Project Management
 
-- [ ] Web frontend with React + UI5
-- [ ] Real-time dashboard with WebSockets
-- [ ] Export to CSV/Excel functionality
-- [ ] Advanced filtering (color, department, price range)
-- [ ] Comparison between time periods
+- `POST /api/projects`
+- Create Draft. Body: `{ name, product_group }`
 
-### Phase 3 (Q3 2026)
+- `PATCH /api/projects/:id`
+- Update Scope/Ontology.
 
-- [ ] Machine learning trend predictions
-- [ ] Recommendation engine
-- [ ] Customer segmentation analytics
-- [ ] Inventory optimization suggestions
+- `POST /api/projects/:id/finalize`
+- Locks Project. Triggers DB update `status='active'`.
 
-### Phase 4 (Q4 2026)
+### Group 2: Context Data
 
-- [ ] Multi-tenant support
-- [ ] Role-based access control
-- [ ] Audit logging
-- [ ] Data warehouse integration
+- `POST /api/context/cohort`
+- Body: `{ product_types: [], target_month: 6, filters: {} }`
+- **Logic:** Executes the Seasonal Velocity SQL query.
+- Response: `{ top_50: [], bottom_50: [] }`
 
----
+### Group 3: AI Services (Stateless)
 
-## 10. Success Metrics
+- `POST /api/ai/ontology/generate`
+- Input: Product Types. Output: JSON Schema.
 
-### Technical Metrics
+- `POST /api/ai/enrich` **(High Volume)**
+- Input: `{ image_url, ontology_schema }`
+- Output: JSON Attributes.
 
-- API uptime: 99.9%
-- Query response time: < 2s (95th percentile)
-- Test coverage: > 80%
-- Zero critical security vulnerabilities
-
-### Business Metrics
-
-- User adoption rate
-- Query volume per day
-- Time saved vs manual analysis
-- Decision accuracy improvement
+- `POST /api/ai/predict`
+- Input: `{ context_rows: [], query_mask: {}, target: 100 }`
+- Output: Filled JSON.
 
 ---
 
-## 11. Risks and Mitigation
+## 8. Non-Functional Requirements
 
-### Risk 1: Large Dataset Performance
+1. **Performance:**
 
-**Impact**: High  
-**Probability**: Medium  
-**Mitigation**:
-- Implement materialized views for pre-aggregated data
-- Add database indexes on frequently queried columns
-- Consider partitioning transactions table by date
+- **Context Batching:** The Frontend MUST implement concurrency throttling (max 5 simultaneous requests) for the Enrichment phase to ensure the UI remains responsive and the backend is not overwhelmed.
 
-### Risk 2: Image Storage Costs
+2. **Security:**
 
-**Impact**: Medium  
-**Probability**: Medium  
-**Mitigation**:
-- Implement image CDN with caching
-- Compress images to optimal size
-- Lazy load images in frontend
+- API Inputs must be validated using **Zod** schemas shared from the Monorepo.
 
-### Risk 3: Data Quality Issues
+3. **Responsiveness:**
 
-**Impact**: High  
-**Probability**: Low  
-**Mitigation**:
-- Add data validation on ingestion
-- Implement data quality monitoring
-- Regular data audits
+- UI5 Web Components must be used to ensure the application works on Tablet/Desktop (Mobile is low priority).
 
 ---
 
-## 12. Open Questions
+## 9. Implementation Roadmap
 
-1. Should we support real-time data or batch updates?
-2. What is the desired data retention policy?
-3. Should we implement caching (Redis) for frequent queries?
-4. Do we need multi-language support for product names?
-5. Should zero-sales products be ranked separately?
-
----
-
-## 13. Approval
-
-| Stakeholder | Role | Status | Date |
-|-------------|------|--------|------|
-| Product Owner | Approval | Pending | - |
-| Tech Lead | Review | Pending | - |
-| Engineering | Implementation | In Progress | 2026-01-14 |
-
----
-
-**Document Control**
-
-- **Author**: Development Team
-- **Reviewers**: TBD
-- **Next Review**: 2026-02-01
+1. **Setup:** Initialize `pnpm` Monorepo, Fastify, and Drizzle.
+2. **Data Ingestion:** Import H&M CSVs into Postgres with Semantic Renaming.
+3. **Wizard UI:** Build Screens 1-3 (Scope & Context Logic).
+4. **AI Integration:** Implement Client-Side Batching & Vision LLM hook.
+5. **The Alchemist:** Build Screen 5 (Grid) & RPT-1 Logic.
+6. **Visualization:** Connect Stable Diffusion.
