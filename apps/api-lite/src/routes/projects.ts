@@ -245,13 +245,16 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
       // Use transaction for atomicity
       const result = await db.transaction(async (tx) => {
-        // Update project status and season config
+        // Update project status, season config, and ontology schema
         await tx
           .update(projects)
           .set({
             status: 'active',
             seasonConfig: validatedInput.seasonConfig
               ? JSON.stringify(validatedInput.seasonConfig)
+              : undefined,
+            ontologySchema: validatedInput.ontologySchema
+              ? JSON.stringify(validatedInput.ontologySchema)
               : undefined,
           })
           .where(eq(projects.id, projectId));

@@ -103,7 +103,9 @@ The application connects to a cloud-hosted PostgreSQL database. Typical workflow
 - **customers** - Customer demographics (customer_id, age)
 - **projects** - User projects with scope and status (draft/active)
 - **project_context_items** - Context articles per project: top 25 and worst 25 articles (by velocity score) when >50 total results, otherwise all matching articles (up to 50)
-- **generated_designs** - AI-generated design outputs
+- **generated_designs** - AI-generated design outputs (project_id, input_constraints, predicted_attributes, generated_image_url)
+- **collections** - User-created collections grouping generated designs (id, user_id, name, created_at)
+- **collection_items** - Junction table linking collections to generated designs (collection_id, generated_design_id)
 
 #### Important Indexes
 - `idx_transactions_article_id` on `transactions_train(article_id)`
@@ -124,10 +126,12 @@ The API server (`apps/api-lite/src/main.ts`) uses Fastify with the following end
 - `/health` - Health check
 - `/api/taxonomy` - Product type hierarchy
 - `/api/transactions/count` - Count filtered transactions
+- `/api/articles/count` - Count distinct articles by product type
 - `/api/filters/attributes` - Dynamic filter options based on current filters
 - `/api/products` - Paginated product listing with filters
 - `/api/generate-attributes` - LLM-based attribute generation (uses OpenAI)
 - `/api/projects/*` - Project CRUD and context management (see `routes/projects.ts`)
+- `/api/collections` - List user collections with item counts and preview images (see `routes/collections.ts`)
 
 ### Frontend Structure
 
@@ -139,10 +143,14 @@ The frontend (`apps/web/src/`) uses:
 - **API Communication**: Fetch API with manual state management
 
 Key pages:
-- `Home.tsx` - Landing page
+- `Home.tsx` - Dashboard with searchable/paginated projects table and collections grid
 - `ProductSelection.tsx` - Product type taxonomy browser
 - `Analysis.tsx` - Filtering and analysis dashboard
 - `components/AttributeGenerationDialog.tsx` - LLM attribute generation UI
+
+#### Home Page Features
+- **Projects Table**: Displays all user projects with status (Ready/Processing), name, time period, product group, and generated products count. Supports search filtering and pagination (5 items per page).
+- **Collections Section**: Shows user collections as cards with 2x2 image thumbnail grids. Only visible when collections exist. Images fall back to product icons when unavailable.
 
 ### Important Implementation Details
 

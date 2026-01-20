@@ -77,13 +77,14 @@ function Analysis() {
   // --- Dialog State ---
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
   const [tempSelection, setTempSelection] = useState<string[]>([]);
-  
+
   // --- Attribute Generation Dialog State ---
   const [attributeDialogOpen, setAttributeDialogOpen] = useState(false);
   const [generatedAttributes, setGeneratedAttributes] = useState<any>(null);
   const [attributesLoading, setAttributesLoading] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [conversationHistory, setConversationHistory] = useState<any[]>([]);
+  const [ontologySchema, setOntologySchema] = useState<any>(null);
 
   // --- Data State ---
   const [products, setProducts] = useState<any[]>([]);
@@ -302,10 +303,10 @@ function Analysis() {
 
   const generateAttributes = async (withFeedback = false) => {
     if (!project?.scopeConfig?.productTypes) return;
-    
+
     try {
       setAttributesLoading(true);
-      
+
       const response = await fetch('/api/generate-attributes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -313,7 +314,7 @@ function Analysis() {
           productTypes: project.scopeConfig.productTypes,
           feedback: withFeedback ? feedbackText : undefined,
           conversationHistory: withFeedback ? conversationHistory : undefined,
-        })
+        }),
       });
 
       if (!response.ok) {
@@ -341,7 +342,10 @@ function Analysis() {
 
   const handleSaveAttributes = (attributes: any) => {
     console.log('Saving attributes:', attributes);
-    // TODO: Implement save functionality
+    // Store ontology in component state for use when confirming cohort
+    setOntologySchema(attributes);
+    // Close the dialog after saving
+    handleCloseAttributeDialog();
   };
 
   // --- API Calls ---
@@ -494,6 +498,7 @@ function Analysis() {
         body: JSON.stringify({
           articles,
           seasonConfig,
+          ontologySchema,
         }),
       });
 
@@ -779,7 +784,11 @@ function Analysis() {
                     valueState={
                       startDay && !validateDate(startDay, startMonth || '1') ? 'Negative' : 'None'
                     }
-                    style={{ width: '60px', height: '25px', background: 'var(--sapBackgroundColor)' }}
+                    style={{
+                      width: '60px',
+                      height: '25px',
+                      background: 'var(--sapBackgroundColor)',
+                    }}
                   />
                   <span style={{ fontSize: '0.875rem', fontWeight: 'bold' }}>/</span>
                   <Input
@@ -791,7 +800,11 @@ function Analysis() {
                         ? 'Negative'
                         : 'None'
                     }
-                    style={{ width: '60px', height: '25px', background: 'var(--sapBackgroundColor)' }}
+                    style={{
+                      width: '60px',
+                      height: '25px',
+                      background: 'var(--sapBackgroundColor)',
+                    }}
                   />
                 </div>
                 <div
@@ -810,7 +823,11 @@ function Analysis() {
                     valueState={
                       endDay && !validateDate(endDay, endMonth || '1') ? 'Negative' : 'None'
                     }
-                    style={{ width: '60px', height: '25px', background: 'var(--sapBackgroundColor)' }}
+                    style={{
+                      width: '60px',
+                      height: '25px',
+                      background: 'var(--sapBackgroundColor)',
+                    }}
                   />
                   <span style={{ fontSize: '0.875rem', fontWeight: 'bold' }}>/</span>
                   <Input
@@ -822,7 +839,11 @@ function Analysis() {
                         ? 'Negative'
                         : 'None'
                     }
-                    style={{ width: '60px', height: '25px', background: 'var(--sapBackgroundColor)' }}
+                    style={{
+                      width: '60px',
+                      height: '25px',
+                      background: 'var(--sapBackgroundColor)',
+                    }}
                   />
                 </div>
               </div>
@@ -939,13 +960,15 @@ function Analysis() {
       </div>
 
       {/* Stats Section */}
-      <div style={{ 
-        display: 'flex', 
-        gap: '2rem', 
-        padding: '0 2rem 1rem', 
-        alignItems: 'center', 
-        justifyContent: 'space-between'
-      }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: '2rem',
+          padding: '0 2rem 1rem',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
         <div style={{ display: 'flex', gap: '2rem', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Icon name="list" style={{ color: 'var(--sapContent_LabelColor)' }} />
@@ -989,7 +1012,7 @@ function Analysis() {
               </Text>
             </div>
           )}
-          
+
           {project?.status !== 'locked' && (
             <Button
               design="Emphasized"
@@ -999,7 +1022,7 @@ function Analysis() {
               {lockingContext ? 'Confirming...' : 'Confirm Cohort'}
             </Button>
           )}
-          
+
           <Button design="Emphasized" icon="lightbulb" onClick={handleOpenAttributeDialog}>
             Generate Attributes
           </Button>
@@ -1209,8 +1232,11 @@ function Analysis() {
         productGroup={project?.scopeConfig?.productGroup || 'Apparel & Fashion'}
         selectedSeason={selectedSeason}
         dateRange={
-          hasValidDateRange() 
-            ? { from: formatDateString(startDay, startMonth), to: formatDateString(endDay, endMonth) }
+          hasValidDateRange()
+            ? {
+                from: formatDateString(startDay, startMonth),
+                to: formatDateString(endDay, endMonth),
+              }
             : undefined
         }
         generatedAttributes={generatedAttributes}
