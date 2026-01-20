@@ -11,3 +11,4 @@ export * from './taxonomy.js';
 export * from './filters.js';
 export * from './projects.js';
 export * from './context.js';
+export * from './collections.js';

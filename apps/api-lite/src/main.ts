@@ -10,6 +10,7 @@ import { fetchProductTaxonomy, pool } from '@fashion/db';
 import type { Taxonomy, FiltersResponse, ProductsResponse } from '@fashion/types';
 
 import projectRoutes from './routes/projects.js';
+import collectionRoutes from './routes/collections.js';
 
 import { llmConfig } from '@fashion/config';
 import OpenAI from 'openai';
@@ -375,6 +376,9 @@ fastify.get<{ Querystring: ProductsQuery; Reply: ProductsResponse }>(
 
 // Register project routes
 await fastify.register(projectRoutes, { prefix: '/api' });
+
+// Register collection routes
+await fastify.register(collectionRoutes, { prefix: '/api' });
 
 /**
  * POST /api/generate-attributes

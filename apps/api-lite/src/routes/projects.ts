@@ -10,6 +10,7 @@ import {
   projectContextItems,
   articles,
   transactionsTrain,
+  generatedDesigns,
   eq,
   and,
   inArray,
@@ -280,14 +281,39 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
   /**
    * GET /api/projects
-   * List all projects for the hardcoded user
+   * List all projects for the hardcoded user with generated products count
    */
   fastify.get('/projects', async (_request, reply) => {
     try {
-      const userProjects = await db.query.projects.findMany({
-        where: eq(projects.userId, HARDCODED_USER_ID),
-        orderBy: desc(projects.createdAt),
-      });
+      // Query projects with generated designs count
+      const userProjects = await db
+        .select({
+          id: projects.id,
+          userId: projects.userId,
+          name: projects.name,
+          status: projects.status,
+          seasonConfig: projects.seasonConfig,
+          scopeConfig: projects.scopeConfig,
+          ontologySchema: projects.ontologySchema,
+          createdAt: projects.createdAt,
+          deletedAt: projects.deletedAt,
+          generatedProductsCount: sql<number>`COUNT(${generatedDesigns.id})::int`,
+        })
+        .from(projects)
+        .leftJoin(generatedDesigns, eq(generatedDesigns.projectId, projects.id))
+        .where(eq(projects.userId, HARDCODED_USER_ID))
+        .groupBy(
+          projects.id,
+          projects.userId,
+          projects.name,
+          projects.status,
+          projects.seasonConfig,
+          projects.scopeConfig,
+          projects.ontologySchema,
+          projects.createdAt,
+          projects.deletedAt
+        )
+        .orderBy(desc(projects.createdAt));
 
       return reply.status(200).send(userProjects);
     } catch (error: any) {
