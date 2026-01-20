@@ -62,7 +62,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
   /**
    * GET /api/projects/:id/preview-context
-   * The Velocity Engine - calculates top 50 articles by velocity score
+   * The Velocity Engine - calculates top 25 and worst 25 articles by velocity score
    */
   fastify.get<{
     Params: { id: string };
@@ -158,8 +158,8 @@ export default async function projectRoutes(fastify: FastifyInstance) {
         }
       });
 
-      // Execute velocity calculation query
-      const velocityQuery = db
+      // Execute velocity calculation query for all matching articles
+      const allArticlesQuery = db
         .select({
           article_id: articles.articleId,
           product_type: articles.productType,
@@ -192,10 +192,20 @@ export default async function projectRoutes(fastify: FastifyInstance) {
           articles.fabricTypeBase,
           articles.detailDesc
         )
-        .orderBy(desc(sql`SUM(${transactionsTrain.price})`))
-        .limit(50);
+        .orderBy(desc(sql`SUM(${transactionsTrain.price})`));
 
-      const results = await velocityQuery;
+      const allResults = await allArticlesQuery;
+
+      // If we have more than 50 results, return top 25 and worst 25
+      let results;
+      if (allResults.length > 50) {
+        const top25 = allResults.slice(0, 25);
+        const worst25 = allResults.slice(-25);
+        results = [...top25, ...worst25];
+      } else {
+        // If 50 or fewer, return all
+        results = allResults;
+      }
 
       return reply.status(200).send(results);
     } catch (error: any) {
@@ -209,7 +219,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
   /**
    * POST /api/projects/:id/lock-context
-   * Locks the project context and saves top 50 articles
+   * Locks the project context and saves articles (top 25 + worst 25 if >50 total)
    */
   fastify.post<{
     Params: { id: string };

@@ -442,8 +442,10 @@ function Analysis() {
       console.log('Project created successfully:', createdProject);
 
       const params = new URLSearchParams();
-      if (selectedSeason) params.append('season', selectedSeason);
-      else if (hasValidDateRange()) {
+      // Only add date/season params if they exist, otherwise all year is analyzed
+      if (selectedSeason) {
+        params.append('season', selectedSeason);
+      } else if (hasValidDateRange()) {
         params.append('mdFrom', formatDateString(startDay, startMonth));
         params.append('mdTo', formatDateString(endDay, endMonth));
       }
@@ -508,8 +510,6 @@ function Analysis() {
         status: 'active',
         lockedAt: new Date().toISOString(),
       });
-
-      navigate(`/project/${createdProject.id}/analysis`, { replace: true });
     } catch (err) {
       console.error('Failed to create project and lock context:', err);
       setError(err instanceof Error ? err.message : 'Failed to create project and lock context');
