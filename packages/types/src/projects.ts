@@ -84,14 +84,16 @@ export const LockContextInputSchema = z.object({
         velocity_score: z.number(),
       })
     )
-    .length(50), // Enforce exactly 50 articles
+    .min(1) // Require at least 1 article
+    .max(50), // Allow up to 50 articles (top 25 + worst 25)
   seasonConfig: z
     .object({
       season: z.enum(['spring', 'summer', 'autumn', 'winter']).optional(),
       startDate: z.string().optional(),
       endDate: z.string().optional(),
     })
-    .optional(),
+    .optional()
+    .nullable(), // Allow null for seasonConfig
 });
 
 /**

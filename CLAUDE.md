@@ -1,0 +1,267 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+**The Fashion Trend Alchemist** is an AI-powered fashion analytics platform with inverse design capabilities. It analyzes product trends and sales data to generate design attributes for future best-sellers using LLM-based enrichment and RPT-1 inference logic.
+
+## Development Commands
+
+### Starting the Application
+
+The application requires both API and web app to be running:
+
+```bash
+# Terminal 1: Start API server (port 3001)
+cd apps/api-lite && pnpm run dev
+
+# Terminal 2: Start web app (port 5173)
+cd apps/web && pnpm run dev
+```
+
+Or start both at once from root:
+```bash
+pnpm run dev
+```
+
+### Building
+
+```bash
+# Build all packages (required before starting app)
+pnpm build
+
+# Build individual packages
+pnpm build:api
+pnpm build:web
+```
+
+### Database Operations
+
+```bash
+# Generate migrations after schema changes
+pnpm db:generate
+
+# Apply migrations
+pnpm db:migrate
+
+# Open Drizzle Studio (database GUI)
+pnpm db:studio
+```
+
+### Code Quality
+
+```bash
+# Format all code
+pnpm format
+```
+
+## Architecture
+
+### Monorepo Structure
+
+This is a **pnpm workspace monorepo** with the following structure:
+
+- `apps/api-lite/` - Fastify backend API server
+- `apps/web/` - React + Vite frontend with SAP UI5 Web Components
+- `packages/db/` - Database layer with Drizzle ORM schemas and queries
+- `packages/types/` - Shared TypeScript types and Zod schemas
+- `packages/config/` - Configuration and environment management
+
+### Key Technologies
+
+- **Frontend**: React 18 + Vite + SAP UI5 Web Components for React
+- **Backend**: Node.js 18+ with Fastify
+- **Database**: PostgreSQL 16 (cloud-hosted, typically accessed via port forwarding)
+- **ORM**: Drizzle ORM 0.29.5 (version pinned in root package.json)
+- **AI Integration**: OpenAI API for LLM-based attribute generation
+- **Package Manager**: pnpm with workspaces
+
+### Database Connection
+
+The application connects to a cloud-hosted PostgreSQL database. Typical workflow involves:
+
+1. Setting up port forwarding (example):
+   ```bash
+   caffeinate kubectl port-forward statefulset/your-db-instance 5432:5432 -n your-namespace
+   ```
+
+2. Configuring `.env` with connection details:
+   ```
+   PGHOST=localhost
+   PGPORT=5432
+   PGDATABASE=fashion_db
+   PGUSER=postgres
+   PGPASSWORD=<password>
+   ```
+
+### Core Database Schema
+
+#### Primary Tables
+- **articles** - Static product catalog with attributes (article_id, product_type, product_group, color_family, pattern_style, etc.)
+- **transactions_train** - Sales data linking articles to customers and dates (t_date, customer_id, article_id, price)
+- **customers** - Customer demographics (customer_id, age)
+- **projects** - User projects with scope and status (draft/active)
+- **project_context_items** - Context articles per project: top 25 and worst 25 articles (by velocity score) when >50 total results, otherwise all matching articles (up to 50)
+- **generated_designs** - AI-generated design outputs
+
+#### Important Indexes
+- `idx_transactions_article_id` on `transactions_train(article_id)`
+- `idx_transactions_t_date` on `transactions_train(t_date)`
+- `idx_transactions_customer_id` on `transactions_train(customer_id)`
+
+### Data Flow Architecture
+
+1. **Product Selection Flow**: User selects product types from taxonomy → stored in localStorage
+2. **Analysis Flow**: Filters applied (date/season + attributes) → API queries with dynamic WHERE clauses → paginated results
+3. **Project Flow**: Create project (draft) → preview context with velocity calculation → lock context (moves to active)
+4. **LLM Enrichment Flow**: Frontend batches 100+ requests → API forwards to OpenAI → enriched attributes stored in DB
+
+### API Structure
+
+The API server (`apps/api-lite/src/main.ts`) uses Fastify with the following endpoint categories:
+
+- `/health` - Health check
+- `/api/taxonomy` - Product type hierarchy
+- `/api/transactions/count` - Count filtered transactions
+- `/api/filters/attributes` - Dynamic filter options based on current filters
+- `/api/products` - Paginated product listing with filters
+- `/api/generate-attributes` - LLM-based attribute generation (uses OpenAI)
+- `/api/projects/*` - Project CRUD and context management (see `routes/projects.ts`)
+
+### Frontend Structure
+
+The frontend (`apps/web/src/`) uses:
+
+- **Routing**: React Router 7 with pages in `src/pages/`
+- **UI Components**: SAP UI5 Web Components (@ui5/webcomponents-react)
+- **State**: Local state + localStorage for persistence
+- **API Communication**: Fetch API with manual state management
+
+Key pages:
+- `Home.tsx` - Landing page
+- `ProductSelection.tsx` - Product type taxonomy browser
+- `Analysis.tsx` - Filtering and analysis dashboard
+- `components/AttributeGenerationDialog.tsx` - LLM attribute generation UI
+
+### Important Implementation Details
+
+#### Date/Season Filtering
+
+The system uses **MM-DD format** for date ranges that apply across all years:
+- Season filters map to months: spring (3,4,5), summer (6,7,8), autumn (9,10,11), winter (12,1,2)
+- Date range filtering uses EXTRACT(MONTH/DAY) to work across years
+- Cross-year ranges (e.g., Dec 15 - Jan 15) are handled with OR logic
+- **If no date/season is selected**: All data across all years is analyzed (no date filtering applied)
+
+#### Multi-Attribute Filtering
+
+- 9 filter categories: productGroup, productFamily, styleConcept, patternStyle, colorFamily, colorIntensity, specificColor, customerSegment, fabricTypeBase
+- Filter options dynamically update based on current dataset
+- Frontend sends comma-separated values like `filter_colorFamily=Blue,Red`
+- Backend converts camelCase to snake_case for SQL column names
+- All filters use parameterized queries to prevent SQL injection
+
+#### Velocity Score Calculation
+
+The "velocity score" is calculated as `SUM(price)` for each article, grouped by article attributes. This represents total revenue and is used to rank articles in project contexts. When there are more than 50 matching articles, the system stores the top 25 (highest velocity) and worst 25 (lowest velocity) to provide contrast for analysis.
+
+#### Project Lifecycle
+
+1. **Draft Status**: User creates project, configures scope (product types, filters)
+2. **Preview Context**: System calculates velocity scores for all matching articles
+   - If >50 articles match: selects top 25 and worst 25 by velocity score
+   - If ≤50 articles match: includes all matching articles
+3. **Lock Context**: User confirms selection (via "Confirm Cohort"), project moves to "active", articles saved to `project_context_items`. User stays on the same page.
+4. **Active Status**: Context is locked, user can now enrich attributes and generate designs
+
+### Environment Configuration
+
+Required environment variables (see `.env.example`):
+
+```
+# Database
+PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD
+
+# API
+API_PORT (default: 3001)
+API_HOST (default: 0.0.0.0)
+
+# LLM Integration
+LLM_API_URL, LLM_API_KEY, LLM_MODEL
+
+# S3/SeaweedFS (for image storage)
+S3_ENDPOINT, S3_REGION, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET
+```
+
+### TypeScript Configuration
+
+- Root `tsconfig.base.json` provides base configuration
+- Each package/app has its own `tsconfig.json` extending the base
+- Strict mode enabled
+- ESM modules (type: "module" in all package.json files)
+
+### Package Dependencies
+
+All packages use workspace protocol (`workspace:*`) for internal dependencies:
+- `@fashion/db` exports database client, schemas, and query functions
+- `@fashion/types` exports shared TypeScript types and Zod schemas
+- `@fashion/config` exports environment configuration
+
+The monorepo enforces Drizzle ORM version 0.29.5 via pnpm overrides in root package.json.
+
+## Common Development Patterns
+
+### Adding a New API Endpoint
+
+1. Add endpoint handler in `apps/api-lite/src/main.ts` or create new route file in `apps/api-lite/src/routes/`
+2. Define request/response types in `packages/types/src/`
+3. Add database queries in `packages/db/src/queries/` if needed
+4. Use parameterized queries for all user input to prevent SQL injection
+
+### Adding a New Database Table
+
+1. Define schema in `packages/db/src/schema/[table-name].ts` using Drizzle syntax
+2. Export from `packages/db/src/schema/index.ts`
+3. Run `pnpm db:generate` to create migration
+4. Run `pnpm db:migrate` to apply migration
+5. Export query functions from `packages/db/src/index.ts`
+
+### Adding a New Filter Attribute
+
+1. Add column to articles table schema
+2. Update `/api/filters/attributes` endpoint to include new attribute in SELECT
+3. Update `/api/products` endpoint to add filter key to `filterKeys` array and `validColumns` set
+4. Update `FiltersResponse` type in `packages/types/`
+5. Add UI controls in `apps/web/src/pages/Analysis.tsx`
+
+## Testing & Validation
+
+### Manual Testing Workflow
+
+1. Ensure database port forwarding is active
+2. Start API server and verify `/health` endpoint responds
+3. Start web app and verify it loads at http://localhost:5173
+4. Test product selection → analysis flow
+5. Test project creation → context preview → lock flow
+
+### Database Connection Testing
+
+```bash
+# Test direct connection
+psql -h localhost -p 5432 -U postgres -d fashion_db
+
+# Test API connection
+curl http://localhost:3001/health
+```
+
+## Project Phases
+
+The system is being built in phases (see docs/PRD.md):
+
+- **Phase 1 (COMPLETE)**: Product analysis with filtering and pagination
+- **Phase 2**: LLM-based attribute enrichment for top performers
+- **Phase 3**: RPT-1 inverse design engine for predicting attributes
+- **Phase 4**: AI image generation for design visualization
+
+Current focus is on project management and LLM attribute enrichment (Phase 2).
