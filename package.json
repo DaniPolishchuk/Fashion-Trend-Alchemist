@@ -4,7 +4,7 @@
   "private": true,
   "description": "Fashion analytics platform with top/bottom sellers by product type",
   "scripts": {
-    "dev:api": "pnpm --filter @fashion/api dev",
+    "dev:api": "pnpm --filter @fashion/api-lite dev",
     "dev:cli": "pnpm --filter @fashion/cli dev",
     "dev:web": "pnpm --filter @fashion/web dev",
     "dev": "pnpm run dev:api & pnpm run dev:web",
@@ -26,5 +26,10 @@
   "engines": {
     "node": ">=18.0.0",
     "pnpm": ">=8.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "drizzle-orm": "0.29.5"
+    }
   }
 }

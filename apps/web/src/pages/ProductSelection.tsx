@@ -46,6 +46,8 @@ function ProductSelection() {
   const [sortAZ, setSortAZ] = useState(true);
   const [rowCount, setRowCount] = useState<number | null>(null);
   const [countLoading, setCountLoading] = useState(false);
+  const [projectName, setProjectName] = useState('');
+  const [projectCreating, setProjectCreating] = useState(false);
 
   // Load selections from localStorage on mount
   useEffect(() => {
@@ -86,12 +88,12 @@ function ProductSelection() {
   const fetchTaxonomy = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/taxonomy');
-      
+      const response = await fetch('/taxonomy');
+
       if (!response.ok) {
         throw new Error('Failed to fetch taxonomy');
       }
-      
+
       const data: Taxonomy = await response.json();
       setTaxonomy(data);
       setError(null);
@@ -106,15 +108,15 @@ function ProductSelection() {
     try {
       setCountLoading(true);
       // Extract just the product type names from the keys
-      const types = Array.from(selectedTypes).map(key => key.split('::')[1]);
+      const types = Array.from(selectedTypes).map((key) => key.split('::')[1]);
       const typesParam = types.join(',');
-      
-      const response = await fetch(`/api/transactions/count?types=${encodeURIComponent(typesParam)}`);
-      
+
+      const response = await fetch(`/transactions/count?types=${encodeURIComponent(typesParam)}`);
+
       if (!response.ok) {
         throw new Error('Failed to fetch row count');
       }
-      
+
       const data = await response.json();
       setRowCount(data.count);
     } catch (err) {
@@ -130,7 +132,7 @@ function ProductSelection() {
       if (expandedGroups.size === taxonomy.groups.length) {
         setExpandedGroups(new Set());
       } else {
-        setExpandedGroups(new Set(taxonomy.groups.map(g => g.productGroup)));
+        setExpandedGroups(new Set(taxonomy.groups.map((g) => g.productGroup)));
       }
     }
   };
@@ -160,17 +162,57 @@ function ProductSelection() {
     setSelectedTypes(new Set());
   };
 
-  const handleProceed = () => {
-    console.log('Selected types:', Array.from(selectedTypes));
-    console.log('Matching rows:', rowCount);
-    navigate('/analysis');
+  const handleProceed = async () => {
+    if (!projectName.trim()) {
+      setError('Please enter a project name');
+      return;
+    }
+
+    if (selectedTypes.size === 0) {
+      setError('Please select at least one product type');
+      return;
+    }
+
+    try {
+      setProjectCreating(true);
+      setError(null);
+
+      // Extract product types and groups from selections
+      const productTypes: string[] = [];
+      const productGroups = new Set<string>();
+
+      Array.from(selectedTypes).forEach((key) => {
+        const [groupName, typeName] = key.split('::');
+        productTypes.push(typeName);
+        productGroups.add(groupName);
+      });
+
+      // Clear localStorage since we're proceeding
+      localStorage.removeItem(STORAGE_KEY);
+
+      // Navigate to analysis page with project data (no project creation yet)
+      navigate('/analysis', {
+        state: {
+          projectData: {
+            name: projectName.trim(),
+            scopeConfig: {
+              productTypes,
+              productGroups: Array.from(productGroups),
+            },
+          },
+        },
+      });
+    } catch (err) {
+      console.error('Failed to proceed:', err);
+      setError(err instanceof Error ? err.message : 'Failed to proceed');
+    } finally {
+      setProjectCreating(false);
+    }
   };
 
   const filterTypes = (types: string[]) => {
     if (!searchQuery) return types;
-    return types.filter(type =>
-      type.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    return types.filter((type) => type.toLowerCase().includes(searchQuery.toLowerCase()));
   };
 
   const getSortedGroups = () => {
@@ -186,12 +228,14 @@ function ProductSelection() {
       <>
         <ShellBar primaryTitle="The Fashion Trend Alchemist" />
         <Page style={{ height: 'calc(100vh - 44px)' }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            height: '100%'
-          }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              height: '100%',
+            }}
+          >
             <BusyIndicator active size="L" />
           </div>
         </Page>
@@ -204,9 +248,7 @@ function ProductSelection() {
       <>
         <ShellBar primaryTitle="The Fashion Trend Alchemist" />
         <Page style={{ height: 'calc(100vh - 44px)' }}>
-          <MessageStrip design="Negative">
-            Error loading product taxonomy: {error}
-          </MessageStrip>
+          <MessageStrip design="Negative">Error loading product taxonomy: {error}</MessageStrip>
           <Button onClick={fetchTaxonomy}>Retry</Button>
         </Page>
       </>
@@ -218,11 +260,11 @@ function ProductSelection() {
   return (
     <>
       <ShellBar primaryTitle="The Fashion Trend Alchemist" />
-      
+
       <Page
-        style={{ 
+        style={{
           height: 'calc(100vh - 44px)',
-          paddingBottom: '80px'
+          paddingBottom: '80px',
         }}
       >
         {/* Breadcrumbs */}
@@ -242,12 +284,40 @@ function ProductSelection() {
 
         {/* Header with Title and Row Count */}
         <div style={{ padding: '16px 16px 0 16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <Title level="H2" style={{ marginBottom: '8px', fontSize: '30px' }}>Select Product Scope</Title>
-              <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '15px' }}>
+          <div
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}
+          >
+            <div style={{ flex: 1, marginRight: '24px' }}>
+              <Title level="H2" style={{ marginBottom: '8px', fontSize: '30px' }}>
+                Select Product Scope
+              </Title>
+              <Text
+                style={{
+                  color: 'var(--sapContent_LabelColor)',
+                  fontSize: '15px',
+                  marginBottom: '12px',
+                }}
+              >
                 Choose product groups and types for the upcoming analysis cycle.
               </Text>
+              <div style={{ maxWidth: '400px' }}>
+                <Text
+                  style={{
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    marginBottom: '4px',
+                    display: 'block',
+                  }}
+                >
+                  Project Name
+                </Text>
+                <Input
+                  placeholder="Enter a descriptive name for this project..."
+                  value={projectName}
+                  onInput={(e: any) => setProjectName(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+              </div>
             </div>
             <div style={{ marginTop: '4px' }}>
               {countLoading ? (
@@ -264,7 +334,14 @@ function ProductSelection() {
         </div>
 
         {/* Search and Actions Bar */}
-        <div style={{ paddingLeft: '16px', paddingRight: '16px', paddingBottom: '16px', paddingTop: 0 }}>
+        <div
+          style={{
+            paddingLeft: '16px',
+            paddingRight: '16px',
+            paddingBottom: '16px',
+            paddingTop: 0,
+          }}
+        >
           <Card
             style={{
               width: '100%',
@@ -274,23 +351,27 @@ function ProductSelection() {
               borderRadius: '12px',
             }}
           >
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              width: '100%'
-            }}>
-              {/* Pill-style filter input */}
-              <div style={{
+            <div
+              style={{
                 display: 'flex',
+                justifyContent: 'space-between',
                 alignItems: 'center',
-                gap: '8px',
                 width: '100%',
-                maxWidth: '760px',
-                backgroundColor: 'var(--sapUiBaseBG)',
-                borderRadius: '12px',
-                padding: '8px 12px'
-              }}>
+              }}
+            >
+              {/* Pill-style filter input */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  width: '100%',
+                  maxWidth: '760px',
+                  backgroundColor: 'var(--sapUiBaseBG)',
+                  borderRadius: '12px',
+                  padding: '8px 12px',
+                }}
+              >
                 <Icon name="filter" style={{ color: 'var(--sapContent_IconColor)' }} />
                 <Input
                   placeholder="Filter product types by name..."
@@ -299,11 +380,11 @@ function ProductSelection() {
                   style={{
                     flex: 1,
                     backgroundColor: 'var(--sapBackgroundColor)',
-                    border: 'none'
+                    border: 'none',
                   }}
                 />
               </div>
-              
+
               {/* Actions */}
               <div style={{ display: 'flex', gap: '8px' }}>
                 <Button
@@ -321,15 +402,17 @@ function ProductSelection() {
           </Card>
         </div>
 
-        <div style={{
-          columnCount: 3,
-          columnGap: '16px',
-          padding: '16px'
-        }}>
+        <div
+          style={{
+            columnCount: 3,
+            columnGap: '16px',
+            padding: '16px',
+          }}
+        >
           {sortedGroups.map((group) => {
             const filteredTypes = filterTypes(group.productTypes);
             const isExpanded = expandedGroups.has(group.productGroup);
-            
+
             if (filteredTypes.length === 0 && searchQuery) {
               return null;
             }
@@ -340,7 +423,7 @@ function ProductSelection() {
                 style={{
                   breakInside: 'avoid',
                   marginBottom: '16px',
-                  width: '100%'
+                  width: '100%',
                 }}
                 header={
                   <CardHeader
@@ -356,13 +439,13 @@ function ProductSelection() {
                     {filteredTypes.map((type) => {
                       const key = `${group.productGroup}::${type}`;
                       const isSelected = selectedTypes.has(key);
-                      
+
                       return (
                         <ListItemStandard
                           key={type}
                           type="Active"
-                          onClick={() => toggleType(group.productGroup, type)}                        
-                          >
+                          onClick={() => toggleType(group.productGroup, type)}
+                        >
                           <CheckBox
                             checked={isSelected}
                             style={{ pointerEvents: 'none' }}
@@ -388,14 +471,15 @@ function ProductSelection() {
           left: 0,
           right: 0,
           zIndex: 1000,
-          boxShadow: '0 -2px 8px rgba(0,0,0,0.1)'
+          boxShadow: '0 -2px 8px rgba(0,0,0,0.1)',
         }}
         startContent={
           <Text>
             <strong>{selectedTypes.size} items selected</strong>
             {selectedTypes.size > 0 && (
               <span style={{ marginLeft: '1rem', color: 'var(--sapContent_LabelColor)' }}>
-                from {new Set(Array.from(selectedTypes).map(s => s.split('::')[0])).size} categories
+                from {new Set(Array.from(selectedTypes).map((s) => s.split('::')[0])).size}{' '}
+                categories
               </span>
             )}
           </Text>
@@ -411,9 +495,9 @@ function ProductSelection() {
             <Button
               design="Emphasized"
               onClick={handleProceed}
-              disabled={selectedTypes.size === 0}
+              disabled={selectedTypes.size === 0 || !projectName.trim() || projectCreating}
             >
-              Proceed to Analysis
+              {projectCreating ? 'Creating Project...' : 'Proceed to Analysis'}
             </Button>
           </>
         }

@@ -21,7 +21,7 @@
   "dependencies": {
     "@fashion/config": "workspace:*",
     "@fashion/types": "workspace:*",
-    "drizzle-orm": "^0.29.2",
+    "drizzle-orm": "0.29.5",
     "pg": "^8.11.3"
   },
   "devDependencies": {

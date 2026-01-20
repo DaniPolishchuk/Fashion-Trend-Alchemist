@@ -5,8 +5,10 @@
 
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+// Using real database taxonomy query
 import { fetchProductTaxonomy, pool } from '@fashion/db';
 import type { Taxonomy, FiltersResponse, ProductsResponse } from '@fashion/types';
+import projectRoutes from './routes/projects.js';
 
 const fastify = Fastify({
   logger: true,
@@ -17,6 +19,21 @@ await fastify.register(cors, {
   origin: ['http://localhost:5173', 'http://localhost:3000'],
   credentials: true,
 });
+
+/**
+ * Interfaces & Types
+ */
+interface ProductsQuery {
+  types: string;
+  season?: string;
+  mdFrom?: string;
+  mdTo?: string;
+  sortBy?: string;
+  sortDir?: string;
+  limit?: string;
+  offset?: string;
+  [key: string]: string | undefined;
+}
 
 /**
  * Health check endpoint
@@ -38,71 +55,92 @@ fastify.get<{ Reply: Taxonomy }>('/taxonomy', async (request, reply) => {
     return reply.status(200).send({ groups });
   } catch (error) {
     request.log.error({ error }, 'Failed to fetch taxonomy');
-    return reply.status(500).send({ error: 'Internal Server Error', message: 'Failed to fetch taxonomy' } as any);
+    return reply
+      .status(500)
+      .send({ error: 'Internal Server Error', message: 'Failed to fetch taxonomy' } as any);
   }
 });
 
 /**
  * GET /transactions/count
  */
-fastify.get<{ Querystring: { types: string }; Reply: { count: number } }>('/transactions/count', async (request, reply) => {
-  try {
-    const { types } = request.query;
-    if (!types || types.trim() === '') return reply.status(200).send({ count: 0 });
-    
-    const typeArray = types.split(',').map(t => t.trim()).filter(t => t.length > 0);
-    if (typeArray.length === 0) return reply.status(200).send({ count: 0 });
-    
-    const placeholders = typeArray.map((_, i) => `$${i + 1}`).join(', ');
-    const query = `
+fastify.get<{ Querystring: { types: string }; Reply: { count: number } }>(
+  '/transactions/count',
+  async (request, reply) => {
+    try {
+      const { types } = request.query;
+      if (!types || types.trim() === '') return reply.status(200).send({ count: 0 });
+
+      const typeArray = types
+        .split(',')
+        .map((t: string) => t.trim())
+        .filter((t: string) => t.length > 0);
+
+      if (typeArray.length === 0) return reply.status(200).send({ count: 0 });
+
+      const placeholders = typeArray.map((_: string, i: number) => `$${i + 1}`).join(', ');
+      const query = `
       SELECT COUNT(*) as count
       FROM transactions_train t
       INNER JOIN articles a ON a.article_id = t.article_id
       WHERE a.product_type IN (${placeholders})
     `;
-    
-    const result = await pool.query(query, typeArray);
-    return reply.status(200).send({ count: parseInt(result.rows[0].count, 10) });
-  } catch (error) {
-    request.log.error({ error }, 'Failed to fetch transaction count');
-    return reply.status(500).send({ count: 0 });
+
+      const result = await pool.query(query, typeArray);
+      const count = result.rows[0]?.count ? parseInt(result.rows[0].count, 10) : 0;
+      return reply.status(200).send({ count });
+    } catch (error) {
+      request.log.error({ error }, 'Failed to fetch transaction count');
+      return reply.status(500).send({ count: 0 });
+    }
   }
-});
+);
 
 /**
  * GET /filters/attributes
  */
-fastify.get<{ Querystring: { types: string; season?: string; mdFrom?: string; mdTo?: string }; Reply: FiltersResponse }>('/filters/attributes', async (request, reply) => {
+fastify.get<{
+  Querystring: { types: string; season?: string; mdFrom?: string; mdTo?: string };
+  Reply: FiltersResponse;
+}>('/filters/attributes', async (request, reply) => {
   try {
     const { types, season, mdFrom, mdTo } = request.query;
-    
+
     if (!types) return reply.status(400).send({ error: 'Missing types' } as any);
-    
-    const typeArray = types.split(',').map(t => t.trim()).filter(t => t.length > 0);
-    const typePlaceholders = typeArray.map((_, i) => `$${i + 1}`).join(', ');
+
+    const typeArray = types
+      .split(',')
+      .map((t: string) => t.trim())
+      .filter((t: string) => t.length > 0);
+
+    const typePlaceholders = typeArray.map((_: string, i: number) => `$${i + 1}`).join(', ');
     const whereClauses = [`a.product_type IN (${typePlaceholders})`];
     const params: any[] = [...typeArray];
-  
+
     if (season) {
-      const seasonMonths: Record<string, string> = { spring: '(3,4,5)', summer: '(6,7,8)', autumn: '(9,10,11)', winter: '(12,1,2)' };
-      if (seasonMonths[season.toLowerCase()]) whereClauses.push(`EXTRACT(MONTH FROM t.t_date) IN ${seasonMonths[season.toLowerCase()]}`);
+      const seasonMonths: Record<string, string> = {
+        spring: '(3,4,5)',
+        summer: '(6,7,8)',
+        autumn: '(9,10,11)',
+        winter: '(12,1,2)',
+      };
+      const s = season.toLowerCase();
+      if (seasonMonths[s]) whereClauses.push(`EXTRACT(MONTH FROM t.t_date) IN ${seasonMonths[s]}`);
     } else if (mdFrom && mdTo) {
-      // Parse MM-DD format
       const [fromMonth, fromDay] = mdFrom.split('-').map(Number);
       const [toMonth, toDay] = mdTo.split('-').map(Number);
-      
+
       if (fromMonth === toMonth && fromDay === toDay) {
-        // Single day
-        whereClauses.push(`(EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) = ${fromDay})`);
+        whereClauses.push(
+          `(EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) = ${fromDay})`
+        );
       } else if (fromMonth < toMonth || (fromMonth === toMonth && fromDay <= toDay)) {
-        // Same year range
         whereClauses.push(`(
           (EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) >= ${fromDay})
           OR (EXTRACT(MONTH FROM t.t_date) > ${fromMonth} AND EXTRACT(MONTH FROM t.t_date) < ${toMonth})
           OR (EXTRACT(MONTH FROM t.t_date) = ${toMonth} AND EXTRACT(DAY FROM t.t_date) <= ${toDay})
         )`);
       } else {
-        // Wraps around year (e.g., Dec to Jan)
         whereClauses.push(`(
           (EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) >= ${fromDay})
           OR (EXTRACT(MONTH FROM t.t_date) > ${fromMonth})
@@ -111,7 +149,7 @@ fastify.get<{ Querystring: { types: string; season?: string; mdFrom?: string; md
         )`);
       }
     }
-    
+
     const query = `
       SELECT
         ARRAY_AGG(DISTINCT a.product_group) FILTER (WHERE a.product_group IS NOT NULL) as product_group,
@@ -127,10 +165,10 @@ fastify.get<{ Querystring: { types: string; season?: string; mdFrom?: string; md
       INNER JOIN articles a ON a.article_id = t.article_id
       WHERE ${whereClauses.join(' AND ')}
     `;
-    
+
     const result = await pool.query(query, params);
     const row = result.rows[0] || {};
-    
+
     return reply.status(200).send({
       productGroup: row.product_group || [],
       productFamily: row.product_family || [],
@@ -149,97 +187,116 @@ fastify.get<{ Querystring: { types: string; season?: string; mdFrom?: string; md
 });
 
 /**
- * GET /products
- * Optimized: Skips aggregation calculations entirely.
+ * GET /products Handler
  */
-fastify.get<{
-  Querystring: {
-    types: string; season?: string; mdFrom?: string; mdTo?: string;
-    sortBy?: string; sortDir?: string; limit?: string; offset?: string;
-    [key: string]: string | undefined;
-  };
-  Reply: ProductsResponse;
-}>('/products', async (request, reply) => {
+const productsHandler = async (
+  request: import('fastify').FastifyRequest<{ Querystring: ProductsQuery }>,
+  reply: import('fastify').FastifyReply
+) => {
   try {
-    const { types, season, mdFrom, mdTo, sortBy = 'article_id', sortDir = 'asc', limit = '10', offset = '0' } = request.query;
-    
+    const {
+      types,
+      season,
+      mdFrom,
+      mdTo,
+      sortBy = 'article_id',
+      sortDir = 'asc',
+      limit = '10',
+      offset = '0',
+    } = request.query;
+
     if (!types) return reply.status(400).send({ error: 'Missing types' } as any);
-    
-    const typeArray = types.split(',').map(t => t.trim()).filter(t => t.length > 0);
+
+    const typeArray = types
+      .split(',')
+      .map((t: string) => t.trim())
+      .filter((t: string) => t.length > 0);
+
     const whereClauses: string[] = [];
     const params: any[] = [...typeArray];
     let paramIndex = typeArray.length + 1;
-    
-    const typePlaceholders = typeArray.map((_, i) => `$${i + 1}`).join(', ');
+
+    const typePlaceholders = typeArray.map((_: string, i: number) => `$${i + 1}`).join(', ');
     whereClauses.push(`a.product_type IN (${typePlaceholders})`);
-    
-    // --- Filters ---
+
+    // --- Time/Season Filters ---
     if (season) {
-      const months = { spring: '(3,4,5)', summer: '(6,7,8)', autumn: '(9,10,11)', winter: '(12,1,2)' }[season.toLowerCase()];
-      if (months) whereClauses.push(`EXTRACT(MONTH FROM t.t_date) IN ${months}`);
+      const months: Record<string, string> = {
+        spring: '(3,4,5)',
+        summer: '(6,7,8)',
+        autumn: '(9,10,11)',
+        winter: '(12,1,2)',
+      };
+      const monthsForSeason = months[season.toLowerCase()];
+      if (monthsForSeason) whereClauses.push(`EXTRACT(MONTH FROM t.t_date) IN ${monthsForSeason}`);
     } else if (mdFrom && mdTo) {
-      // Parse MM-DD format
       const [fromMonth, fromDay] = mdFrom.split('-').map(Number);
       const [toMonth, toDay] = mdTo.split('-').map(Number);
-      
       if (fromMonth === toMonth && fromDay === toDay) {
-        // Single day
-        whereClauses.push(`(EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) = ${fromDay})`);
+        whereClauses.push(
+          `(EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) = ${fromDay})`
+        );
       } else if (fromMonth < toMonth || (fromMonth === toMonth && fromDay <= toDay)) {
-        // Same year range
-        whereClauses.push(`(
-          (EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) >= ${fromDay})
-          OR (EXTRACT(MONTH FROM t.t_date) > ${fromMonth} AND EXTRACT(MONTH FROM t.t_date) < ${toMonth})
-          OR (EXTRACT(MONTH FROM t.t_date) = ${toMonth} AND EXTRACT(DAY FROM t.t_date) <= ${toDay})
-        )`);
+        whereClauses.push(
+          `((EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) >= ${fromDay}) OR (EXTRACT(MONTH FROM t.t_date) > ${fromMonth} AND EXTRACT(MONTH FROM t.t_date) < ${toMonth}) OR (EXTRACT(MONTH FROM t.t_date) = ${toMonth} AND EXTRACT(DAY FROM t.t_date) <= ${toDay}))`
+        );
       } else {
-        // Wraps around year (e.g., Dec to Jan)
-        whereClauses.push(`(
-          (EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) >= ${fromDay})
-          OR (EXTRACT(MONTH FROM t.t_date) > ${fromMonth})
-          OR (EXTRACT(MONTH FROM t.t_date) < ${toMonth})
-          OR (EXTRACT(MONTH FROM t.t_date) = ${toMonth} AND EXTRACT(DAY FROM t.t_date) <= ${toDay})
-        )`);
+        whereClauses.push(
+          `((EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) >= ${fromDay}) OR (EXTRACT(MONTH FROM t.t_date) > ${fromMonth}) OR (EXTRACT(MONTH FROM t.t_date) < ${toMonth}) OR (EXTRACT(MONTH FROM t.t_date) = ${toMonth} AND EXTRACT(DAY FROM t.t_date) <= ${toDay}))`
+        );
       }
     }
 
-    const filterKeys = ['productGroup', 'productFamily', 'styleConcept', 'patternStyle', 
-                       'colorFamily', 'colorIntensity', 'specificColor', 'customerSegment', 'fabricTypeBase'];
-    
+    // --- Dynamic Column Filters (Safe) ---
+    const filterKeys = [
+      'productGroup',
+      'productFamily',
+      'styleConcept',
+      'patternStyle',
+      'colorFamily',
+      'colorIntensity',
+      'specificColor',
+      'customerSegment',
+      'fabricTypeBase',
+    ];
+
+    const validColumns = new Set([
+      'product_group',
+      'product_family',
+      'style_concept',
+      'pattern_style',
+      'color_family',
+      'color_intensity',
+      'specific_color',
+      'customer_segment',
+      'fabric_type_base',
+    ]);
+
     for (const key of filterKeys) {
       const val = request.query[`filter_${key}`];
       if (val) {
-        const values = (val as string).split(',').map(v => v.trim()).filter(v => v.length > 0);
+        const values = (val as string)
+          .split(',')
+          .map((v: string) => v.trim())
+          .filter((v: string) => v.length > 0);
         if (values.length > 0) {
           const col = key.replace(/([A-Z])/g, '_$1').toLowerCase();
-          const p = values.map(() => `$${paramIndex++}`).join(', ');
-          whereClauses.push(`a.${col} IN (${p})`);
-          params.push(...values);
+          if (validColumns.has(col)) {
+            const p = values.map(() => `$${paramIndex++}`).join(', ');
+            whereClauses.push(`a.${col} IN (${p})`);
+            params.push(...values);
+          }
         }
       }
     }
-    
+
     const whereClause = whereClauses.join(' AND ');
-
-    // --- Safe Sorting ---
-    let orderByClause = '';
     const sortD = sortDir.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
-    
-    // We cannot sort by transaction_count anymore as we aren't calculating it
-    if (sortBy === 'article_id') {
-      orderByClause = `ORDER BY a.article_id ${sortD}`;
-    } else {
-      // For text fields, use MAX to ensure unique row per ID if we were grouping
-      // Since we use DISTINCT below, we can order by the column directly if it's unique per article
-      // But to be safe with DISTINCT + JOIN:
-      orderByClause = `ORDER BY a.${sortBy} ${sortD}`;
-    }
+    const orderByClause = `ORDER BY a.${sortBy === 'article_id' ? 'article_id' : sortBy} ${sortD}`;
 
-    // --- STEP 1: Get IDs (Distinct) ---
-    // We use DISTINCT instead of GROUP BY + COUNT to save performance
+    // --- Queries ---
     const idsQuery = `
-      SELECT DISTINCT
-        a.article_id
+      SELECT DISTINCT a.article_id
       FROM transactions_train t
       INNER JOIN articles a ON a.article_id = t.article_id
       WHERE ${whereClause}
@@ -247,7 +304,6 @@ fastify.get<{
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
 
-    // --- STEP 2: Count Total ---
     const countQuery = `
       SELECT COUNT(DISTINCT a.article_id) as total
       FROM transactions_train t
@@ -255,49 +311,54 @@ fastify.get<{
       WHERE ${whereClause}
     `;
 
+    const limitNum = parseInt(limit, 10) || 10;
+    const offsetNum = parseInt(offset, 10) || 0;
+
     const [idsResult, countResult] = await Promise.all([
-      pool.query(idsQuery, [...params, parseInt(limit), parseInt(offset)]),
-      pool.query(countQuery, params)
+      pool.query(idsQuery, [...params, limitNum, offsetNum]),
+      pool.query(countQuery, params),
     ]);
 
-    const rows = idsResult.rows;
-    
-    if (rows.length === 0) {
-      return reply.send({ items: [], total: 0, limit: parseInt(limit), offset: parseInt(offset) });
+    if (idsResult.rows.length === 0) {
+      return reply.send({ items: [], total: 0, limit: limitNum, offset: offsetNum });
     }
 
-    // --- STEP 3: Hydrate Details ---
-    const foundIds = rows.map((r: any) => r.article_id);
-    const idPlaceholders = foundIds.map((_, i) => `$${i + 1}`).join(', ');
-    
-    const detailsQuery = `SELECT * FROM articles WHERE article_id IN (${idPlaceholders})`;
-    const detailsResult = await pool.query(detailsQuery, foundIds);
-    
+    const foundIds = idsResult.rows.map((r: any) => r.article_id);
+    const idPlaceholders = foundIds.map((_: string, i: number) => `$${i + 1}`).join(', ');
+    const detailsResult = await pool.query(
+      `SELECT * FROM articles WHERE article_id IN (${idPlaceholders})`,
+      foundIds
+    );
+
     const detailsMap = new Map();
     detailsResult.rows.forEach((d: any) => detailsMap.set(d.article_id, d));
 
-    // --- STEP 4: Merge & Return ---
-    const items = rows.map((row: any) => {
+    const items = idsResult.rows.map((row: any) => {
       const details = detailsMap.get(row.article_id) || {};
-      return {
-        ...details, // Spreads all article columns
-        articleId: row.article_id, // CamelCase ID
-        // Note: transactionCount and lastSaleDate are explicitly OMITTED here
-      };
+      return { ...details, articleId: row.article_id };
     });
 
     return reply.send({
       items,
-      total: parseInt(countResult.rows[0].total),
-      limit: parseInt(limit),
-      offset: parseInt(offset),
+      total: parseInt(countResult.rows[0]?.total || '0', 10),
+      limit: limitNum,
+      offset: offsetNum,
     });
-
   } catch (error) {
     request.log.error({ error }, 'Failed to fetch products');
     return reply.status(500).send({ error: 'Internal Server Error' } as any);
   }
-});
+};
+
+// Register products endpoints
+fastify.get<{ Querystring: ProductsQuery; Reply: ProductsResponse }>('/products', productsHandler);
+fastify.get<{ Querystring: ProductsQuery; Reply: ProductsResponse }>(
+  '/products/preview',
+  productsHandler
+);
+
+// Register project routes
+await fastify.register(projectRoutes, { prefix: '/api' });
 
 const start = async () => {
   try {

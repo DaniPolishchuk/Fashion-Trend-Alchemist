@@ -10,6 +10,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/product-selection" element={<ProductSelection />} />
         <Route path="/analysis" element={<Analysis />} />
+        <Route path="/project/:projectId/analysis" element={<Analysis />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

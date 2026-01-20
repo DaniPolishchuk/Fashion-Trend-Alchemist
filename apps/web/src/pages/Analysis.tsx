@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ShellBar,
   Button,
@@ -28,11 +28,10 @@ import '@ui5/webcomponents-icons/dist/navigation-right-arrow.js';
 import '@ui5/webcomponents-icons/dist/navigation-left-arrow.js';
 import '@ui5/webcomponents-icons/dist/color-fill.js';
 import '@ui5/webcomponents-icons/dist/activate.js';
+import '@ui5/webcomponents-icons/dist/accept.js';
 import '@ui5/webcomponents-fiori/dist/illustrations/NoData.js';
 
 import type { FiltersResponse } from '@fashion/types';
-
-const STORAGE_KEY = 'fashion.productSelection.selectedTypes';
 
 // --- CONFIG: Columns to exclude from the visual table ---
 const HIDDEN_COLUMNS = ['product_group', 'transactionCount', 'lastSaleDate', 'articleId'];
@@ -41,22 +40,24 @@ type Season = 'spring' | 'summer' | 'autumn' | 'winter' | null;
 
 function Analysis() {
   const navigate = useNavigate();
-  
+  const location = useLocation();
+
   // --- Global State ---
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [project, setProject] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  
+  const [error, setError] = useState<string | null>(null);
+
   // --- Date / Season State ---
   const [selectedSeason, setSelectedSeason] = useState<Season>(null);
   const [startDay, setStartDay] = useState<string>('');
   const [startMonth, setStartMonth] = useState<string>('');
   const [endDay, setEndDay] = useState<string>('');
   const [endMonth, setEndMonth] = useState<string>('');
-  
+
   // --- Filter Options ---
   const [filterOptions, setFilterOptions] = useState<FiltersResponse | null>(null);
   const [filterOptionsLoading, setFilterOptionsLoading] = useState(false);
-  
+
   // --- Selected Filters ---
   const [selectedProductGroup, setSelectedProductGroup] = useState<string[]>([]);
   const [selectedProductFamily, setSelectedProductFamily] = useState<string[]>([]);
@@ -67,17 +68,18 @@ function Analysis() {
   const [selectedSpecificColor, setSelectedSpecificColor] = useState<string[]>([]);
   const [selectedColorIntensity, setSelectedColorIntensity] = useState<string[]>([]);
   const [selectedFabricType, setSelectedFabricType] = useState<string[]>([]);
-  
+
   // --- Dialog State ---
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
   const [tempSelection, setTempSelection] = useState<string[]>([]);
 
   // --- Data State ---
-  const [products, setProducts] = useState<any[]>([]); 
+  const [products, setProducts] = useState<any[]>([]);
   const [totalProducts, setTotalProducts] = useState(0);
   const [productsLoading, setProductsLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [limit] = useState(10); 
+  const [limit] = useState(10);
+  const [lockingContext, setLockingContext] = useState(false);
 
   // --- Helper Functions ---
   const getMaxDaysInMonth = (month: number): number => {
@@ -102,45 +104,52 @@ function Analysis() {
   };
 
   const hasValidDateRange = (): boolean => {
-    return !!(startDay && startMonth && endDay && endMonth &&
-           validateDate(startDay, startMonth) && validateDate(endDay, endMonth));
+    return !!(
+      startDay &&
+      startMonth &&
+      endDay &&
+      endMonth &&
+      validateDate(startDay, startMonth) &&
+      validateDate(endDay, endMonth)
+    );
   };
 
   // --- Initial Load ---
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as string[];
-        const typeNames = parsed.map(key => key.includes('::') ? key.split('::')[1] : key);
-        setSelectedTypes(typeNames);
-      } catch (e) {
-        console.error('Failed to load saved selections', e);
-      }
+    // Get project data from router state
+    const projectData = (location.state as any)?.projectData;
+
+    if (!projectData) {
+      setError('No project data provided');
+      setLoading(false);
+      return;
     }
+
+    // Set project data directly from router state (no fetch needed)
+    setProject(projectData);
     setLoading(false);
-  }, []);
+  }, [location.state]);
 
   // --- Fetch Filters ---
   useEffect(() => {
-    if (selectedTypes.length > 0) {
+    if (project?.scopeConfig?.productTypes?.length > 0) {
       // Only fetch if we have valid date input or no date input at all
       const hasAnyDateInput = startDay || startMonth || endDay || endMonth;
       const shouldFetch = selectedSeason || !hasAnyDateInput || hasValidDateRange();
-      
+
       if (shouldFetch) {
         fetchFilterOptions();
       }
     }
-  }, [selectedTypes, selectedSeason, startDay, startMonth, endDay, endMonth]);
+  }, [project, selectedSeason, startDay, startMonth, endDay, endMonth]);
 
   // --- Fetch Products ---
   useEffect(() => {
-    if (selectedTypes.length > 0) {
+    if (project?.scopeConfig?.productTypes?.length > 0) {
       // Only fetch if we have valid date input or no date input at all
       const hasAnyDateInput = startDay || startMonth || endDay || endMonth;
       const shouldFetch = selectedSeason || !hasAnyDateInput || hasValidDateRange();
-      
+
       if (shouldFetch) {
         const timer = setTimeout(() => {
           fetchProducts();
@@ -149,15 +158,26 @@ function Analysis() {
       }
     }
   }, [
-    selectedTypes, selectedSeason, startDay, startMonth, endDay, endMonth,
-    selectedProductGroup, selectedProductFamily, selectedStyleConcept, 
-    selectedColorFamily, selectedCustomerSegment, selectedPattern,
-    selectedSpecificColor, selectedColorIntensity, selectedFabricType,
-    currentPage
+    project,
+    selectedSeason,
+    startDay,
+    startMonth,
+    endDay,
+    endMonth,
+    selectedProductGroup,
+    selectedProductFamily,
+    selectedStyleConcept,
+    selectedColorFamily,
+    selectedCustomerSegment,
+    selectedPattern,
+    selectedSpecificColor,
+    selectedColorIntensity,
+    selectedFabricType,
+    currentPage,
   ]);
 
   // --- Handlers: Date & Reset ---
-  
+
   const handleSeasonClick = (season: Season) => {
     if (selectedSeason === season) {
       setSelectedSeason(null);
@@ -171,12 +191,15 @@ function Analysis() {
     setCurrentPage(1);
   };
 
-  const handleDateInput = (field: 'startDay' | 'startMonth' | 'endDay' | 'endMonth', value: string) => {
+  const handleDateInput = (
+    field: 'startDay' | 'startMonth' | 'endDay' | 'endMonth',
+    value: string
+  ) => {
     // Only allow numbers
     if (value && !/^\d+$/.test(value)) return;
-    
+
     setSelectedSeason(null);
-    
+
     switch (field) {
       case 'startDay':
         setStartDay(value);
@@ -191,7 +214,7 @@ function Analysis() {
         setEndMonth(value);
         break;
     }
-    
+
     setCurrentPage(1);
   };
 
@@ -227,14 +250,30 @@ function Analysis() {
   const applyDialog = () => {
     if (!activeDialog) return;
     switch (activeDialog) {
-      case 'customerSegment': setSelectedCustomerSegment(tempSelection); break;
-      case 'colorFamily': setSelectedColorFamily(tempSelection); break;
-      case 'styleConcept': setSelectedStyleConcept(tempSelection); break;
-      case 'productFamily': setSelectedProductFamily(tempSelection); break;
-      case 'patternStyle': setSelectedPattern(tempSelection); break;
-      case 'specificColor': setSelectedSpecificColor(tempSelection); break;
-      case 'colorIntensity': setSelectedColorIntensity(tempSelection); break;
-      case 'fabricTypeBase': setSelectedFabricType(tempSelection); break;
+      case 'customerSegment':
+        setSelectedCustomerSegment(tempSelection);
+        break;
+      case 'colorFamily':
+        setSelectedColorFamily(tempSelection);
+        break;
+      case 'styleConcept':
+        setSelectedStyleConcept(tempSelection);
+        break;
+      case 'productFamily':
+        setSelectedProductFamily(tempSelection);
+        break;
+      case 'patternStyle':
+        setSelectedPattern(tempSelection);
+        break;
+      case 'specificColor':
+        setSelectedSpecificColor(tempSelection);
+        break;
+      case 'colorIntensity':
+        setSelectedColorIntensity(tempSelection);
+        break;
+      case 'fabricTypeBase':
+        setSelectedFabricType(tempSelection);
+        break;
     }
     setCurrentPage(1);
     closeDialog();
@@ -242,17 +281,19 @@ function Analysis() {
 
   // --- API Calls ---
   const fetchFilterOptions = async () => {
+    if (!project?.scopeConfig?.productTypes) return;
+
     try {
       setFilterOptionsLoading(true);
-      const typesParam = selectedTypes.join(',');
+      const typesParam = project.scopeConfig.productTypes.join(',');
       const params = new URLSearchParams({ types: typesParam });
       if (selectedSeason) params.append('season', selectedSeason);
       else if (hasValidDateRange()) {
         params.append('mdFrom', formatDateString(startDay, startMonth));
         params.append('mdTo', formatDateString(endDay, endMonth));
       }
-      
-      const response = await fetch(`/api/filters/attributes?${params}`);
+
+      const response = await fetch(`/filters/attributes?${params}`);
       if (!response.ok) throw new Error('Failed to fetch filters');
       const data = await response.json();
       setFilterOptions(data);
@@ -264,12 +305,14 @@ function Analysis() {
   };
 
   const fetchProducts = async () => {
+    if (!project?.scopeConfig?.productTypes?.length) return;
+
     try {
       setProductsLoading(true);
       const params = new URLSearchParams({
-        types: selectedTypes.join(','),
         limit: String(limit),
         offset: String((currentPage - 1) * limit),
+        types: project.scopeConfig.productTypes.join(','),
       });
 
       if (selectedSeason) params.append('season', selectedSeason);
@@ -278,26 +321,146 @@ function Analysis() {
         params.append('mdTo', formatDateString(endDay, endMonth));
       }
 
-      if (selectedProductGroup.length) params.append('filter_productGroup', selectedProductGroup.join(','));
-      if (selectedProductFamily.length) params.append('filter_productFamily', selectedProductFamily.join(','));
-      if (selectedStyleConcept.length) params.append('filter_styleConcept', selectedStyleConcept.join(','));
-      if (selectedColorFamily.length) params.append('filter_colorFamily', selectedColorFamily.join(','));
-      if (selectedCustomerSegment.length) params.append('filter_customerSegment', selectedCustomerSegment.join(','));
+      if (selectedProductGroup.length)
+        params.append('filter_productGroup', selectedProductGroup.join(','));
+      if (selectedProductFamily.length)
+        params.append('filter_productFamily', selectedProductFamily.join(','));
+      if (selectedStyleConcept.length)
+        params.append('filter_styleConcept', selectedStyleConcept.join(','));
+      if (selectedColorFamily.length)
+        params.append('filter_colorFamily', selectedColorFamily.join(','));
+      if (selectedCustomerSegment.length)
+        params.append('filter_customerSegment', selectedCustomerSegment.join(','));
       if (selectedPattern.length) params.append('filter_patternStyle', selectedPattern.join(','));
-      if (selectedSpecificColor.length) params.append('filter_specificColor', selectedSpecificColor.join(','));
-      if (selectedColorIntensity.length) params.append('filter_colorIntensity', selectedColorIntensity.join(','));
-      if (selectedFabricType.length) params.append('filter_fabricTypeBase', selectedFabricType.join(','));
+      if (selectedSpecificColor.length)
+        params.append('filter_specificColor', selectedSpecificColor.join(','));
+      if (selectedColorIntensity.length)
+        params.append('filter_colorIntensity', selectedColorIntensity.join(','));
+      if (selectedFabricType.length)
+        params.append('filter_fabricTypeBase', selectedFabricType.join(','));
 
-      const response = await fetch(`/api/products?${params}`);
-      if (!response.ok) throw new Error('Failed to fetch products');
+      // Use a generic products endpoint instead of project-specific one
+      const response = await fetch(`/products/preview?${params}`);
+      if (!response.ok) throw new Error('Failed to fetch context');
       const data = await response.json();
-      
-      setProducts(data.items);
-      setTotalProducts(data.total);
+
+      setProducts(data.items || data.products || data);
+      setTotalProducts(data.total || data.count || (Array.isArray(data) ? data.length : 0));
     } catch (err) {
       console.error(err);
     } finally {
       setProductsLoading(false);
+    }
+  };
+
+  const handleLockContext = async () => {
+    if (!project?.name || !project?.scopeConfig) return;
+
+    try {
+      setLockingContext(true);
+      setError(null);
+
+      // Step 1: Create the project first
+      const createResponse = await fetch('/api/projects', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: project.name,
+          scopeConfig: project.scopeConfig,
+        }),
+      });
+
+      if (!createResponse.ok) {
+        const errorData = await createResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to create project');
+      }
+
+      const createdProject = await createResponse.json();
+      console.log('Project created successfully:', createdProject);
+
+      // Step 2: Get top 50 articles with velocity scores using the preview-context endpoint
+      const params = new URLSearchParams();
+
+      if (selectedSeason) params.append('season', selectedSeason);
+      else if (hasValidDateRange()) {
+        params.append('mdFrom', formatDateString(startDay, startMonth));
+        params.append('mdTo', formatDateString(endDay, endMonth));
+      }
+
+      if (selectedProductGroup.length)
+        params.append('filter_productGroup', selectedProductGroup.join(','));
+      if (selectedProductFamily.length)
+        params.append('filter_productFamily', selectedProductFamily.join(','));
+      if (selectedStyleConcept.length)
+        params.append('filter_styleConcept', selectedStyleConcept.join(','));
+      if (selectedColorFamily.length)
+        params.append('filter_colorFamily', selectedColorFamily.join(','));
+      if (selectedCustomerSegment.length)
+        params.append('filter_customerSegment', selectedCustomerSegment.join(','));
+      if (selectedPattern.length) params.append('filter_patternStyle', selectedPattern.join(','));
+      if (selectedSpecificColor.length)
+        params.append('filter_specificColor', selectedSpecificColor.join(','));
+      if (selectedColorIntensity.length)
+        params.append('filter_colorIntensity', selectedColorIntensity.join(','));
+      if (selectedFabricType.length)
+        params.append('filter_fabricTypeBase', selectedFabricType.join(','));
+
+      const previewResponse = await fetch(
+        `/api/projects/${createdProject.id}/preview-context?${params}`
+      );
+      if (!previewResponse.ok) {
+        const errorData = await previewResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to get articles for locking');
+      }
+
+      const articles = await previewResponse.json();
+      console.log('Retrieved articles for locking:', articles.length);
+
+      // Step 3: Lock the context with the actual articles
+      const seasonConfig = selectedSeason
+        ? { season: selectedSeason }
+        : hasValidDateRange()
+          ? {
+              startDate: formatDateString(startDay, startMonth),
+              endDate: formatDateString(endDay, endMonth),
+            }
+          : null;
+
+      const lockResponse = await fetch(`/api/projects/${createdProject.id}/lock-context`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          articles,
+          seasonConfig,
+        }),
+      });
+
+      if (!lockResponse.ok) {
+        const errorData = await lockResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to lock context');
+      }
+
+      const result = await lockResponse.json();
+      console.log('Context locked successfully:', result);
+
+      // Update the project state with the created project and locked status
+      setProject({
+        ...createdProject,
+        status: 'active',
+        lockedAt: new Date().toISOString(),
+      });
+
+      // Navigate to the project-based URL
+      navigate(`/project/${createdProject.id}/analysis`, { replace: true });
+    } catch (err) {
+      console.error('Failed to create project and lock context:', err);
+      setError(err instanceof Error ? err.message : 'Failed to create project and lock context');
+    } finally {
+      setLockingContext(false);
     }
   };
 
@@ -318,8 +481,10 @@ function Analysis() {
   };
 
   const getPopularityLabel = () => {
-    if (selectedSeason) return `${selectedSeason.charAt(0).toUpperCase() + selectedSeason.slice(1)} items`;
-    if (hasValidDateRange()) return `Items from ${formatDateString(startDay, startMonth)} to ${formatDateString(endDay, endMonth)}`;
+    if (selectedSeason)
+      return `${selectedSeason.charAt(0).toUpperCase() + selectedSeason.slice(1)} items`;
+    if (hasValidDateRange())
+      return `Items from ${formatDateString(startDay, startMonth)} to ${formatDateString(endDay, endMonth)}`;
     return 'All time';
   };
 
@@ -329,20 +494,30 @@ function Analysis() {
   const canGoNext = currentPage < totalPages;
 
   const handlePreviousPage = () => {
-    if (canGoPrevious) setCurrentPage(prev => prev - 1);
+    if (canGoPrevious) setCurrentPage((prev) => prev - 1);
   };
 
   const handleNextPage = () => {
-    if (canGoNext) setCurrentPage(prev => prev + 1);
+    if (canGoNext) setCurrentPage((prev) => prev + 1);
   };
 
   // --- COMPONENT: Filter Card Item ---
-  const FilterCardItem = ({ title, icon, selectedData, dialogKey }: { title: string; icon: string; selectedData: string[]; dialogKey: string; }) => {
+  const FilterCardItem = ({
+    title,
+    icon,
+    selectedData,
+    dialogKey,
+  }: {
+    title: string;
+    icon: string;
+    selectedData: string[];
+    dialogKey: string;
+  }) => {
     const isSelected = selectedData.length > 0;
     const [isHovered, setIsHovered] = useState(false);
 
     return (
-      <div 
+      <div
         onClick={() => openDialog(dialogKey, selectedData)}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -350,7 +525,7 @@ function Analysis() {
           minWidth: '140px',
           height: '70px',
           // Dynamic border color: Selected gets Blue, Hover gets darker gray, Default light gray
-          border: `1px solid ${isSelected ? '#0070F2' : (isHovered ? '#888' : 'var(--sapList_BorderColor)')}`,
+          border: `1px solid ${isSelected ? '#0070F2' : isHovered ? '#888' : 'var(--sapList_BorderColor)'}`,
           borderRadius: '0.5rem',
           padding: '0.75rem',
           // Keep consistent background (no blue tint when selected)
@@ -361,22 +536,39 @@ function Analysis() {
           justifyContent: 'space-between',
           flexShrink: 0,
           transition: 'all 0.2s ease',
-          boxShadow: isHovered ? '0 2px 8px rgba(0,0,0,0.1)' : 'none'
+          boxShadow: isHovered ? '0 2px 8px rgba(0,0,0,0.1)' : 'none',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Icon name={icon} style={{ color: isSelected ? '#0070F2' : 'var(--sapContent_IconColor)' }} />
+          <Icon
+            name={icon}
+            style={{ color: isSelected ? '#0070F2' : 'var(--sapContent_IconColor)' }}
+          />
           {isSelected && (
-             <span style={{
-                background: '#0070F2', color: 'white', borderRadius: '50%', 
-                width: '18px', height: '18px', fontSize: '11px', 
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
-             }}>
-               {selectedData.length}
-             </span>
+            <span
+              style={{
+                background: '#0070F2',
+                color: 'white',
+                borderRadius: '50%',
+                width: '18px',
+                height: '18px',
+                fontSize: '11px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {selectedData.length}
+            </span>
           )}
         </div>
-        <Text style={{ fontSize: '0.75rem', color: isSelected ? '#0070F2' : 'var(--sapContent_LabelColor)', fontWeight: isSelected ? 600 : 400 }}>
+        <Text
+          style={{
+            fontSize: '0.75rem',
+            color: isSelected ? '#0070F2' : 'var(--sapContent_LabelColor)',
+            fontWeight: isSelected ? 600 : 400,
+          }}
+        >
           {title}
         </Text>
       </div>
@@ -386,37 +578,47 @@ function Analysis() {
   const getDialogOptions = () => {
     if (!activeDialog || !filterOptions) return [];
     switch (activeDialog) {
-      case 'customerSegment': return filterOptions.customerSegment;
-      case 'colorFamily': return filterOptions.colorFamily;
-      case 'styleConcept': return filterOptions.styleConcept;
-      case 'productFamily': return filterOptions.productFamily;
-      case 'patternStyle': return filterOptions.patternStyle;
-      case 'specificColor': return filterOptions.specificColor;
-      case 'colorIntensity': return filterOptions.colorIntensity;
-      case 'fabricTypeBase': return filterOptions.fabricTypeBase;
-      default: return [];
+      case 'customerSegment':
+        return filterOptions.customerSegment;
+      case 'colorFamily':
+        return filterOptions.colorFamily;
+      case 'styleConcept':
+        return filterOptions.styleConcept;
+      case 'productFamily':
+        return filterOptions.productFamily;
+      case 'patternStyle':
+        return filterOptions.patternStyle;
+      case 'specificColor':
+        return filterOptions.specificColor;
+      case 'colorIntensity':
+        return filterOptions.colorIntensity;
+      case 'fabricTypeBase':
+        return filterOptions.fabricTypeBase;
+      default:
+        return [];
     }
   };
 
   // --- Dynamic Table Logic ---
   const getVisibleKeys = () => {
     if (products.length === 0) return [];
-    
+
     // Priority order for display
     const priority = ['article_id', 'product_name', 'product_type'];
     const keys = Object.keys(products[0]);
-    
+
     // Filter and separate detail_desc
-    const filteredKeys = keys.filter(key => 
-      // Exclude unwanted columns
-      !HIDDEN_COLUMNS.includes(key) && 
-      // Safety check for objects
-      (typeof products[0][key] !== 'object' || products[0][key] === null)
+    const filteredKeys = keys.filter(
+      (key) =>
+        // Exclude unwanted columns
+        !HIDDEN_COLUMNS.includes(key) &&
+        // Safety check for objects
+        (typeof products[0][key] !== 'object' || products[0][key] === null)
     );
-    
-    const detailDescKey = filteredKeys.find(key => key.toLowerCase() === 'detail_desc');
-    const otherKeys = filteredKeys.filter(key => key.toLowerCase() !== 'detail_desc');
-    
+
+    const detailDescKey = filteredKeys.find((key) => key.toLowerCase() === 'detail_desc');
+    const otherKeys = filteredKeys.filter((key) => key.toLowerCase() !== 'detail_desc');
+
     // Sort other keys by priority
     const sortedOtherKeys = otherKeys.sort((a, b) => {
       const idxA = priority.indexOf(a);
@@ -426,32 +628,54 @@ function Analysis() {
       if (idxB !== -1) return 1;
       return a.localeCompare(b);
     });
-    
+
     // Add detail_desc at the end if it exists
     return detailDescKey ? [...sortedOtherKeys, detailDescKey] : sortedOtherKeys;
   };
 
   const visibleKeys = getVisibleKeys();
 
-  if (loading) return <BusyIndicator active size="L" style={{ display: 'block', margin: 'auto', marginTop: '20vh' }} />;
-
-  if (selectedTypes.length === 0) {
+  if (loading)
     return (
-      <IllustratedMessage name="NoData" titleText="No Selection">
+      <BusyIndicator
+        active
+        size="L"
+        style={{ display: 'block', margin: 'auto', marginTop: '20vh' }}
+      />
+    );
+
+  if (error) {
+    return (
+      <IllustratedMessage name="NoData" titleText="Error">
+        <Text>{error}</Text>
+        <Button onClick={() => navigate('/product-selection')}>Back to Selection</Button>
+      </IllustratedMessage>
+    );
+  }
+
+  if (!project) {
+    return (
+      <IllustratedMessage name="NoData" titleText="No Project">
         <Button onClick={() => navigate('/product-selection')}>Go to Selection</Button>
       </IllustratedMessage>
     );
   }
 
   return (
-    <div style={{ background: 'var(--sapBackgroundColor)', minHeight: '100vh', paddingBottom: '2rem' }}>
-      <ShellBar 
-        primaryTitle="The Fashion Trend Alchemist" 
-        profile={<Avatar icon="employee" size="XS" style={{ background: 'var(--sapAccentColor1)' }} />}
+    <div
+      style={{ background: 'var(--sapBackgroundColor)', minHeight: '100vh', paddingBottom: '2rem' }}
+    >
+      <ShellBar
+        primaryTitle="The Fashion Trend Alchemist"
+        profile={
+          <Avatar icon="employee" size="XS" style={{ background: 'var(--sapAccentColor1)' }} />
+        }
       />
-      
+
       <div style={{ padding: '1rem 2rem 0' }}>
-        <Title level="H2" style={{ marginBottom: '0.5rem' }}>Context Analysis: {getPopularityLabel()}</Title>
+        <Title level="H2" style={{ marginBottom: '0.5rem' }}>
+          Context Analysis: {getPopularityLabel()}
+        </Title>
       </div>
 
       {/* Filter Section */}
@@ -459,65 +683,118 @@ function Analysis() {
         <Card>
           <div style={{ display: 'flex', height: '130px' }}>
             {/* Left: Date Section */}
-            <div style={{ 
-              width: '360px', 
-              padding: '1rem', 
-              borderRight: '1px solid var(--sapList_BorderColor)',
-              display: 'flex', 
-              flexDirection: 'column', 
-              gap: '0.75rem', 
-              flexShrink: 0, 
-              justifyContent: 'center',
-              alignItems: 'center'
-            }}>
+            <div
+              style={{
+                width: '360px',
+                padding: '1rem',
+                borderRight: '1px solid var(--sapList_BorderColor)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem',
+                flexShrink: 0,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
               {/* Date Range Inputs with Labels */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+              <div
+                style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                  }}
+                >
                   <Label style={{ fontSize: '0.875rem', minWidth: '40px' }}>Start:</Label>
                   <Input
                     value={startDay}
                     placeholder="DD"
                     onInput={(e: any) => handleDateInput('startDay', e.target.value)}
-                    valueState={startDay && !validateDate(startDay, startMonth || '1') ? 'Negative' : 'None'}
-                    style={{ width: '60px', height: '25px', background: 'var(--sapBackgroundColor)' }}
+                    valueState={
+                      startDay && !validateDate(startDay, startMonth || '1') ? 'Negative' : 'None'
+                    }
+                    style={{
+                      width: '60px',
+                      height: '25px',
+                      background: 'var(--sapBackgroundColor)',
+                    }}
                   />
                   <span style={{ fontSize: '0.875rem', fontWeight: 'bold' }}>/</span>
                   <Input
                     value={startMonth}
                     placeholder="MM"
                     onInput={(e: any) => handleDateInput('startMonth', e.target.value)}
-                    valueState={startMonth && (parseInt(startMonth) < 1 || parseInt(startMonth) > 12) ? 'Negative' : 'None'}
-                    style={{ width: '60px', height: '25px', background: 'var(--sapBackgroundColor)' }}
+                    valueState={
+                      startMonth && (parseInt(startMonth) < 1 || parseInt(startMonth) > 12)
+                        ? 'Negative'
+                        : 'None'
+                    }
+                    style={{
+                      width: '60px',
+                      height: '25px',
+                      background: 'var(--sapBackgroundColor)',
+                    }}
                   />
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                  }}
+                >
                   <Label style={{ fontSize: '0.875rem', minWidth: '40px' }}>End:</Label>
                   <Input
                     value={endDay}
                     placeholder="DD"
                     onInput={(e: any) => handleDateInput('endDay', e.target.value)}
-                    valueState={endDay && !validateDate(endDay, endMonth || '1') ? 'Negative' : 'None'}
-                    style={{ width: '60px', height: '25px', background: 'var(--sapBackgroundColor)' }}
+                    valueState={
+                      endDay && !validateDate(endDay, endMonth || '1') ? 'Negative' : 'None'
+                    }
+                    style={{
+                      width: '60px',
+                      height: '25px',
+                      background: 'var(--sapBackgroundColor)',
+                    }}
                   />
                   <span style={{ fontSize: '0.875rem', fontWeight: 'bold' }}>/</span>
                   <Input
                     value={endMonth}
                     placeholder="MM"
                     onInput={(e: any) => handleDateInput('endMonth', e.target.value)}
-                    valueState={endMonth && (parseInt(endMonth) < 1 || parseInt(endMonth) > 12) ? 'Negative' : 'None'}
-                    style={{ width: '60px', height: '25px', background: 'var(--sapBackgroundColor)' }}
+                    valueState={
+                      endMonth && (parseInt(endMonth) < 1 || parseInt(endMonth) > 12)
+                        ? 'Negative'
+                        : 'None'
+                    }
+                    style={{
+                      width: '60px',
+                      height: '25px',
+                      background: 'var(--sapBackgroundColor)',
+                    }}
                   />
                 </div>
               </div>
-              
+
               {/* Season Buttons */}
-              <div style={{ display: 'flex', gap: '0.25rem', width: '100%', justifyContent: 'center' }}>
+              <div
+                style={{ display: 'flex', gap: '0.25rem', width: '100%', justifyContent: 'center' }}
+              >
                 {(['spring', 'summer', 'autumn', 'winter'] as const).map((season) => (
                   <Button
                     key={season}
                     design={selectedSeason === season ? 'Emphasized' : 'Default'}
                     onClick={() => handleSeasonClick(season)}
-                    style={{ flex: 1, textTransform: 'capitalize', fontSize: '0.75rem', height:'20px' }}
+                    style={{
+                      flex: 1,
+                      textTransform: 'capitalize',
+                      fontSize: '0.75rem',
+                      height: '20px',
+                    }}
                   >
                     {season}
                   </Button>
@@ -526,20 +803,89 @@ function Analysis() {
             </div>
 
             {/* Right: Attribute Scroll + Reset Button */}
-            <div style={{ flex: 1, padding: '0.75rem', display: 'flex', alignItems: 'center', minWidth: 0, gap: '1rem' }}>
-              <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', flex: 1, height: '100%', alignItems: 'center', scrollbarWidth: 'thin' }}>
-                <FilterCardItem title="Pattern/Style" icon="display" selectedData={selectedPattern} dialogKey="patternStyle" />
-                <FilterCardItem title="Specific Color" icon="palette" selectedData={selectedSpecificColor} dialogKey="specificColor" />
-                <FilterCardItem title="Color Intensity" icon="palette" selectedData={selectedColorIntensity} dialogKey="colorIntensity" />
-                <FilterCardItem title="Color Family" icon="palette" selectedData={selectedColorFamily} dialogKey="colorFamily" />
-                <FilterCardItem title="Product Family" icon="product" selectedData={selectedProductFamily} dialogKey="productFamily" />
-                <FilterCardItem title="Customer Segment" icon="group" selectedData={selectedCustomerSegment} dialogKey="customerSegment" />
-                <FilterCardItem title="Style Concept" icon="display" selectedData={selectedStyleConcept} dialogKey="styleConcept" />
-                <FilterCardItem title="Fabric Type" icon="activate" selectedData={selectedFabricType} dialogKey="fabricTypeBase" />
+            <div
+              style={{
+                flex: 1,
+                padding: '0.75rem',
+                display: 'flex',
+                alignItems: 'center',
+                minWidth: 0,
+                gap: '1rem',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '0.75rem',
+                  overflowX: 'auto',
+                  flex: 1,
+                  height: '100%',
+                  alignItems: 'center',
+                  scrollbarWidth: 'thin',
+                }}
+              >
+                <FilterCardItem
+                  title="Pattern/Style"
+                  icon="display"
+                  selectedData={selectedPattern}
+                  dialogKey="patternStyle"
+                />
+                <FilterCardItem
+                  title="Specific Color"
+                  icon="palette"
+                  selectedData={selectedSpecificColor}
+                  dialogKey="specificColor"
+                />
+                <FilterCardItem
+                  title="Color Intensity"
+                  icon="palette"
+                  selectedData={selectedColorIntensity}
+                  dialogKey="colorIntensity"
+                />
+                <FilterCardItem
+                  title="Color Family"
+                  icon="palette"
+                  selectedData={selectedColorFamily}
+                  dialogKey="colorFamily"
+                />
+                <FilterCardItem
+                  title="Product Family"
+                  icon="product"
+                  selectedData={selectedProductFamily}
+                  dialogKey="productFamily"
+                />
+                <FilterCardItem
+                  title="Customer Segment"
+                  icon="group"
+                  selectedData={selectedCustomerSegment}
+                  dialogKey="customerSegment"
+                />
+                <FilterCardItem
+                  title="Style Concept"
+                  icon="display"
+                  selectedData={selectedStyleConcept}
+                  dialogKey="styleConcept"
+                />
+                <FilterCardItem
+                  title="Fabric Type"
+                  icon="activate"
+                  selectedData={selectedFabricType}
+                  dialogKey="fabricTypeBase"
+                />
               </div>
-              
-              <div style={{ borderLeft: '1px solid var(--sapList_BorderColor)', height: '100%', paddingLeft: '1rem', display: 'flex', alignItems: 'center' }}>
-                 <Button design="Transparent" onClick={handleResetFilters}>Reset All</Button>
+
+              <div
+                style={{
+                  borderLeft: '1px solid var(--sapList_BorderColor)',
+                  height: '100%',
+                  paddingLeft: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                <Button design="Transparent" onClick={handleResetFilters}>
+                  Reset All
+                </Button>
               </div>
             </div>
           </div>
@@ -550,12 +896,53 @@ function Analysis() {
       <div style={{ display: 'flex', gap: '2rem', padding: '0 2rem 1rem', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Icon name="list" style={{ color: 'var(--sapContent_LabelColor)' }} />
-          <div><Text style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)', textTransform: 'uppercase' }}>Total Products</Text><Title level="H4">{totalProducts}</Title></div>
+          <div>
+            <Text
+              style={{
+                fontSize: '0.7rem',
+                color: 'var(--sapContent_LabelColor)',
+                textTransform: 'uppercase',
+              }}
+            >
+              Total Products
+            </Text>
+            <Title level="H4">{totalProducts}</Title>
+          </div>
         </div>
         <div style={{ height: '30px', borderLeft: '1px solid var(--sapList_BorderColor)' }}></div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Icon name="filter" style={{ color: 'var(--sapContent_LabelColor)' }} />
-          <div><Text style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)', textTransform: 'uppercase' }}>Active Filters</Text><Title level="H4">{getActiveFilterCount()}</Title></div>
+          <div>
+            <Text
+              style={{
+                fontSize: '0.7rem',
+                color: 'var(--sapContent_LabelColor)',
+                textTransform: 'uppercase',
+              }}
+            >
+              Active Filters
+            </Text>
+            <Title level="H4">{getActiveFilterCount()}</Title>
+          </div>
+        </div>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {project?.status === 'locked' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Icon name="accept" style={{ color: 'var(--sapPositiveColor)' }} />
+              <Text style={{ color: 'var(--sapPositiveColor)', fontSize: '0.875rem' }}>
+                Context Locked
+              </Text>
+            </div>
+          )}
+          {project?.status !== 'locked' && (
+            <Button
+              design="Emphasized"
+              onClick={handleLockContext}
+              disabled={lockingContext || totalProducts === 0}
+            >
+              {lockingContext ? 'Confirming...' : 'Confirm Cohort'}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -563,14 +950,36 @@ function Analysis() {
       <div style={{ padding: '0 2rem' }}>
         <Card>
           <div style={{ overflowX: 'auto', maxHeight: '600px' }}>
-            <table style={{ minWidth: products.length > 0 ? 'max-content' : '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-              <thead style={{ background: 'var(--sapList_HeaderBackground)', position: 'sticky', top: 0, zIndex: 1 }}>
+            <table
+              style={{
+                minWidth: products.length > 0 ? 'max-content' : '100%',
+                borderCollapse: 'collapse',
+                fontSize: '0.875rem',
+              }}
+            >
+              <thead
+                style={{
+                  background: 'var(--sapList_HeaderBackground)',
+                  position: 'sticky',
+                  top: 0,
+                  zIndex: 1,
+                }}
+              >
                 <tr>
                   {productsLoading ? (
-                     <th style={{ padding: '1rem' }}>Loading data...</th>
+                    <th style={{ padding: '1rem' }}>Loading data...</th>
                   ) : products.length > 0 ? (
                     visibleKeys.map((key) => (
-                      <th key={key} style={{ padding: '1rem', textAlign: 'left', borderBottom: '1px solid var(--sapList_BorderColor)', textTransform: 'capitalize', whiteSpace: 'nowrap' }}>
+                      <th
+                        key={key}
+                        style={{
+                          padding: '1rem',
+                          textAlign: 'left',
+                          borderBottom: '1px solid var(--sapList_BorderColor)',
+                          textTransform: 'capitalize',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
                         {key.replace(/_/g, ' ')}
                       </th>
                     ))
@@ -581,31 +990,45 @@ function Analysis() {
               </thead>
               <tbody>
                 {productsLoading ? (
-                  <tr><td colSpan={visibleKeys.length || 1} style={{ textAlign: 'center', padding: '3rem' }}><BusyIndicator active size="M" /></td></tr>
+                  <tr>
+                    <td
+                      colSpan={visibleKeys.length || 1}
+                      style={{ textAlign: 'center', padding: '3rem' }}
+                    >
+                      <BusyIndicator active size="M" />
+                    </td>
+                  </tr>
                 ) : products.length === 0 ? (
-                  <tr><td colSpan={10} style={{ textAlign: 'center', padding: '3rem' }}><IllustratedMessage name="NoData" titleText="No items found" /></td></tr>
+                  <tr>
+                    <td colSpan={10} style={{ textAlign: 'center', padding: '3rem' }}>
+                      <IllustratedMessage name="NoData" titleText="No items found" />
+                    </td>
+                  </tr>
                 ) : (
                   products.map((product) => (
-                    <tr key={product.article_id} style={{ borderBottom: '1px solid var(--sapList_BorderColor)' }}>
-                       {visibleKeys.map((key) => {
-                         const isDetailDesc = key.toLowerCase() === 'detail_desc';
-                         return (
-                           <td 
-                             key={`${product.article_id}-${key}`} 
-                             style={{ 
-                               padding: '0.75rem', 
-                               whiteSpace: isDetailDesc ? 'normal' : 'nowrap',
-                               minWidth: isDetailDesc ? '400px' : 'auto',
-                               maxWidth: isDetailDesc ? '600px' : '300px',
-                               overflow: 'hidden', 
-                               textOverflow: isDetailDesc ? 'clip' : 'ellipsis',
-                               wordWrap: isDetailDesc ? 'break-word' : 'normal'
-                             }}
-                           >
-                             {product[key]}
-                           </td>
-                         );
-                       })}
+                    <tr
+                      key={product.article_id}
+                      style={{ borderBottom: '1px solid var(--sapList_BorderColor)' }}
+                    >
+                      {visibleKeys.map((key) => {
+                        const isDetailDesc = key.toLowerCase() === 'detail_desc';
+                        return (
+                          <td
+                            key={`${product.article_id}-${key}`}
+                            style={{
+                              padding: '0.75rem',
+                              whiteSpace: isDetailDesc ? 'normal' : 'nowrap',
+                              minWidth: isDetailDesc ? '400px' : 'auto',
+                              maxWidth: isDetailDesc ? '600px' : '300px',
+                              overflow: 'hidden',
+                              textOverflow: isDetailDesc ? 'clip' : 'ellipsis',
+                              wordWrap: isDetailDesc ? 'break-word' : 'normal',
+                            }}
+                          >
+                            {product[key]}
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))
                 )}
@@ -618,7 +1041,8 @@ function Analysis() {
               design="Footer"
               startContent={
                 <Text style={{ fontSize: '0.875rem', color: 'var(--sapContent_LabelColor)' }}>
-                  Showing {((currentPage - 1) * limit) + 1}-{Math.min(currentPage * limit, totalProducts)} of {totalProducts}
+                  Showing {(currentPage - 1) * limit + 1}-
+                  {Math.min(currentPage * limit, totalProducts)} of {totalProducts}
                 </Text>
               }
               endContent={
@@ -646,30 +1070,36 @@ function Analysis() {
       </div>
 
       {/* Dialog with Checkbox-based Selection */}
-      <Dialog 
-        open={!!activeDialog} 
-        headerText={`Select ${activeDialog?.replace(/([A-Z])/g, ' $1').trim()}`} 
+      <Dialog
+        open={!!activeDialog}
+        headerText={`Select ${activeDialog?.replace(/([A-Z])/g, ' $1').trim()}`}
         footer={
-          <Bar 
-            design="Footer" 
+          <Bar
+            design="Footer"
             endContent={
               <>
-                <Button design="Transparent" onClick={closeDialog}>Cancel</Button>
-                <Button design="Emphasized" onClick={applyDialog}>Apply</Button>
+                <Button design="Transparent" onClick={closeDialog}>
+                  Cancel
+                </Button>
+                <Button design="Emphasized" onClick={applyDialog}>
+                  Apply
+                </Button>
               </>
-            } 
+            }
           />
         }
       >
-        <div style={{ 
-          width: '300px', 
-          height: '230px', 
-          padding: filterOptionsLoading ? '0.5rem' : '0.75rem 0.5rem',
-          overflowY: 'auto',
-          display: filterOptionsLoading ? 'flex' : 'block',
-          justifyContent: filterOptionsLoading ? 'center' : 'flex-start',
-          alignItems: filterOptionsLoading ? 'center' : 'flex-start'
-        }}>
+        <div
+          style={{
+            width: '300px',
+            height: '230px',
+            padding: filterOptionsLoading ? '0.5rem' : '0.75rem 0.5rem',
+            overflowY: 'auto',
+            display: filterOptionsLoading ? 'flex' : 'block',
+            justifyContent: filterOptionsLoading ? 'center' : 'flex-start',
+            alignItems: filterOptionsLoading ? 'center' : 'flex-start',
+          }}
+        >
           {filterOptionsLoading ? (
             <BusyIndicator active size="M" />
           ) : (
@@ -680,10 +1110,8 @@ function Analysis() {
                   <div
                     key={opt}
                     onClick={() => {
-                      setTempSelection(prev => 
-                        prev.includes(opt) 
-                          ? prev.filter(x => x !== opt)
-                          : [...prev, opt]
+                      setTempSelection((prev) =>
+                        prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]
                       );
                     }}
                     style={{
@@ -691,10 +1119,12 @@ function Analysis() {
                       borderRadius: '4px',
                       transition: 'background-color 0.2s',
                       backgroundColor: 'transparent',
-                      cursor: 'pointer'
+                      cursor: 'pointer',
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--sapList_Hover_Background)'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.backgroundColor = 'var(--sapList_Hover_Background)')
+                    }
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                   >
                     <CheckBox
                       checked={isChecked}
