@@ -77,3 +77,12 @@ export const llmConfig = {
   apiKey: process.env.LLM_API_KEY || '',
   model: process.env.LLM_MODEL || 'gpt-4',
 } as const;
+
+/**
+ * Vision LLM configuration (via LiteLLM proxy)
+ */
+export const visionLlmConfig = {
+  proxyUrl: process.env.LITELLM_PROXY_URL || 'https://litellm-apac.a549aaa.kyma.ondemand.com/',
+  apiKey: process.env.LITELLM_API_KEY || '',
+  model: process.env.VISION_LLM_MODEL || 'sapgenai-gpt-4.1',
+} as const;

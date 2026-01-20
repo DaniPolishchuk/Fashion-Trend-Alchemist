@@ -18,6 +18,7 @@ import '@ui5/webcomponents-icons/dist/ai.js';
 import '@ui5/webcomponents-icons/dist/table-chart.js';
 import '@ui5/webcomponents-icons/dist/grid.js';
 import '@ui5/webcomponents-icons/dist/business-objects-experience.js';
+import '@ui5/webcomponents-icons/dist/play.js';
 
 // Tab components
 import TheAlchemistTab from './tabs/TheAlchemistTab';
@@ -37,6 +38,9 @@ interface ProjectData {
   ontologySchema: Record<string, Record<string, string[]>> | null;
   createdAt: string;
   deletedAt: string | null;
+  enrichmentStatus?: 'idle' | 'running' | 'completed' | 'failed';
+  enrichmentProcessed?: number;
+  enrichmentTotal?: number;
 }
 
 function ProjectHub() {
@@ -49,10 +53,11 @@ function ProjectHub() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('alchemist');
 
-  // Dummy progress state
-  const [imageDescriptionProgress] = useState(85);
+  // Enrichment state
+  const [enrichmentStatus, setEnrichmentStatus] = useState<'idle' | 'running' | 'completed' | 'failed'>('idle');
+  const [enrichmentProgress, setEnrichmentProgress] = useState({ processed: 0, total: 0 });
 
-  // Fetch project data
+  // Fetch project data and enrichment status
   useEffect(() => {
     const fetchProject = async () => {
       if (!projectId) {
@@ -63,12 +68,25 @@ function ProjectHub() {
 
       try {
         setLoading(true);
-        const response = await fetch(`/api/projects/${projectId}`);
-        if (!response.ok) {
+
+        // Fetch project data and enrichment status in parallel
+        const [projectResponse, statusResponse] = await Promise.all([
+          fetch(`/api/projects/${projectId}`),
+          fetch(`/api/projects/${projectId}/enrichment-status`),
+        ]);
+
+        if (!projectResponse.ok) {
           throw new Error('Failed to fetch project');
         }
-        const data = await response.json();
+        const data = await projectResponse.json();
         setProject(data);
+
+        // Set enrichment status if available
+        if (statusResponse.ok) {
+          const statusData = await statusResponse.json();
+          setEnrichmentStatus(statusData.status || 'idle');
+          setEnrichmentProgress(statusData.progress || { processed: 0, total: 0 });
+        }
       } catch (err) {
         console.error('Failed to fetch project:', err);
         setError(err instanceof Error ? err.message : 'Failed to load project');
@@ -79,6 +97,50 @@ function ProjectHub() {
 
     fetchProject();
   }, [projectId]);
+
+  // SSE connection for real-time enrichment progress
+  useEffect(() => {
+    if (enrichmentStatus !== 'running' || !projectId) return;
+
+    const eventSource = new EventSource(`/api/projects/${projectId}/enrichment-progress`);
+
+    eventSource.addEventListener('progress', (e) => {
+      const data = JSON.parse(e.data);
+      setEnrichmentProgress({ processed: data.processed, total: data.total });
+    });
+
+    eventSource.addEventListener('completed', () => {
+      setEnrichmentStatus('completed');
+      eventSource.close();
+    });
+
+    eventSource.addEventListener('error', () => {
+      setEnrichmentStatus('failed');
+      eventSource.close();
+    });
+
+    return () => eventSource.close();
+  }, [projectId, enrichmentStatus]);
+
+  // Handle start enrichment
+  const handleStartEnrichment = async () => {
+    if (!projectId) return;
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/start-enrichment`, {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        setEnrichmentStatus('running');
+      } else {
+        const data = await response.json();
+        console.error('Failed to start enrichment:', data.error);
+      }
+    } catch (err) {
+      console.error('Failed to start enrichment:', err);
+    }
+  };
 
   const tabs: { id: TabType; label: string; icon: string }[] = [
     { id: 'alchemist', label: 'The Alchemist', icon: 'ai' },
@@ -200,27 +262,44 @@ function ProjectHub() {
           </Text>
         </div>
 
-        {/* Right: Progress Indicator */}
+        {/* Right: Progress Indicator with Start Button */}
         <div
           style={{
-            border: '1px solid var(--sapList_BorderColor)',
-            borderRadius: '0.5rem',
-            padding: '0.75rem 1rem',
-            background: 'var(--sapList_Background)',
-            minWidth: '200px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-            <Text style={{ fontSize: '0.875rem' }}>Image Description</Text>
-            <Text style={{ fontSize: '0.875rem', color: '#0070F2', fontWeight: 600 }}>
-              {imageDescriptionProgress}%
-            </Text>
-          </div>
-          <ProgressIndicator
-            value={imageDescriptionProgress}
-            valueState="Information"
-            style={{ width: '100%' }}
+          <Button
+            icon="play"
+            design="Transparent"
+            onClick={handleStartEnrichment}
+            disabled={enrichmentStatus === 'running' || project.status !== 'active'}
+            tooltip="Start Image Enrichment"
           />
+          <div
+            style={{
+              border: '1px solid var(--sapList_BorderColor)',
+              borderRadius: '0.5rem',
+              padding: '0.75rem 1rem',
+              background: 'var(--sapList_Background)',
+              minWidth: '200px',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+              <Text style={{ fontSize: '0.875rem' }}>Image Description</Text>
+              <Text style={{ fontSize: '0.875rem', color: '#0070F2', fontWeight: 600 }}>
+                {enrichmentProgress.processed}/{enrichmentProgress.total}
+              </Text>
+            </div>
+            <ProgressIndicator
+              value={enrichmentProgress.total > 0
+                ? (enrichmentProgress.processed / enrichmentProgress.total) * 100
+                : 0}
+              valueState={enrichmentStatus === 'running' ? 'Information' : 'None'}
+              style={{ width: '100%' }}
+            />
+          </div>
         </div>
       </div>
 
