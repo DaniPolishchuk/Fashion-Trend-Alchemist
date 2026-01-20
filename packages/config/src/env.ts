@@ -68,3 +68,12 @@ export const appConfig = {
 export const imageConfig = {
   urlExpirationSeconds: parseInt(process.env.IMAGE_URL_EXPIRATION || '3600', 10),
 } as const;
+
+/**
+ * LLM API configuration
+ */
+export const llmConfig = {
+  apiUrl: process.env.LLM_API_URL || 'https://api.openai.com/v1',
+  apiKey: process.env.LLM_API_KEY || '',
+  model: process.env.LLM_MODEL || 'gpt-4',
+} as const;

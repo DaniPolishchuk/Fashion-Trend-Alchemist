@@ -160,9 +160,22 @@ function ProductSelection() {
     setSelectedTypes(new Set());
   };
 
-  const handleProceed = () => {
+  const handleProceed = async () => {
     console.log('Selected types:', Array.from(selectedTypes));
     console.log('Matching rows:', rowCount);
+    
+    // Extract product type names from selection keys
+    const types = Array.from(selectedTypes).map(key => key.split('::')[1]);
+    
+    // Trigger attribute generation (fire and forget)
+    if (types.length > 0) {
+      fetch('/api/generate-attributes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productTypes: types })
+      }).catch(err => console.error('Failed to generate attributes:', err));
+    }
+    
     navigate('/analysis');
   };
 
