@@ -104,3 +104,16 @@ export type UpdateProjectInput = z.infer<typeof UpdateProjectInputSchema>;
 export type ProjectResponse = z.infer<typeof ProjectResponseSchema>;
 export type PreviewContextQuery = z.infer<typeof PreviewContextQuerySchema>;
 export type LockContextInput = z.infer<typeof LockContextInputSchema>;
+
+/**
+ * Extended project type for list view with additional computed fields
+ */
+export interface ProjectListItem {
+  id: string;
+  name: string;
+  status: 'draft' | 'active';
+  timePeriod: string | null; // Derived from season_config
+  productGroup: string | null; // Derived from scope_config
+  generatedProductsCount: number;
+  createdAt: string;
+}
