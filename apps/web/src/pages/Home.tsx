@@ -96,9 +96,7 @@ function Home() {
   }, []);
 
   // Derive time period from seasonConfig
-  const deriveTimePeriod = (
-    seasonConfig: Record<string, unknown> | null
-  ): string | null => {
+  const deriveTimePeriod = (seasonConfig: Record<string, unknown> | null): string | null => {
     if (!seasonConfig) return null;
     const season = seasonConfig.season as string | undefined;
     if (season) {
@@ -113,9 +111,7 @@ function Home() {
   };
 
   // Derive product group from scopeConfig
-  const deriveProductGroup = (
-    scopeConfig: Record<string, unknown> | null
-  ): string | null => {
+  const deriveProductGroup = (scopeConfig: Record<string, unknown> | null): string | null => {
     if (!scopeConfig) return null;
     const productGroups = scopeConfig.productGroups as string[] | undefined;
     if (productGroups && productGroups.length > 0) {
@@ -175,8 +171,19 @@ function Home() {
   if (loading) {
     return (
       <>
-        <ShellBar primaryTitle="The Fashion Trend Alchemist" showNotifications showProductSwitch={false} />
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 'calc(100vh - 44px)' }}>
+        <ShellBar
+          primaryTitle="The Fashion Trend Alchemist"
+          showNotifications
+          showProductSwitch={false}
+        />
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            height: 'calc(100vh - 44px)',
+          }}
+        >
           <BusyIndicator active size="L" />
         </div>
       </>
@@ -185,9 +192,19 @@ function Home() {
 
   return (
     <>
-      <ShellBar primaryTitle="The Fashion Trend Alchemist" showNotifications showProductSwitch={false} />
+      <ShellBar
+        primaryTitle="The Fashion Trend Alchemist"
+        showNotifications
+        showProductSwitch={false}
+      />
 
-      <Page style={{ height: 'calc(100vh - 44px)', padding: '1.5rem 2rem', background: 'var(--sapBackgroundColor)' }}>
+      <Page
+        style={{
+          height: 'calc(100vh - 44px)',
+          padding: '1.5rem 2rem',
+          background: 'var(--sapBackgroundColor)',
+        }}
+      >
         {/* Projects Section */}
         <Card
           style={{ marginBottom: '1.5rem' }}
@@ -201,7 +218,9 @@ function Home() {
                     placeholder="Search projects..."
                     icon={<Icon name="search" />}
                     value={searchQuery}
-                    onInput={(e: CustomEvent) => setSearchQuery((e.target as HTMLInputElement).value)}
+                    onInput={(e: CustomEvent) =>
+                      setSearchQuery((e.target as HTMLInputElement).value)
+                    }
                     style={{ width: '200px' }}
                   />
                   <Button icon="action-settings" design="Transparent" />
@@ -247,11 +266,15 @@ function Home() {
                       <th style={{ padding: '0.75rem 1rem', textAlign: 'left', width: '40px' }}>
                         <Icon name="pushpin-off" style={{ color: 'var(--sapContent_IconColor)' }} />
                       </th>
-                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', width: '100px' }}>Status</th>
+                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', width: '100px' }}>
+                        Status
+                      </th>
                       <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Project Name</th>
                       <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Time Period</th>
                       <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Product Group</th>
-                      <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Generated Products</th>
+                      <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
+                        Generated Products
+                      </th>
                       <th style={{ padding: '0.75rem 1rem', width: '40px' }}></th>
                     </tr>
                   </thead>
@@ -265,20 +288,26 @@ function Home() {
                           borderBottom: '1px solid var(--sapList_BorderColor)',
                         }}
                         onMouseEnter={(e) =>
-                          (e.currentTarget.style.backgroundColor = 'var(--sapList_Hover_Background)')
+                          (e.currentTarget.style.backgroundColor =
+                            'var(--sapList_Hover_Background)')
                         }
-                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.backgroundColor = 'transparent')
+                        }
                       >
                         <td style={{ padding: '0.75rem 1rem' }}>
                           <Icon
                             name="pushpin-off"
-                            style={{ color: 'var(--sapContent_IconColor)', opacity: 0.3, cursor: 'pointer' }}
+                            style={{
+                              color: 'var(--sapContent_IconColor)',
+                              opacity: 0.3,
+                              cursor: 'pointer',
+                            }}
                           />
                         </td>
                         <td style={{ padding: '0.75rem 1rem' }}>
                           <ObjectStatus
                             state={project.status === 'active' ? 'Positive' : 'Information'}
-                            icon={project.status === 'active' ? 'accept' : 'synchronize'}
                           >
                             {project.status === 'active' ? 'Ready' : 'Processing'}
                           </ObjectStatus>
@@ -307,7 +336,10 @@ function Home() {
                           <Text>{project.generatedProductsCount}</Text>
                         </td>
                         <td style={{ padding: '0.75rem 1rem' }}>
-                          <Icon name="slim-arrow-right" style={{ color: 'var(--sapContent_IconColor)' }} />
+                          <Icon
+                            name="slim-arrow-right"
+                            style={{ color: 'var(--sapContent_IconColor)' }}
+                          />
                         </td>
                       </tr>
                     ))}
@@ -322,7 +354,8 @@ function Home() {
                   startContent={
                     <Text style={{ fontSize: '0.875rem', color: 'var(--sapContent_LabelColor)' }}>
                       Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}-
-                      {Math.min(currentPage * ITEMS_PER_PAGE, filteredProjects.length)} of {filteredProjects.length}
+                      {Math.min(currentPage * ITEMS_PER_PAGE, filteredProjects.length)} of{' '}
+                      {filteredProjects.length}
                     </Text>
                   }
                   endContent={
@@ -380,10 +413,7 @@ function Home() {
                   }
                   onClick={() => console.log('View collection:', collection.id)}
                 >
-                  <FlexBox
-                    wrap="Wrap"
-                    style={{ padding: '0.5rem', gap: '0.5rem' }}
-                  >
+                  <FlexBox wrap="Wrap" style={{ padding: '0.5rem', gap: '0.5rem' }}>
                     {/* Show up to 4 images in a 2x2 grid */}
                     {[0, 1, 2, 3].map((index) => {
                       const imageUrl = collection.imageUrls[index];
