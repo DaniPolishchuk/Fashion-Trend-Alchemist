@@ -293,15 +293,10 @@ export function AttributeGenerationDialog({
               </Label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                 {selectedTypes.map(type => (
-                  <span key={type} style={{
-                    padding: '0.25rem 0.75rem',
-                    background: 'var(--sapButton_Background)',
-                    border: '1px solid var(--sapButton_BorderColor)',
-                    borderRadius: '0.25rem',
-                    fontSize: '0.875rem'
-                  }}>
-                    {type}
-                  </span>
+                  <div key={type} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Icon name="product" style={{ color: 'var(--sapContent_IconColor)' }} />
+                    <Text>{type}</Text>
+                  </div>
                 ))}
               </div>
             </div>
@@ -312,12 +307,7 @@ export function AttributeGenerationDialog({
                 Seasonal Lens
               </Label>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <div style={{ 
-                  width: '8px', 
-                  height: '8px', 
-                  borderRadius: '50%', 
-                  background: selectedSeason === 'autumn' ? '#F0AB00' : '#0070F2'
-                }} />
+                <Icon name="history" style={{ color: 'var(--sapContent_IconColor)' }} />
                 <Text>{getSeasonalLens()}</Text>
               </div>
             </div>
@@ -366,7 +356,7 @@ export function AttributeGenerationDialog({
                 </div>
                 <Button 
                   design="Emphasized" 
-                  icon="refresh"
+                  icon="da"
                   onClick={() => onRegenerate()}
                   disabled={attributesLoading}
                 >
@@ -470,7 +460,7 @@ export function AttributeGenerationDialog({
                             style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.5rem' }}
                             onClick={() => handleOpenOptionsPopup(attr.category, attr.key)}
                           >
-                            <Icon name="product" style={{ color: 'var(--sapContent_IconColor)', fontSize: '1rem' }} />
+                            <Icon name="ai" style={{ color: 'var(--sapContent_IconColor)', fontSize: '1rem' }} />
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                               <Text style={{ fontWeight: '600', fontSize: '0.875rem' }}>{attr.name}</Text>
                               <Text style={{ fontSize: '0.75rem', color: 'var(--sapContent_LabelColor)' }}>

@@ -69,6 +69,40 @@ fastify.get<{ Reply: Taxonomy }>('/api/taxonomy', async (request, reply) => {
 });
 
 /**
+ * GET /api/articles/count
+ */
+fastify.get<{ Querystring: { types: string }; Reply: { count: number } }>(
+  '/api/articles/count',
+  async (request, reply) => {
+    try {
+      const { types } = request.query;
+      if (!types || types.trim() === '') return reply.status(200).send({ count: 0 });
+
+      const typeArray = types
+        .split(',')
+        .map((t: string) => t.trim())
+        .filter((t: string) => t.length > 0);
+
+      if (typeArray.length === 0) return reply.status(200).send({ count: 0 });
+
+      const placeholders = typeArray.map((_: string, i: number) => `$${i + 1}`).join(', ');
+      const query = `
+      SELECT COUNT(DISTINCT article_id) as count
+      FROM articles
+      WHERE product_type IN (${placeholders})
+    `;
+
+      const result = await pool.query(query, typeArray);
+      const count = result.rows[0]?.count ? parseInt(result.rows[0].count, 10) : 0;
+      return reply.status(200).send({ count });
+    } catch (error) {
+      request.log.error({ error }, 'Failed to fetch article count');
+      return reply.status(500).send({ count: 0 });
+    }
+  }
+);
+
+/**
  * GET /api/transactions/count
  */
 fastify.get<{ Querystring: { types: string }; Reply: { count: number } }>(
@@ -377,8 +411,25 @@ fastify.get<{ Querystring: ProductsQuery; Reply: ProductsResponse }>(
 await fastify.register(projectRoutes, { prefix: '/api' });
 
 /**
+ * Helper function to extract JSON from LLM response
+ */
+function extractJSON(text: string): string {
+  // Try to find JSON in code blocks first
+  const codeBlockMatch = text.match(/```json\n([\s\S]*?)\n```/) || text.match(/```\n([\s\S]*?)\n```/);
+  if (codeBlockMatch) return codeBlockMatch[1].trim();
+  
+  // Try to find JSON object directly
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (jsonMatch) return jsonMatch[0].trim();
+  
+  // Return as-is if no patterns found
+  return text.trim();
+}
+
+/**
  * POST /api/generate-attributes
  * UI-based attribute generation with conversation history support
+ * Includes automatic retry logic for JSON parsing failures
  */
 fastify.post<{ 
   Body: { 
@@ -407,7 +458,7 @@ fastify.post<{
       baseURL: llmConfig.apiUrl,
     });
 
-    // Build messages array
+    // Build initial messages array
     let messages: any[];
     
     if (conversationHistory && conversationHistory.length > 0) {
@@ -434,40 +485,60 @@ Please generate a comprehensive attribute schema following the format in the exa
       ];
     }
 
-    // Make LLM request
-    console.log('⏳ Calling LLM...');
-    const completion = await openai.chat.completions.create({
-      model: llmConfig.model,
-      messages: messages,
-      temperature: 0.7,
-    });
-
-    const responseContent = completion.choices[0]?.message?.content || '';
-    
-    // Add assistant response to conversation history
-    messages.push({ role: 'assistant', content: responseContent });
-    
-    // Try to parse JSON from response
+    // Retry logic for JSON parsing
+    const MAX_RETRIES = 3;
     let attributeSet: any;
-    try {
-      const jsonMatch = responseContent.match(/```json\n([\s\S]*?)\n```/) || responseContent.match(/```\n([\s\S]*?)\n```/);
-      const jsonString = jsonMatch ? jsonMatch[1] : responseContent;
-      attributeSet = JSON.parse(jsonString);
-    } catch (parseError) {
-      console.error('❌ Failed to parse JSON response');
-      return reply.status(500).send({ 
-        error: 'Failed to parse LLM response',
-        rawResponse: responseContent 
-      });
+    let lastError: any = null;
+    
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        console.log(`⏳ Calling LLM (attempt ${attempt}/${MAX_RETRIES})...`);
+        
+        const completion = await openai.chat.completions.create({
+          model: llmConfig.model,
+          messages: messages,
+          temperature: 0.7,
+        });
+
+        const responseContent = completion.choices[0]?.message?.content || '';
+        
+        // Add assistant response to conversation history
+        messages.push({ role: 'assistant', content: responseContent });
+        
+        // Try to parse JSON from response
+        const jsonString = extractJSON(responseContent);
+        attributeSet = JSON.parse(jsonString);
+        
+        // Success! Exit retry loop
+        console.log('✅ Attributes generated and parsed successfully\n');
+        return reply.send({ 
+          success: true, 
+          attributeSet,
+          conversationHistory: messages
+        });
+        
+      } catch (parseError) {
+        lastError = parseError;
+        console.error(`❌ JSON parse failed on attempt ${attempt}/${MAX_RETRIES}`);
+        
+        if (attempt < MAX_RETRIES) {
+          // Add retry instruction to conversation
+          messages.push({
+            role: 'user',
+            content: 'The previous response was not valid JSON. Please provide ONLY valid JSON in your response, wrapped in ```json code blocks. Ensure the JSON is properly formatted with no syntax errors.'
+          });
+          console.log('🔄 Retrying with JSON formatting instructions...');
+        } else {
+          // All retries exhausted
+          console.error('❌ Failed to parse JSON after all retries');
+          return reply.status(500).send({ 
+            error: 'Failed to parse LLM response after multiple attempts',
+            details: lastError instanceof Error ? lastError.message : 'Unknown error',
+            rawResponse: messages[messages.length - 1]?.content
+          });
+        }
+      }
     }
-
-    console.log('✅ Attributes generated successfully\n');
-
-    return reply.send({ 
-      success: true, 
-      attributeSet,
-      conversationHistory: messages
-    });
     
   } catch (error) {
     request.log.error({ error }, 'Failed to generate attributes');

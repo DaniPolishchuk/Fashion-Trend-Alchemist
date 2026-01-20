@@ -45,6 +45,7 @@ function ProductSelection() {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [sortAZ, setSortAZ] = useState(true);
   const [rowCount, setRowCount] = useState<number | null>(null);
+  const [articleCount, setArticleCount] = useState<number | null>(null);
   const [countLoading, setCountLoading] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [projectCreating, setProjectCreating] = useState(false);
@@ -71,15 +72,17 @@ function ProductSelection() {
     fetchTaxonomy();
   }, []);
 
-  // Debounced row count fetch
+  // Debounced count fetch (both transactions and articles)
   useEffect(() => {
     if (selectedTypes.size === 0) {
       setRowCount(0);
+      setArticleCount(0);
       return;
     }
 
     const timer = setTimeout(() => {
       fetchRowCount();
+      fetchArticleCount();
     }, 500);
 
     return () => clearTimeout(timer);
@@ -124,6 +127,26 @@ function ProductSelection() {
       setRowCount(null);
     } finally {
       setCountLoading(false);
+    }
+  };
+
+  const fetchArticleCount = async () => {
+    try {
+      // Extract just the product type names from the keys
+      const types = Array.from(selectedTypes).map((key) => key.split('::')[1]);
+      const typesParam = types.join(',');
+
+      const response = await fetch(`/api/articles/count?types=${encodeURIComponent(typesParam)}`);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch article count');
+      }
+
+      const data = await response.json();
+      setArticleCount(data.count);
+    } catch (err) {
+      console.error('Failed to fetch article count:', err);
+      setArticleCount(null);
     }
   };
 
@@ -320,13 +343,20 @@ function ProductSelection() {
                 />
               </div>
             </div>
-            <div style={{ marginTop: '4px' }}>
+            <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
               {countLoading ? (
                 <ObjectStatus state="Information">Loading...</ObjectStatus>
               ) : rowCount !== null ? (
-                <ObjectStatus state="Information">
-                  {rowCount.toLocaleString()} transaction rows
-                </ObjectStatus>
+                <>
+                  <ObjectStatus state="Information">
+                    {rowCount.toLocaleString()} transaction rows
+                  </ObjectStatus>
+                  {articleCount !== null && (
+                    <ObjectStatus state="Information">
+                      {articleCount.toLocaleString()} unique articles
+                    </ObjectStatus>
+                  )}
+                </>
               ) : (
                 <ObjectStatus state="None">Select types</ObjectStatus>
               )}

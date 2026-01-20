@@ -15,6 +15,8 @@ import {
   CheckBox,
   Input,
   Label,
+  Breadcrumbs,
+  BreadcrumbsItem,
 } from '@ui5/webcomponents-react';
 import '@ui5/webcomponents-icons/dist/calendar.js';
 import '@ui5/webcomponents-icons/dist/group.js';
@@ -715,6 +717,24 @@ function Analysis() {
           <Avatar icon="employee" size="XS" style={{ background: 'var(--sapAccentColor1)' }} />
         }
       />
+
+      {/* Breadcrumbs */}
+      <div style={{ padding: '12px 2rem 0' }}>
+        <Breadcrumbs
+          onItemClick={(e: any) => {
+            const text = e.detail.item.textContent?.trim();
+            if (text === 'Home') {
+              navigate('/');
+            } else if (text === 'Product Selection') {
+              navigate('/product-selection');
+            }
+          }}
+        >
+          <BreadcrumbsItem>Home</BreadcrumbsItem>
+          <BreadcrumbsItem>Product Selection</BreadcrumbsItem>
+          <BreadcrumbsItem>Analysis</BreadcrumbsItem>
+        </Breadcrumbs>
+      </div>
 
       <div style={{ padding: '1rem 2rem 0' }}>
         <Title level="H2" style={{ marginBottom: '0.5rem' }}>
