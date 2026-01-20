@@ -37,7 +37,6 @@ import '@ui5/webcomponents-fiori/dist/illustrations/NoData.js';
 import type { FiltersResponse } from '@fashion/types';
 import { AttributeGenerationDialog } from '../components/AttributeGenerationDialog';
 
-// --- CONFIG: Columns to exclude from the visual table ---
 const HIDDEN_COLUMNS = ['product_group', 'transactionCount', 'lastSaleDate', 'articleId'];
 
 type Season = 'spring' | 'summer' | 'autumn' | 'winter' | null;
@@ -83,7 +82,6 @@ function Analysis() {
   const [attributesLoading, setAttributesLoading] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [conversationHistory, setConversationHistory] = useState<any[]>([]);
-  const [productGroup, setProductGroup] = useState<string>('Apparel & Fashion');
 
   // --- Data State ---
   const [products, setProducts] = useState<any[]>([]);
@@ -128,32 +126,14 @@ function Analysis() {
 
   // --- Initial Load ---
   useEffect(() => {
-    // Get project data from router state
     const projectData = (location.state as any)?.projectData;
 
     if (!projectData) {
       setError('No project data provided');
       setLoading(false);
       return;
-
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as string[];
-        const typeNames = parsed.map(key => key.includes('::') ? key.split('::')[1] : key);
-        setSelectedTypes(typeNames);
-        
-        // Extract product group from the first selected item
-        if (parsed.length > 0 && parsed[0].includes('::')) {
-          const group = parsed[0].split('::')[0];
-          setProductGroup(group);
-        }
-      } catch (e) {
-        console.error('Failed to load saved selections', e);
-      }
     }
 
-    // Set project data directly from router state (no fetch needed)
     setProject(projectData);
     setLoading(false);
   }, [location.state]);
@@ -161,7 +141,6 @@ function Analysis() {
   // --- Fetch Filters ---
   useEffect(() => {
     if (project?.scopeConfig?.productTypes?.length > 0) {
-      // Only fetch if we have valid date input or no date input at all
       const hasAnyDateInput = startDay || startMonth || endDay || endMonth;
       const shouldFetch = selectedSeason || !hasAnyDateInput || hasValidDateRange();
 
@@ -174,7 +153,6 @@ function Analysis() {
   // --- Fetch Products ---
   useEffect(() => {
     if (project?.scopeConfig?.productTypes?.length > 0) {
-      // Only fetch if we have valid date input or no date input at all
       const hasAnyDateInput = startDay || startMonth || endDay || endMonth;
       const shouldFetch = selectedSeason || !hasAnyDateInput || hasValidDateRange();
 
@@ -205,7 +183,6 @@ function Analysis() {
   ]);
 
   // --- Handlers: Date & Reset ---
-
   const handleSeasonClick = (season: Season) => {
     if (selectedSeason === season) {
       setSelectedSeason(null);
@@ -223,9 +200,7 @@ function Analysis() {
     field: 'startDay' | 'startMonth' | 'endDay' | 'endMonth',
     value: string
   ) => {
-    // Only allow numbers
     if (value && !/^\d+$/.test(value)) return;
-
     setSelectedSeason(null);
 
     switch (field) {
@@ -313,7 +288,6 @@ function Analysis() {
     setFeedbackText('');
     setConversationHistory([]);
     setGeneratedAttributes(null);
-    // Auto-generate on open
     generateAttributes();
   };
 
@@ -325,6 +299,8 @@ function Analysis() {
   };
 
   const generateAttributes = async (withFeedback = false) => {
+    if (!project?.scopeConfig?.productTypes) return;
+    
     try {
       setAttributesLoading(true);
       
@@ -332,7 +308,7 @@ function Analysis() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          productTypes: selectedTypes,
+          productTypes: project.scopeConfig.productTypes,
           feedback: withFeedback ? feedbackText : undefined,
           conversationHistory: withFeedback ? conversationHistory : undefined,
         })
@@ -345,7 +321,7 @@ function Analysis() {
       const data = await response.json();
       setGeneratedAttributes(data.attributeSet);
       setConversationHistory(data.conversationHistory || []);
-      if (withFeedback) setFeedbackText(''); // Clear feedback after regeneration
+      if (withFeedback) setFeedbackText('');
     } catch (err) {
       console.error('Failed to generate attributes:', err);
     } finally {
@@ -363,7 +339,7 @@ function Analysis() {
 
   const handleSaveAttributes = (attributes: any) => {
     console.log('Saving attributes:', attributes);
-    // TODO: Implement save functionality (e.g., send to backend, update state, etc.)
+    // TODO: Implement save functionality
   };
 
   // --- API Calls ---
@@ -380,7 +356,7 @@ function Analysis() {
         params.append('mdTo', formatDateString(endDay, endMonth));
       }
 
-      const response = await fetch(`/filters/attributes?${params}`);
+      const response = await fetch(`/api/filters/attributes?${params}`);
       if (!response.ok) throw new Error('Failed to fetch filters');
       const data = await response.json();
       setFilterOptions(data);
@@ -426,13 +402,12 @@ function Analysis() {
       if (selectedFabricType.length)
         params.append('filter_fabricTypeBase', selectedFabricType.join(','));
 
-      // Use a generic products endpoint instead of project-specific one
-      const response = await fetch(`/products/preview?${params}`);
-      if (!response.ok) throw new Error('Failed to fetch context');
+      const response = await fetch(`/api/products?${params}`);
+      if (!response.ok) throw new Error('Failed to fetch products');
       const data = await response.json();
 
-      setProducts(data.items || data.products || data);
-      setTotalProducts(data.total || data.count || (Array.isArray(data) ? data.length : 0));
+      setProducts(data.items || []);
+      setTotalProducts(data.total || 0);
     } catch (err) {
       console.error(err);
     } finally {
@@ -447,12 +422,9 @@ function Analysis() {
       setLockingContext(true);
       setError(null);
 
-      // Step 1: Create the project first
       const createResponse = await fetch('/api/projects', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: project.name,
           scopeConfig: project.scopeConfig,
@@ -467,9 +439,7 @@ function Analysis() {
       const createdProject = await createResponse.json();
       console.log('Project created successfully:', createdProject);
 
-      // Step 2: Get top 50 articles with velocity scores using the preview-context endpoint
       const params = new URLSearchParams();
-
       if (selectedSeason) params.append('season', selectedSeason);
       else if (hasValidDateRange()) {
         params.append('mdFrom', formatDateString(startDay, startMonth));
@@ -505,7 +475,6 @@ function Analysis() {
       const articles = await previewResponse.json();
       console.log('Retrieved articles for locking:', articles.length);
 
-      // Step 3: Lock the context with the actual articles
       const seasonConfig = selectedSeason
         ? { season: selectedSeason }
         : hasValidDateRange()
@@ -517,9 +486,7 @@ function Analysis() {
 
       const lockResponse = await fetch(`/api/projects/${createdProject.id}/lock-context`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           articles,
           seasonConfig,
@@ -534,14 +501,12 @@ function Analysis() {
       const result = await lockResponse.json();
       console.log('Context locked successfully:', result);
 
-      // Update the project state with the created project and locked status
       setProject({
         ...createdProject,
         status: 'active',
         lockedAt: new Date().toISOString(),
       });
 
-      // Navigate to the project-based URL
       navigate(`/project/${createdProject.id}/analysis`, { replace: true });
     } catch (err) {
       console.error('Failed to create project and lock context:', err);
@@ -611,11 +576,9 @@ function Analysis() {
         style={{
           minWidth: '140px',
           height: '70px',
-          // Dynamic border color: Selected gets Blue, Hover gets darker gray, Default light gray
           border: `1px solid ${isSelected ? '#0070F2' : isHovered ? '#888' : 'var(--sapList_BorderColor)'}`,
           borderRadius: '0.5rem',
           padding: '0.75rem',
-          // Keep consistent background (no blue tint when selected)
           backgroundColor: 'var(--sapList_Background)',
           cursor: 'pointer',
           display: 'flex',
@@ -690,23 +653,18 @@ function Analysis() {
   const getVisibleKeys = () => {
     if (products.length === 0) return [];
 
-    // Priority order for display
     const priority = ['article_id', 'product_name', 'product_type'];
     const keys = Object.keys(products[0]);
 
-    // Filter and separate detail_desc
     const filteredKeys = keys.filter(
       (key) =>
-        // Exclude unwanted columns
         !HIDDEN_COLUMNS.includes(key) &&
-        // Safety check for objects
         (typeof products[0][key] !== 'object' || products[0][key] === null)
     );
 
     const detailDescKey = filteredKeys.find((key) => key.toLowerCase() === 'detail_desc');
     const otherKeys = filteredKeys.filter((key) => key.toLowerCase() !== 'detail_desc');
 
-    // Sort other keys by priority
     const sortedOtherKeys = otherKeys.sort((a, b) => {
       const idxA = priority.indexOf(a);
       const idxB = priority.indexOf(b);
@@ -716,7 +674,6 @@ function Analysis() {
       return a.localeCompare(b);
     });
 
-    // Add detail_desc at the end if it exists
     return detailDescKey ? [...sortedOtherKeys, detailDescKey] : sortedOtherKeys;
   };
 
@@ -783,7 +740,6 @@ function Analysis() {
                 alignItems: 'center',
               }}
             >
-              {/* Date Range Inputs with Labels */}
               <div
                 style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}
               >
@@ -803,11 +759,7 @@ function Analysis() {
                     valueState={
                       startDay && !validateDate(startDay, startMonth || '1') ? 'Negative' : 'None'
                     }
-                    style={{
-                      width: '60px',
-                      height: '25px',
-                      background: 'var(--sapBackgroundColor)',
-                    }}
+                    style={{ width: '60px', height: '25px', background: 'var(--sapBackgroundColor)' }}
                   />
                   <span style={{ fontSize: '0.875rem', fontWeight: 'bold' }}>/</span>
                   <Input
@@ -819,11 +771,7 @@ function Analysis() {
                         ? 'Negative'
                         : 'None'
                     }
-                    style={{
-                      width: '60px',
-                      height: '25px',
-                      background: 'var(--sapBackgroundColor)',
-                    }}
+                    style={{ width: '60px', height: '25px', background: 'var(--sapBackgroundColor)' }}
                   />
                 </div>
                 <div
@@ -842,11 +790,7 @@ function Analysis() {
                     valueState={
                       endDay && !validateDate(endDay, endMonth || '1') ? 'Negative' : 'None'
                     }
-                    style={{
-                      width: '60px',
-                      height: '25px',
-                      background: 'var(--sapBackgroundColor)',
-                    }}
+                    style={{ width: '60px', height: '25px', background: 'var(--sapBackgroundColor)' }}
                   />
                   <span style={{ fontSize: '0.875rem', fontWeight: 'bold' }}>/</span>
                   <Input
@@ -858,16 +802,11 @@ function Analysis() {
                         ? 'Negative'
                         : 'None'
                     }
-                    style={{
-                      width: '60px',
-                      height: '25px',
-                      background: 'var(--sapBackgroundColor)',
-                    }}
+                    style={{ width: '60px', height: '25px', background: 'var(--sapBackgroundColor)' }}
                   />
                 </div>
               </div>
 
-              {/* Season Buttons */}
               <div
                 style={{ display: 'flex', gap: '0.25rem', width: '100%', justifyContent: 'center' }}
               >
@@ -980,82 +919,71 @@ function Analysis() {
       </div>
 
       {/* Stats Section */}
-<div style={{ 
-  display: 'flex', 
-  gap: '2rem', 
-  padding: '0 2rem 1rem', 
-  alignItems: 'center', 
-  justifyContent: 'space-between'  // ← From main for better layout
-}}>
-  {/* LEFT SIDE: Stats (both branches have this identically) */}
-  <div style={{ display: 'flex', gap: '2rem', alignItems: 'center' }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-      <Icon name="list" style={{ color: 'var(--sapContent_LabelColor)' }} />
-      <div>
-        <Text
-          style={{
-            fontSize: '0.7rem',
-            color: 'var(--sapContent_LabelColor)',
-            textTransform: 'uppercase',
-          }}
-        >
-          Total Products
-        </Text>
-        <Title level="H4">{totalProducts}</Title>
-      </div>
-    </div>
-    <div style={{ height: '30px', borderLeft: '1px solid var(--sapList_BorderColor)' }}></div>
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-      <Icon name="filter" style={{ color: 'var(--sapContent_LabelColor)' }} />
-      <div>
-        <Text
-          style={{
-            fontSize: '0.7rem',
-            color: 'var(--sapContent_LabelColor)',
-            textTransform: 'uppercase',
-          }}
-        >
-          Active Filters
-        </Text>
-        <Title level="H4">{getActiveFilterCount()}</Title>
-      </div>
-    </div>
-  </div>
-
-  {/* RIGHT SIDE: Buttons (COMBINED from both branches) */}
-  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-    {/* YOUR BRANCH: Lock status indicator */}
-    {project?.status === 'locked' && (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-        <Icon name="accept" style={{ color: 'var(--sapPositiveColor)' }} />
-        <Text style={{ color: 'var(--sapPositiveColor)', fontSize: '0.875rem' }}>
-          Context Locked
-        </Text>
-      </div>
-    )}
-    
-    {/* YOUR BRANCH: Confirm Cohort button */}
-    {project?.status !== 'locked' && (
-      <Button
-        design="Emphasized"
-        onClick={handleLockContext}
-        disabled={lockingContext || totalProducts === 0}
-      >
-        {lockingContext ? 'Confirming...' : 'Confirm Cohort'}
-      </Button>
-    )}
-    
-    {/* MAIN BRANCH: Generate Attributes button */}
-    <Button design="Emphasized" icon="lightbulb" onClick={handleOpenAttributeDialog}>
-      Generate Attributes
-    </Button>
-  </div>
-</div>
-
+      <div style={{ 
+        display: 'flex', 
+        gap: '2rem', 
+        padding: '0 2rem 1rem', 
+        alignItems: 'center', 
+        justifyContent: 'space-between'
+      }}>
+        <div style={{ display: 'flex', gap: '2rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Icon name="list" style={{ color: 'var(--sapContent_LabelColor)' }} />
+            <div>
+              <Text
+                style={{
+                  fontSize: '0.7rem',
+                  color: 'var(--sapContent_LabelColor)',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Total Products
+              </Text>
+              <Title level="H4">{totalProducts}</Title>
+            </div>
+          </div>
+          <div style={{ height: '30px', borderLeft: '1px solid var(--sapList_BorderColor)' }}></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Icon name="filter" style={{ color: 'var(--sapContent_LabelColor)' }} />
+            <div>
+              <Text
+                style={{
+                  fontSize: '0.7rem',
+                  color: 'var(--sapContent_LabelColor)',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Active Filters
+              </Text>
+              <Title level="H4">{getActiveFilterCount()}</Title>
+            </div>
+          </div>
         </div>
-        <Button design="Emphasized" icon="lightbulb" onClick={handleOpenAttributeDialog}>
-          Generate Attributes
-        </Button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {project?.status === 'locked' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Icon name="accept" style={{ color: 'var(--sapPositiveColor)' }} />
+              <Text style={{ color: 'var(--sapPositiveColor)', fontSize: '0.875rem' }}>
+                Context Locked
+              </Text>
+            </div>
+          )}
+          
+          {project?.status !== 'locked' && (
+            <Button
+              design="Emphasized"
+              onClick={handleLockContext}
+              disabled={lockingContext || totalProducts === 0}
+            >
+              {lockingContext ? 'Confirming...' : 'Confirm Cohort'}
+            </Button>
+          )}
+          
+          <Button design="Emphasized" icon="lightbulb" onClick={handleOpenAttributeDialog}>
+            Generate Attributes
+          </Button>
+        </div>
       </div>
 
       {/* Table Section */}
@@ -1147,7 +1075,6 @@ function Analysis() {
               </tbody>
             </table>
           </div>
-          {/* Pagination Controls */}
           {totalProducts > 0 && (
             <Bar
               design="Footer"
@@ -1258,8 +1185,8 @@ function Analysis() {
       <AttributeGenerationDialog
         open={attributeDialogOpen}
         onClose={handleCloseAttributeDialog}
-        selectedTypes={selectedTypes}
-        productGroup={productGroup}
+        selectedTypes={project?.scopeConfig?.productTypes || []}
+        productGroup={project?.scopeConfig?.productGroup || 'Apparel & Fashion'}
         selectedSeason={selectedSeason}
         dateRange={
           hasValidDateRange() 

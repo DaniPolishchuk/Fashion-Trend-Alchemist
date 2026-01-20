@@ -10,22 +10,6 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: true,
       },
-      '/taxonomy': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-      },
-      '/transactions': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-      },
-      '/filters': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-      },
-      '/products': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-      },
     },
   },
 });

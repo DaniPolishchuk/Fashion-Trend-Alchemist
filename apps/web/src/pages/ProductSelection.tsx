@@ -88,7 +88,7 @@ function ProductSelection() {
   const fetchTaxonomy = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/taxonomy');
+      const response = await fetch('/api/taxonomy');
 
       if (!response.ok) {
         throw new Error('Failed to fetch taxonomy');
@@ -111,7 +111,7 @@ function ProductSelection() {
       const types = Array.from(selectedTypes).map((key) => key.split('::')[1]);
       const typesParam = types.join(',');
 
-      const response = await fetch(`/transactions/count?types=${encodeURIComponent(typesParam)}`);
+      const response = await fetch(`/api/transactions/count?types=${encodeURIComponent(typesParam)}`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch row count');

@@ -54,9 +54,9 @@ fastify.get('/health', async () => {
 });
 
 /**
- * GET /taxonomy
+ * GET /api/taxonomy
  */
-fastify.get<{ Reply: Taxonomy }>('/taxonomy', async (request, reply) => {
+fastify.get<{ Reply: Taxonomy }>('/api/taxonomy', async (request, reply) => {
   try {
     const groups = await fetchProductTaxonomy();
     return reply.status(200).send({ groups });
@@ -69,10 +69,10 @@ fastify.get<{ Reply: Taxonomy }>('/taxonomy', async (request, reply) => {
 });
 
 /**
- * GET /transactions/count
+ * GET /api/transactions/count
  */
 fastify.get<{ Querystring: { types: string }; Reply: { count: number } }>(
-  '/transactions/count',
+  '/api/transactions/count',
   async (request, reply) => {
     try {
       const { types } = request.query;
@@ -104,12 +104,12 @@ fastify.get<{ Querystring: { types: string }; Reply: { count: number } }>(
 );
 
 /**
- * GET /filters/attributes
+ * GET /api/filters/attributes
  */
 fastify.get<{
   Querystring: { types: string; season?: string; mdFrom?: string; mdTo?: string };
   Reply: FiltersResponse;
-}>('/filters/attributes', async (request, reply) => {
+}>('/api/filters/attributes', async (request, reply) => {
   try {
     const { types, season, mdFrom, mdTo } = request.query;
 
@@ -367,9 +367,9 @@ const productsHandler = async (
 };
 
 // Register products endpoints
-fastify.get<{ Querystring: ProductsQuery; Reply: ProductsResponse }>('/products', productsHandler);
+fastify.get<{ Querystring: ProductsQuery; Reply: ProductsResponse }>('/api/products', productsHandler);
 fastify.get<{ Querystring: ProductsQuery; Reply: ProductsResponse }>(
-  '/products/preview',
+  '/api/products/preview',
   productsHandler
 );
 
@@ -377,7 +377,7 @@ fastify.get<{ Querystring: ProductsQuery; Reply: ProductsResponse }>(
 await fastify.register(projectRoutes, { prefix: '/api' });
 
 /**
- * POST /generate-attributes
+ * POST /api/generate-attributes
  * UI-based attribute generation with conversation history support
  */
 fastify.post<{ 
@@ -386,7 +386,7 @@ fastify.post<{
     feedback?: string;
     conversationHistory?: any[];
   } 
-}>('/generate-attributes', async (request, reply) => {
+}>('/api/generate-attributes', async (request, reply) => {
   try {
     const { productTypes, feedback, conversationHistory } = request.body;
     
@@ -397,9 +397,9 @@ fastify.post<{
     console.log(`\n🎨 Generating attributes for: ${productTypes.join(', ')}`);
     if (feedback) console.log(`💬 With feedback: ${feedback}`);
 
-    // Read files from monorepo root
-    const systemPrompt = readFileSync(resolve(process.cwd(), '../../attributeSetSystemPromt.txt'), 'utf-8');
-    const examples = readFileSync(resolve(process.cwd(), '../../attributeSetExamples.json'), 'utf-8');
+    // Read files from monorepo root (go up from apps/api-lite to monorepo root)
+    const systemPrompt = readFileSync(resolve(process.cwd(), '../..', 'attributeSetSystemPromt.txt'), 'utf-8');
+    const examples = readFileSync(resolve(process.cwd(), '../..', 'attributeSetExamples.json'), 'utf-8');
 
     // Initialize OpenAI client
     const openai = new OpenAI({
