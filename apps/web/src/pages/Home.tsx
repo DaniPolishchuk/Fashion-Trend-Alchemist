@@ -150,9 +150,7 @@ function Home() {
   };
 
   const handleProjectClick = (projectId: string) => {
-    // Navigate to project detail or analysis page
-    console.log('Navigate to project:', projectId);
-    // TODO: Implement navigation to project detail page
+    navigate(`/project/${projectId}`);
   };
 
   const handlePreviousPage = () => {

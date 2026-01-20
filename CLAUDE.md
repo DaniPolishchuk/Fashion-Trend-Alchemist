@@ -103,7 +103,9 @@ The application connects to a cloud-hosted PostgreSQL database. Typical workflow
 - **customers** - Customer demographics (customer_id, age)
 - **projects** - User projects with scope and status (draft/active)
 - **project_context_items** - Context articles per project: top 25 and worst 25 articles (by velocity score) when >50 total results, otherwise all matching articles (up to 50)
-- **generated_designs** - AI-generated design outputs
+- **generated_designs** - AI-generated design outputs (project_id, input_constraints, predicted_attributes, generated_image_url)
+- **collections** - User-created collections grouping generated designs (id, user_id, name, created_at)
+- **collection_items** - Junction table linking collections to generated designs (collection_id, generated_design_id)
 
 #### Important Indexes
 - `idx_transactions_article_id` on `transactions_train(article_id)`
@@ -124,10 +126,15 @@ The API server (`apps/api-lite/src/main.ts`) uses Fastify with the following end
 - `/health` - Health check
 - `/api/taxonomy` - Product type hierarchy
 - `/api/transactions/count` - Count filtered transactions
+- `/api/articles/count` - Count distinct articles by product type
 - `/api/filters/attributes` - Dynamic filter options based on current filters
 - `/api/products` - Paginated product listing with filters
 - `/api/generate-attributes` - LLM-based attribute generation (uses OpenAI)
-- `/api/projects/*` - Project CRUD and context management (see `routes/projects.ts`)
+- `/api/projects` - List all projects (GET), create project (POST)
+- `/api/projects/:id` - Get single project by ID (GET)
+- `/api/projects/:id/preview-context` - Calculate velocity scores for context preview
+- `/api/projects/:id/lock-context` - Lock project context and save articles
+- `/api/collections` - List user collections with item counts and preview images (see `routes/collections.ts`)
 
 ### Frontend Structure
 
@@ -139,10 +146,46 @@ The frontend (`apps/web/src/`) uses:
 - **API Communication**: Fetch API with manual state management
 
 Key pages:
-- `Home.tsx` - Landing page
+- `Home.tsx` - Dashboard with searchable/paginated projects table and collections grid
 - `ProductSelection.tsx` - Product type taxonomy browser
 - `Analysis.tsx` - Filtering and analysis dashboard
+- `ProjectHub.tsx` - Project workspace hub with tabbed navigation (see below)
 - `components/AttributeGenerationDialog.tsx` - LLM attribute generation UI
+
+#### ProjectHub Page (`/project/:projectId`)
+The ProjectHub is the main workspace for working with a project after it's created. It features:
+- **Header**: Project name, status badge (DRAFT/ACTIVE), and progress indicator (dummy for now)
+- **Tab Navigation**: Four tabs for different workflows
+
+**Tab Components** (located in `src/pages/tabs/`):
+1. **TheAlchemistTab** - Transmutation Parameters configuration
+   - Displays attributes from project's `ontologySchema`
+   - Two-column layout: Locked Attributes (fixed values) vs AI Variables (to be predicted)
+   - Arrow buttons to move attributes between columns
+   - Locked attributes show dropdown with variants from ontology
+   - "Transmute (Run RPT-1)" button logs configuration to console (dummy)
+2. **ResultOverviewTab** - Generated designs display
+   - Paginated list of generated designs with search
+   - Shows design name, category, confidence score, thumbnail
+   - Uses mock data (ready for API integration)
+3. **EnhancedTableTab** - Placeholder (displays "Enhanced Table")
+4. **DataAnalysisTab** - Placeholder (displays "Data Analysis")
+
+#### Ontology Schema Structure
+The `ontologySchema` in projects is a nested structure:
+```json
+{
+  "productType": {
+    "attributeName": ["variant1", "variant2", ...],
+    ...
+  }
+}
+```
+Example for skirts: `{ "skirt": { "style": ["A-line", "Pencil", ...], "fit": ["Loose", "Slim", ...] } }`
+
+#### Home Page Features
+- **Projects Table**: Displays all user projects with status (Ready/Processing), name, time period, product group, and generated products count. Supports search filtering and pagination (5 items per page).
+- **Collections Section**: Shows user collections as cards with 2x2 image thumbnail grids. Only visible when collections exist. Images fall back to product icons when unavailable.
 
 ### Important Implementation Details
 

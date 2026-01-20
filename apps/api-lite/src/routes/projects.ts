@@ -245,13 +245,16 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
       // Use transaction for atomicity
       const result = await db.transaction(async (tx) => {
-        // Update project status and season config
+        // Update project status, season config, and ontology schema
         await tx
           .update(projects)
           .set({
             status: 'active',
             seasonConfig: validatedInput.seasonConfig
               ? JSON.stringify(validatedInput.seasonConfig)
+              : undefined,
+            ontologySchema: validatedInput.ontologySchema
+              ? JSON.stringify(validatedInput.ontologySchema)
               : undefined,
           })
           .where(eq(projects.id, projectId));
@@ -318,6 +321,29 @@ export default async function projectRoutes(fastify: FastifyInstance) {
       return reply.status(200).send(userProjects);
     } catch (error: any) {
       fastify.log.error({ error }, 'Failed to fetch projects');
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
+  /**
+   * GET /api/projects/:id
+   * Get a single project by ID
+   */
+  fastify.get<{ Params: { id: string } }>('/projects/:id', async (request, reply) => {
+    try {
+      const { id: projectId } = request.params;
+
+      const project = await db.query.projects.findFirst({
+        where: eq(projects.id, projectId),
+      });
+
+      if (!project) {
+        return reply.status(404).send({ error: 'Project not found' });
+      }
+
+      return reply.status(200).send(project);
+    } catch (error: any) {
+      fastify.log.error({ error }, 'Failed to fetch project');
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
   });
