@@ -103,7 +103,11 @@ export default async function projectRoutes(fastify: FastifyInstance) {
         };
         const months = seasonMonths[queryParams.season];
         if (months) {
-          whereClauses.push(sql`EXTRACT(MONTH FROM ${transactionsTrain.tDate}) = ANY(${months})`);
+          // Use type-safe SQL composition instead of array interpolation
+          const monthConditions = months.map(
+            (month) => sql`EXTRACT(MONTH FROM ${transactionsTrain.tDate}) = ${month}`
+          );
+          whereClauses.push(sql`(${sql.join(monthConditions, sql` OR `)})`);
         }
       } else if (queryParams.mdFrom && queryParams.mdTo) {
         // Parse MM-DD format
