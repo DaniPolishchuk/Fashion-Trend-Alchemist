@@ -208,6 +208,7 @@ function ProductSelection() {
     } finally {
       setProjectCreating(false);
     }
+
   };
 
   const filterTypes = (types: string[]) => {

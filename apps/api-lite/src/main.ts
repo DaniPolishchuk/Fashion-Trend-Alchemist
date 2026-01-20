@@ -8,7 +8,14 @@ import cors from '@fastify/cors';
 // Using real database taxonomy query
 import { fetchProductTaxonomy, pool } from '@fashion/db';
 import type { Taxonomy, FiltersResponse, ProductsResponse } from '@fashion/types';
+
 import projectRoutes from './routes/projects.js';
+
+import { llmConfig } from '@fashion/config';
+import OpenAI from 'openai';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+
 
 const fastify = Fastify({
   logger: true,
@@ -131,9 +138,7 @@ fastify.get<{
       const [toMonth, toDay] = mdTo.split('-').map(Number);
 
       if (fromMonth === toMonth && fromDay === toDay) {
-        whereClauses.push(
-          `(EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) = ${fromDay})`
-        );
+        whereClauses.push(`(EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) = ${fromDay})`);
       } else if (fromMonth < toMonth || (fromMonth === toMonth && fromDay <= toDay)) {
         whereClauses.push(`(
           (EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) >= ${fromDay})
@@ -187,7 +192,9 @@ fastify.get<{
 });
 
 /**
- * GET /products Handler
+
+
+ * GET /products
  */
 const productsHandler = async (
   request: import('fastify').FastifyRequest<{ Querystring: ProductsQuery }>,
@@ -219,7 +226,9 @@ const productsHandler = async (
     const typePlaceholders = typeArray.map((_: string, i: number) => `$${i + 1}`).join(', ');
     whereClauses.push(`a.product_type IN (${typePlaceholders})`);
 
+
     // --- Time/Season Filters ---
+
     if (season) {
       const months: Record<string, string> = {
         spring: '(3,4,5)',
@@ -233,17 +242,21 @@ const productsHandler = async (
       const [fromMonth, fromDay] = mdFrom.split('-').map(Number);
       const [toMonth, toDay] = mdTo.split('-').map(Number);
       if (fromMonth === toMonth && fromDay === toDay) {
-        whereClauses.push(
-          `(EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) = ${fromDay})`
-        );
+
+        whereClauses.push(`(EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) = ${fromDay})`);
       } else if (fromMonth < toMonth || (fromMonth === toMonth && fromDay <= toDay)) {
-        whereClauses.push(
-          `((EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) >= ${fromDay}) OR (EXTRACT(MONTH FROM t.t_date) > ${fromMonth} AND EXTRACT(MONTH FROM t.t_date) < ${toMonth}) OR (EXTRACT(MONTH FROM t.t_date) = ${toMonth} AND EXTRACT(DAY FROM t.t_date) <= ${toDay}))`
-        );
+        whereClauses.push(`(
+          (EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) >= ${fromDay})
+          OR (EXTRACT(MONTH FROM t.t_date) > ${fromMonth} AND EXTRACT(MONTH FROM t.t_date) < ${toMonth})
+          OR (EXTRACT(MONTH FROM t.t_date) = ${toMonth} AND EXTRACT(DAY FROM t.t_date) <= ${toDay})
+        )`);
       } else {
-        whereClauses.push(
-          `((EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) >= ${fromDay}) OR (EXTRACT(MONTH FROM t.t_date) > ${fromMonth}) OR (EXTRACT(MONTH FROM t.t_date) < ${toMonth}) OR (EXTRACT(MONTH FROM t.t_date) = ${toMonth} AND EXTRACT(DAY FROM t.t_date) <= ${toDay}))`
-        );
+        whereClauses.push(`(
+          (EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) >= ${fromDay})
+          OR (EXTRACT(MONTH FROM t.t_date) > ${fromMonth})
+          OR (EXTRACT(MONTH FROM t.t_date) < ${toMonth})
+          OR (EXTRACT(MONTH FROM t.t_date) = ${toMonth} AND EXTRACT(DAY FROM t.t_date) <= ${toDay})
+        )`);
       }
     }
 
@@ -290,11 +303,12 @@ const productsHandler = async (
       }
     }
 
+
     const whereClause = whereClauses.join(' AND ');
     const sortD = sortDir.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
     const orderByClause = `ORDER BY a.${sortBy === 'article_id' ? 'article_id' : sortBy} ${sortD}`;
 
-    // --- Queries ---
+
     const idsQuery = `
       SELECT DISTINCT a.article_id
       FROM transactions_train t
@@ -323,6 +337,7 @@ const productsHandler = async (
       return reply.send({ items: [], total: 0, limit: limitNum, offset: offsetNum });
     }
 
+
     const foundIds = idsResult.rows.map((r: any) => r.article_id);
     const idPlaceholders = foundIds.map((_: string, i: number) => `$${i + 1}`).join(', ');
     const detailsResult = await pool.query(
@@ -336,6 +351,7 @@ const productsHandler = async (
     const items = idsResult.rows.map((row: any) => {
       const details = detailsMap.get(row.article_id) || {};
       return { ...details, articleId: row.article_id };
+
     });
 
     return reply.send({
@@ -359,6 +375,106 @@ fastify.get<{ Querystring: ProductsQuery; Reply: ProductsResponse }>(
 
 // Register project routes
 await fastify.register(projectRoutes, { prefix: '/api' });
+
+/**
+ * POST /generate-attributes
+ * UI-based attribute generation with conversation history support
+ */
+fastify.post<{ 
+  Body: { 
+    productTypes: string[];
+    feedback?: string;
+    conversationHistory?: any[];
+  } 
+}>('/generate-attributes', async (request, reply) => {
+  try {
+    const { productTypes, feedback, conversationHistory } = request.body;
+    
+    if (!productTypes || productTypes.length === 0) {
+      return reply.status(400).send({ error: 'No product types provided' });
+    }
+
+    console.log(`\n🎨 Generating attributes for: ${productTypes.join(', ')}`);
+    if (feedback) console.log(`💬 With feedback: ${feedback}`);
+
+    // Read files from monorepo root
+    const systemPrompt = readFileSync(resolve(process.cwd(), '../../attributeSetSystemPromt.txt'), 'utf-8');
+    const examples = readFileSync(resolve(process.cwd(), '../../attributeSetExamples.json'), 'utf-8');
+
+    // Initialize OpenAI client
+    const openai = new OpenAI({
+      apiKey: llmConfig.apiKey,
+      baseURL: llmConfig.apiUrl,
+    });
+
+    // Build messages array
+    let messages: any[];
+    
+    if (conversationHistory && conversationHistory.length > 0) {
+      // Continue existing conversation with feedback
+      messages = [...conversationHistory];
+      if (feedback) {
+        messages.push({
+          role: 'user',
+          content: `The previous attribute set needs improvement. Here is the feedback:\n\n${feedback}\n\nPlease regenerate the attribute schema addressing this feedback. Remember to follow the same JSON format.`
+        });
+      }
+    } else {
+      // Initial request
+      const initialUserMessage = `Generate attribute set for the following product type(s): ${productTypes.join(', ')}
+
+Here are examples of attribute sets for reference:
+${examples}
+
+Please generate a comprehensive attribute schema following the format in the examples.`;
+
+      messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: initialUserMessage }
+      ];
+    }
+
+    // Make LLM request
+    console.log('⏳ Calling LLM...');
+    const completion = await openai.chat.completions.create({
+      model: llmConfig.model,
+      messages: messages,
+      temperature: 0.7,
+    });
+
+    const responseContent = completion.choices[0]?.message?.content || '';
+    
+    // Add assistant response to conversation history
+    messages.push({ role: 'assistant', content: responseContent });
+    
+    // Try to parse JSON from response
+    let attributeSet: any;
+    try {
+      const jsonMatch = responseContent.match(/```json\n([\s\S]*?)\n```/) || responseContent.match(/```\n([\s\S]*?)\n```/);
+      const jsonString = jsonMatch ? jsonMatch[1] : responseContent;
+      attributeSet = JSON.parse(jsonString);
+    } catch (parseError) {
+      console.error('❌ Failed to parse JSON response');
+      return reply.status(500).send({ 
+        error: 'Failed to parse LLM response',
+        rawResponse: responseContent 
+      });
+    }
+
+    console.log('✅ Attributes generated successfully\n');
+
+    return reply.send({ 
+      success: true, 
+      attributeSet,
+      conversationHistory: messages
+    });
+    
+  } catch (error) {
+    request.log.error({ error }, 'Failed to generate attributes');
+    console.error('❌ Error generating attributes:', error);
+    return reply.status(500).send({ error: 'Internal Server Error' });
+  }
+});
 
 const start = async () => {
   try {
