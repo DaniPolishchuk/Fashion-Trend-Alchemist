@@ -28,9 +28,13 @@ import '@ui5/webcomponents-icons/dist/navigation-right-arrow.js';
 import '@ui5/webcomponents-icons/dist/navigation-left-arrow.js';
 import '@ui5/webcomponents-icons/dist/color-fill.js';
 import '@ui5/webcomponents-icons/dist/activate.js';
+import '@ui5/webcomponents-icons/dist/lightbulb.js';
+import '@ui5/webcomponents-icons/dist/refresh.js';
+import '@ui5/webcomponents-icons/dist/decline.js';
 import '@ui5/webcomponents-fiori/dist/illustrations/NoData.js';
 
 import type { FiltersResponse } from '@fashion/types';
+import { AttributeGenerationDialog } from '../components/AttributeGenerationDialog';
 
 const STORAGE_KEY = 'fashion.productSelection.selectedTypes';
 
@@ -71,6 +75,14 @@ function Analysis() {
   // --- Dialog State ---
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
   const [tempSelection, setTempSelection] = useState<string[]>([]);
+  
+  // --- Attribute Generation Dialog State ---
+  const [attributeDialogOpen, setAttributeDialogOpen] = useState(false);
+  const [generatedAttributes, setGeneratedAttributes] = useState<any>(null);
+  const [attributesLoading, setAttributesLoading] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [conversationHistory, setConversationHistory] = useState<any[]>([]);
+  const [productGroup, setProductGroup] = useState<string>('Apparel & Fashion');
 
   // --- Data State ---
   const [products, setProducts] = useState<any[]>([]); 
@@ -114,6 +126,12 @@ function Analysis() {
         const parsed = JSON.parse(saved) as string[];
         const typeNames = parsed.map(key => key.includes('::') ? key.split('::')[1] : key);
         setSelectedTypes(typeNames);
+        
+        // Extract product group from the first selected item
+        if (parsed.length > 0 && parsed[0].includes('::')) {
+          const group = parsed[0].split('::')[0];
+          setProductGroup(group);
+        }
       } catch (e) {
         console.error('Failed to load saved selections', e);
       }
@@ -238,6 +256,65 @@ function Analysis() {
     }
     setCurrentPage(1);
     closeDialog();
+  };
+
+  // --- Handlers: Attribute Generation ---
+  const handleOpenAttributeDialog = () => {
+    setAttributeDialogOpen(true);
+    setFeedbackText('');
+    setConversationHistory([]);
+    setGeneratedAttributes(null);
+    // Auto-generate on open
+    generateAttributes();
+  };
+
+  const handleCloseAttributeDialog = () => {
+    setAttributeDialogOpen(false);
+    setGeneratedAttributes(null);
+    setFeedbackText('');
+    setConversationHistory([]);
+  };
+
+  const generateAttributes = async (withFeedback = false) => {
+    try {
+      setAttributesLoading(true);
+      
+      const response = await fetch('/api/generate-attributes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productTypes: selectedTypes,
+          feedback: withFeedback ? feedbackText : undefined,
+          conversationHistory: withFeedback ? conversationHistory : undefined,
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate attributes');
+      }
+
+      const data = await response.json();
+      setGeneratedAttributes(data.attributeSet);
+      setConversationHistory(data.conversationHistory || []);
+      if (withFeedback) setFeedbackText(''); // Clear feedback after regeneration
+    } catch (err) {
+      console.error('Failed to generate attributes:', err);
+    } finally {
+      setAttributesLoading(false);
+    }
+  };
+
+  const handleRegenerate = () => {
+    if (feedbackText.trim()) {
+      generateAttributes(true);
+    } else {
+      generateAttributes(false);
+    }
+  };
+
+  const handleSaveAttributes = (attributes: any) => {
+    console.log('Saving attributes:', attributes);
+    // TODO: Implement save functionality (e.g., send to backend, update state, etc.)
   };
 
   // --- API Calls ---
@@ -547,16 +624,21 @@ function Analysis() {
       </div>
 
       {/* Stats Section */}
-      <div style={{ display: 'flex', gap: '2rem', padding: '0 2rem 1rem', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Icon name="list" style={{ color: 'var(--sapContent_LabelColor)' }} />
-          <div><Text style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)', textTransform: 'uppercase' }}>Total Products</Text><Title level="H4">{totalProducts}</Title></div>
+      <div style={{ display: 'flex', gap: '2rem', padding: '0 2rem 1rem', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', gap: '2rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Icon name="list" style={{ color: 'var(--sapContent_LabelColor)' }} />
+            <div><Text style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)', textTransform: 'uppercase' }}>Total Products</Text><Title level="H4">{totalProducts}</Title></div>
+          </div>
+          <div style={{ height: '30px', borderLeft: '1px solid var(--sapList_BorderColor)' }}></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Icon name="filter" style={{ color: 'var(--sapContent_LabelColor)' }} />
+            <div><Text style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)', textTransform: 'uppercase' }}>Active Filters</Text><Title level="H4">{getActiveFilterCount()}</Title></div>
+          </div>
         </div>
-        <div style={{ height: '30px', borderLeft: '1px solid var(--sapList_BorderColor)' }}></div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Icon name="filter" style={{ color: 'var(--sapContent_LabelColor)' }} />
-          <div><Text style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)', textTransform: 'uppercase' }}>Active Filters</Text><Title level="H4">{getActiveFilterCount()}</Title></div>
-        </div>
+        <Button design="Emphasized" icon="lightbulb" onClick={handleOpenAttributeDialog}>
+          Generate Attributes
+        </Button>
       </div>
 
       {/* Table Section */}
@@ -711,6 +793,26 @@ function Analysis() {
           )}
         </div>
       </Dialog>
+
+      {/* Attribute Generation Dialog */}
+      <AttributeGenerationDialog
+        open={attributeDialogOpen}
+        onClose={handleCloseAttributeDialog}
+        selectedTypes={selectedTypes}
+        productGroup={productGroup}
+        selectedSeason={selectedSeason}
+        dateRange={
+          hasValidDateRange() 
+            ? { from: formatDateString(startDay, startMonth), to: formatDateString(endDay, endMonth) }
+            : undefined
+        }
+        generatedAttributes={generatedAttributes}
+        attributesLoading={attributesLoading}
+        feedbackText={feedbackText}
+        onFeedbackChange={setFeedbackText}
+        onRegenerate={handleRegenerate}
+        onSave={handleSaveAttributes}
+      />
     </div>
   );
 }

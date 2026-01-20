@@ -7,6 +7,10 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { fetchProductTaxonomy, pool } from '@fashion/db';
 import type { Taxonomy, FiltersResponse, ProductsResponse } from '@fashion/types';
+import { llmConfig } from '@fashion/config';
+import OpenAI from 'openai';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 
 const fastify = Fastify({
   logger: true,
@@ -87,22 +91,18 @@ fastify.get<{ Querystring: { types: string; season?: string; mdFrom?: string; md
       const seasonMonths: Record<string, string> = { spring: '(3,4,5)', summer: '(6,7,8)', autumn: '(9,10,11)', winter: '(12,1,2)' };
       if (seasonMonths[season.toLowerCase()]) whereClauses.push(`EXTRACT(MONTH FROM t.t_date) IN ${seasonMonths[season.toLowerCase()]}`);
     } else if (mdFrom && mdTo) {
-      // Parse MM-DD format
       const [fromMonth, fromDay] = mdFrom.split('-').map(Number);
       const [toMonth, toDay] = mdTo.split('-').map(Number);
       
       if (fromMonth === toMonth && fromDay === toDay) {
-        // Single day
         whereClauses.push(`(EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) = ${fromDay})`);
       } else if (fromMonth < toMonth || (fromMonth === toMonth && fromDay <= toDay)) {
-        // Same year range
         whereClauses.push(`(
           (EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) >= ${fromDay})
           OR (EXTRACT(MONTH FROM t.t_date) > ${fromMonth} AND EXTRACT(MONTH FROM t.t_date) < ${toMonth})
           OR (EXTRACT(MONTH FROM t.t_date) = ${toMonth} AND EXTRACT(DAY FROM t.t_date) <= ${toDay})
         )`);
       } else {
-        // Wraps around year (e.g., Dec to Jan)
         whereClauses.push(`(
           (EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) >= ${fromDay})
           OR (EXTRACT(MONTH FROM t.t_date) > ${fromMonth})
@@ -150,7 +150,6 @@ fastify.get<{ Querystring: { types: string; season?: string; mdFrom?: string; md
 
 /**
  * GET /products
- * Optimized: Skips aggregation calculations entirely.
  */
 fastify.get<{
   Querystring: {
@@ -173,27 +172,22 @@ fastify.get<{
     const typePlaceholders = typeArray.map((_, i) => `$${i + 1}`).join(', ');
     whereClauses.push(`a.product_type IN (${typePlaceholders})`);
     
-    // --- Filters ---
     if (season) {
       const months = { spring: '(3,4,5)', summer: '(6,7,8)', autumn: '(9,10,11)', winter: '(12,1,2)' }[season.toLowerCase()];
       if (months) whereClauses.push(`EXTRACT(MONTH FROM t.t_date) IN ${months}`);
     } else if (mdFrom && mdTo) {
-      // Parse MM-DD format
       const [fromMonth, fromDay] = mdFrom.split('-').map(Number);
       const [toMonth, toDay] = mdTo.split('-').map(Number);
       
       if (fromMonth === toMonth && fromDay === toDay) {
-        // Single day
         whereClauses.push(`(EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) = ${fromDay})`);
       } else if (fromMonth < toMonth || (fromMonth === toMonth && fromDay <= toDay)) {
-        // Same year range
         whereClauses.push(`(
           (EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) >= ${fromDay})
           OR (EXTRACT(MONTH FROM t.t_date) > ${fromMonth} AND EXTRACT(MONTH FROM t.t_date) < ${toMonth})
           OR (EXTRACT(MONTH FROM t.t_date) = ${toMonth} AND EXTRACT(DAY FROM t.t_date) <= ${toDay})
         )`);
       } else {
-        // Wraps around year (e.g., Dec to Jan)
         whereClauses.push(`(
           (EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) >= ${fromDay})
           OR (EXTRACT(MONTH FROM t.t_date) > ${fromMonth})
@@ -220,26 +214,17 @@ fastify.get<{
     }
     
     const whereClause = whereClauses.join(' AND ');
-
-    // --- Safe Sorting ---
     let orderByClause = '';
     const sortD = sortDir.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
     
-    // We cannot sort by transaction_count anymore as we aren't calculating it
     if (sortBy === 'article_id') {
       orderByClause = `ORDER BY a.article_id ${sortD}`;
     } else {
-      // For text fields, use MAX to ensure unique row per ID if we were grouping
-      // Since we use DISTINCT below, we can order by the column directly if it's unique per article
-      // But to be safe with DISTINCT + JOIN:
       orderByClause = `ORDER BY a.${sortBy} ${sortD}`;
     }
 
-    // --- STEP 1: Get IDs (Distinct) ---
-    // We use DISTINCT instead of GROUP BY + COUNT to save performance
     const idsQuery = `
-      SELECT DISTINCT
-        a.article_id
+      SELECT DISTINCT a.article_id
       FROM transactions_train t
       INNER JOIN articles a ON a.article_id = t.article_id
       WHERE ${whereClause}
@@ -247,7 +232,6 @@ fastify.get<{
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
 
-    // --- STEP 2: Count Total ---
     const countQuery = `
       SELECT COUNT(DISTINCT a.article_id) as total
       FROM transactions_train t
@@ -266,7 +250,6 @@ fastify.get<{
       return reply.send({ items: [], total: 0, limit: parseInt(limit), offset: parseInt(offset) });
     }
 
-    // --- STEP 3: Hydrate Details ---
     const foundIds = rows.map((r: any) => r.article_id);
     const idPlaceholders = foundIds.map((_, i) => `$${i + 1}`).join(', ');
     
@@ -276,13 +259,11 @@ fastify.get<{
     const detailsMap = new Map();
     detailsResult.rows.forEach((d: any) => detailsMap.set(d.article_id, d));
 
-    // --- STEP 4: Merge & Return ---
     const items = rows.map((row: any) => {
       const details = detailsMap.get(row.article_id) || {};
       return {
-        ...details, // Spreads all article columns
-        articleId: row.article_id, // CamelCase ID
-        // Note: transactionCount and lastSaleDate are explicitly OMITTED here
+        ...details,
+        articleId: row.article_id,
       };
     });
 
@@ -296,6 +277,106 @@ fastify.get<{
   } catch (error) {
     request.log.error({ error }, 'Failed to fetch products');
     return reply.status(500).send({ error: 'Internal Server Error' } as any);
+  }
+});
+
+/**
+ * POST /generate-attributes
+ * UI-based attribute generation with conversation history support
+ */
+fastify.post<{ 
+  Body: { 
+    productTypes: string[];
+    feedback?: string;
+    conversationHistory?: any[];
+  } 
+}>('/generate-attributes', async (request, reply) => {
+  try {
+    const { productTypes, feedback, conversationHistory } = request.body;
+    
+    if (!productTypes || productTypes.length === 0) {
+      return reply.status(400).send({ error: 'No product types provided' });
+    }
+
+    console.log(`\n🎨 Generating attributes for: ${productTypes.join(', ')}`);
+    if (feedback) console.log(`💬 With feedback: ${feedback}`);
+
+    // Read files from monorepo root
+    const systemPrompt = readFileSync(resolve(process.cwd(), '../../attributeSetSystemPromt.txt'), 'utf-8');
+    const examples = readFileSync(resolve(process.cwd(), '../../attributeSetExamples.json'), 'utf-8');
+
+    // Initialize OpenAI client
+    const openai = new OpenAI({
+      apiKey: llmConfig.apiKey,
+      baseURL: llmConfig.apiUrl,
+    });
+
+    // Build messages array
+    let messages: any[];
+    
+    if (conversationHistory && conversationHistory.length > 0) {
+      // Continue existing conversation with feedback
+      messages = [...conversationHistory];
+      if (feedback) {
+        messages.push({
+          role: 'user',
+          content: `The previous attribute set needs improvement. Here is the feedback:\n\n${feedback}\n\nPlease regenerate the attribute schema addressing this feedback. Remember to follow the same JSON format.`
+        });
+      }
+    } else {
+      // Initial request
+      const initialUserMessage = `Generate attribute set for the following product type(s): ${productTypes.join(', ')}
+
+Here are examples of attribute sets for reference:
+${examples}
+
+Please generate a comprehensive attribute schema following the format in the examples.`;
+
+      messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: initialUserMessage }
+      ];
+    }
+
+    // Make LLM request
+    console.log('⏳ Calling LLM...');
+    const completion = await openai.chat.completions.create({
+      model: llmConfig.model,
+      messages: messages,
+      temperature: 0.7,
+    });
+
+    const responseContent = completion.choices[0]?.message?.content || '';
+    
+    // Add assistant response to conversation history
+    messages.push({ role: 'assistant', content: responseContent });
+    
+    // Try to parse JSON from response
+    let attributeSet: any;
+    try {
+      const jsonMatch = responseContent.match(/```json\n([\s\S]*?)\n```/) || responseContent.match(/```\n([\s\S]*?)\n```/);
+      const jsonString = jsonMatch ? jsonMatch[1] : responseContent;
+      attributeSet = JSON.parse(jsonString);
+    } catch (parseError) {
+      console.error('❌ Failed to parse JSON response');
+      return reply.status(500).send({ 
+        error: 'Failed to parse LLM response',
+        rawResponse: responseContent 
+      });
+    }
+
+    console.log('✅ Attributes generated successfully\n');
+
+    return reply.send({ 
+      success: true, 
+      attributeSet,
+      conversationHistory: messages
+    });
+    
+  } catch (error) {
+    request.log.error({ error }, 'Failed to generate attributes');
+    console.error('❌ Error generating attributes:', error);
+    return reply.status(500).send({ error: 'Internal Server Error' });
   }
 });
 
