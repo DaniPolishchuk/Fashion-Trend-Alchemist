@@ -1048,13 +1048,34 @@ function Analysis() {
           )}
 
           {project?.status !== 'locked' && (
-            <Button
-              design="Emphasized"
-              onClick={handleLockContext}
-              disabled={lockingContext || totalProducts === 0}
-            >
-              {lockingContext ? 'Confirming...' : 'Confirm Cohort'}
-            </Button>
+            <>
+              {!ontologySchema && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.5rem 1rem',
+                    background: 'var(--sapInformationBackground)',
+                    border: '1px solid var(--sapInformationBorderColor)',
+                    borderRadius: '0.25rem',
+                    fontSize: '0.875rem',
+                  }}
+                >
+                  <Icon name="lightbulb" style={{ color: 'var(--sapInformativeColor)' }} />
+                  <Text style={{ color: 'var(--sapInformativeColor)' }}>
+                    Please generate attributes before confirming cohort
+                  </Text>
+                </div>
+              )}
+              <Button
+                design="Emphasized"
+                onClick={handleLockContext}
+                disabled={lockingContext || totalProducts === 0 || !ontologySchema}
+              >
+                {lockingContext ? 'Confirming...' : 'Confirm Cohort'}
+              </Button>
+            </>
           )}
 
           <Button design="Emphasized" icon="lightbulb" onClick={handleOpenAttributeDialog}>
