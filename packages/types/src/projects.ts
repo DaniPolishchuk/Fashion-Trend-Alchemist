@@ -107,6 +107,21 @@ export type PreviewContextQuery = z.infer<typeof PreviewContextQuerySchema>;
 export type LockContextInput = z.infer<typeof LockContextInputSchema>;
 
 /**
+ * Schema for generated design response from API
+ */
+export const GeneratedDesignResponseSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  predictedAttributes: z.record(z.string(), z.string()).nullable(),
+  generatedImageUrl: z.string().nullable(),
+});
+
+/**
+ * TypeScript types derived from schemas
+ */
+export type GeneratedDesignResponse = z.infer<typeof GeneratedDesignResponseSchema>;
+
+/**
  * Extended project type for list view with additional computed fields
  */
 export interface ProjectListItem {

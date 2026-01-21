@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Card,
   Title,
@@ -7,6 +7,8 @@ import {
   Icon,
   Button,
   Bar,
+  Dialog,
+  BusyIndicator,
 } from '@ui5/webcomponents-react';
 import '@ui5/webcomponents-icons/dist/search.js';
 import '@ui5/webcomponents-icons/dist/filter.js';
@@ -14,114 +16,83 @@ import '@ui5/webcomponents-icons/dist/navigation-right-arrow.js';
 import '@ui5/webcomponents-icons/dist/navigation-left-arrow.js';
 import '@ui5/webcomponents-icons/dist/slim-arrow-right.js';
 import '@ui5/webcomponents-icons/dist/accept.js';
+import '@ui5/webcomponents-icons/dist/delete.js';
 
 interface GeneratedDesign {
   id: string;
   name: string;
-  category: string;
-  subcategory: string;
-  confidence: number;
-  imageUrl: string | null;
+  predictedAttributes: Record<string, string> | null;
+  generatedImageUrl: string | null;
 }
 
 interface ResultOverviewTabProps {
   projectId: string;
 }
 
-// Mock data - can be easily replaced with API call
-const MOCK_GENERATED_DESIGNS: GeneratedDesign[] = [
-  {
-    id: '1',
-    name: 'Urban Utility Gilet V1',
-    category: 'Streetwear',
-    subcategory: 'Utility',
-    confidence: 98,
-    imageUrl: null,
-  },
-  {
-    id: '2',
-    name: 'Technical Field Vest',
-    category: 'Tactical',
-    subcategory: 'Outdoor',
-    confidence: 94,
-    imageUrl: null,
-  },
-  {
-    id: '3',
-    name: 'Modern Utility Overcoat',
-    category: 'Smart Utility',
-    subcategory: '',
-    confidence: 89,
-    imageUrl: null,
-  },
-  {
-    id: '4',
-    name: 'Padded Utility Waistcoat',
-    category: 'Workwear',
-    subcategory: '',
-    confidence: 85,
-    imageUrl: null,
-  },
-  {
-    id: '5',
-    name: 'Minimalist Cargo Jacket',
-    category: 'Streetwear',
-    subcategory: 'Minimal',
-    confidence: 82,
-    imageUrl: null,
-  },
-  {
-    id: '6',
-    name: 'Relaxed Linen Blazer',
-    category: 'Smart Casual',
-    subcategory: 'Summer',
-    confidence: 79,
-    imageUrl: null,
-  },
-  {
-    id: '7',
-    name: 'Oversized Wool Coat',
-    category: 'Outerwear',
-    subcategory: 'Winter',
-    confidence: 76,
-    imageUrl: null,
-  },
-  {
-    id: '8',
-    name: 'Cropped Denim Jacket',
-    category: 'Casual',
-    subcategory: 'Denim',
-    confidence: 73,
-    imageUrl: null,
-  },
-];
-
 const ITEMS_PER_PAGE = 5;
 
 function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [designs, setDesigns] = useState<GeneratedDesign[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [designToDelete, setDesignToDelete] = useState<GeneratedDesign | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  // In a real implementation, this would fetch from API
-  // const [designs, setDesigns] = useState<GeneratedDesign[]>([]);
-  // useEffect(() => {
-  //   fetch(`/api/projects/${projectId}/generated-designs`)
-  //     .then(res => res.json())
-  //     .then(data => setDesigns(data));
-  // }, [projectId]);
+  // Fetch generated designs from API
+  useEffect(() => {
+    const fetchDesigns = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await fetch(`/api/projects/${projectId}/generated-designs`);
 
-  const designs = MOCK_GENERATED_DESIGNS;
+        if (!response.ok) {
+          throw new Error(`Failed to fetch designs: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        setDesigns(data);
+      } catch (err) {
+        console.error('Error fetching generated designs:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load generated designs');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (projectId) {
+      fetchDesigns();
+    }
+  }, [projectId]);
+
+  // Extract category and subcategory from predictedAttributes
+  const getDisplayInfo = (design: GeneratedDesign) => {
+    if (!design.predictedAttributes) {
+      return { category: '', subcategory: '' };
+    }
+
+    const attributes = Object.entries(design.predictedAttributes);
+    const category = attributes[0]?.[1] || '';
+    const subcategory = attributes[1]?.[1] || '';
+
+    return { category, subcategory };
+  };
 
   // Filter designs by search query
   const filteredDesigns = useMemo(() => {
     if (!searchQuery.trim()) return designs;
     const query = searchQuery.toLowerCase();
-    return designs.filter(
-      (d) =>
+    return designs.filter((d) => {
+      const { category, subcategory } = getDisplayInfo(d);
+      return (
         d.name.toLowerCase().includes(query) ||
-        d.category.toLowerCase().includes(query) ||
-        d.subcategory.toLowerCase().includes(query)
-    );
+        category.toLowerCase().includes(query) ||
+        subcategory.toLowerCase().includes(query)
+      );
+    });
   }, [designs, searchQuery]);
 
   // Pagination
@@ -145,8 +116,64 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
     if (currentPage < totalPages) setCurrentPage((prev) => prev + 1);
   };
 
-  // Log projectId usage to avoid unused variable warning
-  console.debug('ResultOverviewTab for project:', projectId);
+  // Delete functionality
+  const handleDeleteClick = (design: GeneratedDesign) => {
+    setDesignToDelete(design);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!designToDelete) return;
+
+    try {
+      setDeleting(true);
+      const response = await fetch(
+        `/api/projects/${projectId}/generated-designs/${designToDelete.id}`,
+        {
+          method: 'DELETE',
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete design: ${response.statusText}`);
+      }
+
+      // Remove from local state
+      setDesigns((prev) => prev.filter((d) => d.id !== designToDelete.id));
+
+      // Close dialog
+      setDeleteDialogOpen(false);
+      setDesignToDelete(null);
+    } catch (err) {
+      console.error('Error deleting design:', err);
+      // You could show an error message here if needed
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setDesignToDelete(null);
+  };
+
+  if (loading) {
+    return (
+      <div
+        style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}
+      >
+        <BusyIndicator active />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: '3rem', textAlign: 'center' }}>
+        <Text style={{ color: 'var(--sapNegativeColor)' }}>Error: {error}</Text>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -191,100 +218,93 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
               </Text>
             </div>
           ) : (
-            paginatedDesigns.map((design, index) => (
-              <div
-                key={design.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '1rem 1.5rem',
-                  borderBottom:
-                    index < paginatedDesigns.length - 1
-                      ? '1px solid var(--sapList_BorderColor)'
-                      : 'none',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s',
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = 'var(--sapList_Hover_Background)')
-                }
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-              >
-                {/* Thumbnail */}
+            paginatedDesigns.map((design, index) => {
+              const { category, subcategory } = getDisplayInfo(design);
+              return (
                 <div
+                  key={design.id}
                   style={{
-                    width: '64px',
-                    height: '64px',
-                    borderRadius: '0.5rem',
-                    background: 'var(--sapBackgroundColor)',
-                    marginRight: '1rem',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    overflow: 'hidden',
-                    flexShrink: 0,
+                    padding: '1rem 1.5rem',
+                    borderBottom:
+                      index < paginatedDesigns.length - 1
+                        ? '1px solid var(--sapList_BorderColor)'
+                        : 'none',
+                    cursor: 'pointer',
+                    transition: 'background 0.2s',
                   }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background = 'var(--sapList_Hover_Background)')
+                  }
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 >
-                  {design.imageUrl ? (
-                    <img
-                      src={design.imageUrl}
-                      alt={design.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                  ) : (
-                    <div
+                  {/* Thumbnail */}
+                  <div
+                    style={{
+                      width: '64px',
+                      height: '64px',
+                      borderRadius: '0.5rem',
+                      background: 'var(--sapBackgroundColor)',
+                      marginRight: '1rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      overflow: 'hidden',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {design.generatedImageUrl ? (
+                      <img
+                        src={design.generatedImageUrl}
+                        alt={design.name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          background: 'linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%)',
+                        }}
+                      />
+                    )}
+                  </div>
+
+                  {/* Content */}
+                  <div style={{ flex: 1 }}>
+                    <Text style={{ fontWeight: 600, fontSize: '0.9375rem', display: 'block' }}>
+                      {design.name}
+                    </Text>
+                    <Text
                       style={{
-                        width: '100%',
-                        height: '100%',
-                        background: 'linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%)',
+                        color: 'var(--sapContent_LabelColor)',
+                        fontSize: '0.8125rem',
+                      }}
+                    >
+                      {category}
+                      {subcategory ? ` / ${subcategory}` : ''}
+                    </Text>
+                  </div>
+
+                  {/* Delete Icon */}
+                  <div style={{ marginRight: '1rem' }}>
+                    <Button
+                      icon="delete"
+                      design="Transparent"
+                      tooltip="Delete generated product"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteClick(design);
                       }}
                     />
-                  )}
-                </div>
+                  </div>
 
-                {/* Content */}
-                <div style={{ flex: 1 }}>
-                  <Text style={{ fontWeight: 600, fontSize: '0.9375rem', display: 'block' }}>
-                    {design.name}
-                  </Text>
-                  <Text
-                    style={{
-                      color: 'var(--sapContent_LabelColor)',
-                      fontSize: '0.8125rem',
-                    }}
-                  >
-                    {design.category}
-                    {design.subcategory ? ` / ${design.subcategory}` : ''}
-                  </Text>
+                  {/* Arrow */}
+                  <Icon name="slim-arrow-right" style={{ color: 'var(--sapContent_IconColor)' }} />
                 </div>
-
-                {/* Confidence */}
-                <div style={{ textAlign: 'right', marginRight: '1rem' }}>
-                  <Text
-                    style={{
-                      color: 'var(--sapContent_LabelColor)',
-                      fontSize: '0.75rem',
-                      textTransform: 'uppercase',
-                      display: 'block',
-                    }}
-                  >
-                    Confidence
-                  </Text>
-                  <Text
-                    style={{
-                      color: design.confidence >= 90 ? 'var(--sapPositiveColor)' : '#0070F2',
-                      fontWeight: 600,
-                      fontSize: '1rem',
-                    }}
-                  >
-                    {design.confidence}%
-                  </Text>
-                </div>
-
-                {/* Arrow */}
-                <Icon name="slim-arrow-right" style={{ color: 'var(--sapContent_IconColor)' }} />
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
@@ -321,6 +341,26 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
           />
         )}
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        headerText="Delete Generated Product?"
+        footer={
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <Button onClick={handleDeleteCancel} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button design="Negative" onClick={handleDeleteConfirm} disabled={deleting}>
+              {deleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </div>
+        }
+      >
+        <Text>
+          Are you sure you want to delete "{designToDelete?.name}"? This action cannot be undone.
+        </Text>
+      </Dialog>
     </div>
   );
 }

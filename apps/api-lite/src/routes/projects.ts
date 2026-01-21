@@ -282,9 +282,10 @@ export default async function projectRoutes(fastify: FastifyInstance) {
         const contextItems = validatedInput.articles.map((article) => {
           // Normalize to 0-100 scale
           // If all articles have the same velocity, assign 100 to all
-          const normalizedVelocity = velocityRange === 0
-            ? 100
-            : ((article.velocity_score - minVelocity) / velocityRange) * 100;
+          const normalizedVelocity =
+            velocityRange === 0
+              ? 100
+              : ((article.velocity_score - minVelocity) / velocityRange) * 100;
 
           return {
             projectId,
@@ -302,8 +303,8 @@ export default async function projectRoutes(fastify: FastifyInstance) {
           velocity_normalization: {
             min_raw: minVelocity,
             max_raw: maxVelocity,
-            normalized_range: '0-100'
-          }
+            normalized_range: '0-100',
+          },
         };
       });
 
@@ -382,4 +383,73 @@ export default async function projectRoutes(fastify: FastifyInstance) {
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
   });
+
+  /**
+   * GET /api/projects/:id/generated-designs
+   * Get all generated designs for a specific project
+   */
+  fastify.get<{ Params: { id: string } }>(
+    '/projects/:id/generated-designs',
+    async (request, reply) => {
+      try {
+        const { id: projectId } = request.params;
+
+        // Verify project exists
+        const project = await db.query.projects.findFirst({
+          where: eq(projects.id, projectId),
+        });
+
+        if (!project) {
+          return reply.status(404).send({ error: 'Project not found' });
+        }
+
+        // Fetch all generated designs for the project
+        const designs = await db
+          .select({
+            id: generatedDesigns.id,
+            name: generatedDesigns.name,
+            predictedAttributes: generatedDesigns.predictedAttributes,
+            generatedImageUrl: generatedDesigns.generatedImageUrl,
+          })
+          .from(generatedDesigns)
+          .where(eq(generatedDesigns.projectId, projectId))
+          .orderBy(desc(generatedDesigns.id)); // Order by creation (newest first)
+
+        return reply.status(200).send(designs);
+      } catch (error: any) {
+        fastify.log.error({ error }, 'Failed to fetch generated designs');
+        return reply.status(500).send({ error: 'Internal Server Error' });
+      }
+    }
+  );
+
+  /**
+   * DELETE /api/projects/:projectId/generated-designs/:designId
+   * Delete a specific generated design
+   */
+  fastify.delete<{ Params: { projectId: string; designId: string } }>(
+    '/projects/:projectId/generated-designs/:designId',
+    async (request, reply) => {
+      try {
+        const { projectId, designId } = request.params;
+
+        // Verify the design exists and belongs to the project
+        const design = await db.query.generatedDesigns.findFirst({
+          where: and(eq(generatedDesigns.id, designId), eq(generatedDesigns.projectId, projectId)),
+        });
+
+        if (!design) {
+          return reply.status(404).send({ error: 'Generated design not found' });
+        }
+
+        // Hard delete the design
+        await db.delete(generatedDesigns).where(eq(generatedDesigns.id, designId));
+
+        return reply.status(204).send();
+      } catch (error: any) {
+        fastify.log.error({ error }, 'Failed to delete generated design');
+        return reply.status(500).send({ error: 'Internal Server Error' });
+      }
+    }
+  );
 }
