@@ -12,6 +12,7 @@ import type { Taxonomy, FiltersResponse, ProductsResponse } from '@fashion/types
 import projectRoutes from './routes/projects.js';
 import collectionRoutes from './routes/collections.js';
 import enrichmentRoutes from './routes/enrichment.js';
+import rpt1Routes from './routes/rpt1.js';
 
 import { llmConfig } from '@fashion/config';
 import OpenAI from 'openai';
@@ -417,6 +418,9 @@ await fastify.register(collectionRoutes, { prefix: '/api' });
 
 // Register enrichment routes
 await fastify.register(enrichmentRoutes, { prefix: '/api' });
+
+// Register RPT-1 routes
+await fastify.register(rpt1Routes, { prefix: '/api' });
 
 /**
  * Helper function to extract JSON from LLM response

@@ -11,4 +11,4 @@ export * from './schema/index.js';
 export * from './queries/analytics.js';
 
 // Re-export drizzle-orm query functions for API consumers
-export { eq, and, inArray, sql, desc, isNull } from 'drizzle-orm';
+export { eq, and, inArray, sql, desc, isNull, isNotNull } from 'drizzle-orm';

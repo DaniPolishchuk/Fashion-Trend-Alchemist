@@ -86,3 +86,14 @@ export const visionLlmConfig = {
   apiKey: process.env.LITELLM_API_KEY || '',
   model: process.env.VISION_LLM_MODEL || 'sapgenai-gpt-4.1',
 } as const;
+
+/**
+ * RPT-1 configuration (SAP AI Core)
+ */
+export const rpt1Config = {
+  aiApiUrl: process.env.AI_API_URL || 'https://api.ai.prod.ap-northeast-1.aws.ml.hana.ondemand.com',
+  authUrl: process.env.AUTH_URL || '',
+  clientId: process.env.CLIENT_ID || '',
+  clientSecret: process.env.CLIENT_SECRET || '',
+  resourceGroup: process.env.RESOURCE_GROUP || 'default',
+} as const;
