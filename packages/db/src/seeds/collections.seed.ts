@@ -5,7 +5,6 @@
 
 import { db, closeDb } from '../client.js';
 import { collections, generatedDesigns, collectionItems, projects } from '../schema/index.js';
-import { eq } from 'drizzle-orm';
 
 const HARDCODED_USER_ID = '00000000-0000-0000-0000-000000000000';
 const PLACEHOLDER_IMAGE_URL = 'https://via.placeholder.com/400x600/7E57C2/FFFFFF?text=Design';

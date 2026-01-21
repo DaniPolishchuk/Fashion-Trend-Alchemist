@@ -45,10 +45,10 @@ export const s3Config = {
 
 /**
  * SeaweedFS Filer HTTP configuration (when IMAGE_STRATEGY=filer)
- * For direct URLs via /buckets/images/... path
+ * For direct URLs via /images/... path
  */
 export const filerConfig = {
-  baseUrl: process.env.FILER_BASE_URL || 'http://localhost:8888/buckets',
+  baseUrl: process.env.FILER_BASE_URL || 'http://localhost:8888',
   bucket: process.env.FILER_BUCKET || 'images',
 } as const;
 

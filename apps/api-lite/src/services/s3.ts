@@ -21,7 +21,7 @@ const s3Client = new S3Client({
  * Fetches an image via S3 and returns it as base64
  */
 async function fetchImageViaS3(articleId: string): Promise<string> {
-  const folder = articleId.slice(0, 3);
+  const folder = articleId.slice(0, 2);
   const key = `${folder}/${articleId}.jpg`;
 
   const command = new GetObjectCommand({
@@ -43,7 +43,7 @@ async function fetchImageViaS3(articleId: string): Promise<string> {
  * Fetches an image via HTTP Filer and returns it as base64
  */
 async function fetchImageViaFiler(articleId: string): Promise<string> {
-  const folder = articleId.slice(0, 3);
+  const folder = articleId.slice(0, 2);
   const url = `${filerConfig.baseUrl}/${filerConfig.bucket}/${folder}/${articleId}.jpg`;
 
   console.log(`[Enrichment] Fetching image: ${url}`);
@@ -61,7 +61,7 @@ async function fetchImageViaFiler(articleId: string): Promise<string> {
 /**
  * Fetches an image and returns it as a base64 encoded string
  * Uses the configured strategy (s3 or filer)
- * Images are stored with path pattern: {first-3-chars}/{articleId}.jpg
+ * Images are stored with path pattern: {first-2-chars}/{articleId}.jpg
  */
 export async function fetchImageAsBase64(articleId: string): Promise<string> {
   if (imageStrategy === 'filer') {

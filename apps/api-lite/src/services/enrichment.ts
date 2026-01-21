@@ -52,6 +52,23 @@ function buildDynamicSchema(ontologySchema: OntologySchema): {
 }
 
 /**
+ * Sanitizes LLM response to extract pure JSON
+ * Handles markdown code blocks and other formatting
+ */
+function sanitizeJsonResponse(content: string): string {
+  // Remove markdown code blocks (```json ... ``` or ``` ... ```)
+  let cleaned = content.trim();
+
+  // Match and extract content from code blocks
+  const codeBlockMatch = cleaned.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  if (codeBlockMatch) {
+    cleaned = codeBlockMatch[1].trim();
+  }
+
+  return cleaned;
+}
+
+/**
  * Calls the Vision LLM to extract attributes from a product image
  */
 async function callVisionLLM(
@@ -97,7 +114,12 @@ Return a JSON object with exactly these attributes. Choose the most appropriate 
     throw new Error('No response content from Vision LLM');
   }
 
-  return JSON.parse(content);
+  try {
+    const sanitized = sanitizeJsonResponse(content);
+    return JSON.parse(sanitized);
+  } catch (parseError) {
+    throw new Error(`Failed to parse LLM response as JSON. Content: ${content.slice(0, 200)}...`);
+  }
 }
 
 /**
@@ -218,10 +240,7 @@ export async function processEnrichment(
 ): Promise<void> {
   try {
     // Get project with ontology schema
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, projectId));
+    const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
 
     if (!project) {
       throw new Error(`Project ${projectId} not found`);
