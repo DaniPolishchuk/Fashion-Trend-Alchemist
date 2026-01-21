@@ -16,7 +16,8 @@
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
     "studio": "drizzle-kit studio",
-    "push": "drizzle-kit push"
+    "push": "drizzle-kit push",
+    "seed:collections": "tsx src/seeds/collections.seed.ts"
   },
   "dependencies": {
     "@fashion/config": "workspace:*",
@@ -28,6 +29,7 @@
     "@types/node": "^20.10.6",
     "@types/pg": "^8.10.9",
     "drizzle-kit": "^0.20.9",
+    "tsx": "^4.6.2",
     "typescript": "^5.3.3"
   }
 }

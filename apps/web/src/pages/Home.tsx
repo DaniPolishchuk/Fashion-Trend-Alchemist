@@ -393,69 +393,109 @@ function Home() {
               <Button design="Transparent">View All</Button>
             </FlexBox>
 
-            <FlexBox style={{ gap: '1rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
-              {collections.slice(0, 4).map((collection) => (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                gap: '1rem',
+                maxWidth: '100%',
+              }}
+            >
+              {collections.slice(0, 8).map((collection) => (
                 <Card
                   key={collection.id}
                   style={{
-                    minWidth: '250px',
-                    flex: '0 0 auto',
                     cursor: 'pointer',
+                    height: 'fit-content',
                   }}
                   header={
                     <CardHeader
                       titleText={collection.name}
-                      subtitleText={`${collection.itemCount} items`}
+                      subtitleText={`${collection.itemCount} Items`}
                       interactive
                     />
                   }
                   onClick={() => console.log('View collection:', collection.id)}
                 >
-                  <FlexBox wrap="Wrap" style={{ padding: '0.5rem', gap: '0.5rem' }}>
-                    {/* Show up to 4 images in a 2x2 grid */}
-                    {[0, 1, 2, 3].map((index) => {
-                      const imageUrl = collection.imageUrls[index];
-                      return (
-                        <div
-                          key={index}
-                          style={{
-                            width: 'calc(50% - 0.25rem)',
-                            height: '80px',
-                            borderRadius: '4px',
-                            backgroundColor: 'var(--sapBackgroundColor)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          {imageUrl ? (
-                            <img
-                              src={imageUrl}
-                              alt=""
-                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                              onError={(e) => {
-                                // Hide broken images and show placeholder
-                                const target = e.currentTarget;
-                                target.style.display = 'none';
-                                const parent = target.parentElement;
-                                if (parent) {
-                                  const placeholder = document.createElement('span');
-                                  placeholder.innerHTML = '<ui5-icon name="product"></ui5-icon>';
-                                  parent.appendChild(placeholder);
-                                }
-                              }}
-                            />
-                          ) : (
-                            <Icon name="product" style={{ color: 'var(--sapContent_IconColor)' }} />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </FlexBox>
+                  <div style={{ padding: '0.75rem' }}>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(2, 1fr)',
+                        gap: '0.5rem',
+                        marginBottom: '0.75rem',
+                      }}
+                    >
+                      {/* Show up to 4 images in a 2x2 grid */}
+                      {[0, 1, 2, 3].map((index) => {
+                        const imageUrl = collection.imageUrls[index];
+                        return (
+                          <div
+                            key={index}
+                            style={{
+                              aspectRatio: '1',
+                              borderRadius: '6px',
+                              backgroundColor: 'var(--sapNeutralBackground)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              overflow: 'hidden',
+                              border: '1px solid var(--sapList_BorderColor)',
+                            }}
+                          >
+                            {imageUrl ? (
+                              <img
+                                src={imageUrl}
+                                alt=""
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                onError={(e) => {
+                                  // Hide broken images and show placeholder
+                                  const target = e.currentTarget;
+                                  target.style.display = 'none';
+                                  const parent = target.parentElement;
+                                  if (parent) {
+                                    const placeholder = document.createElement('div');
+                                    placeholder.innerHTML = '<ui5-icon name="product"></ui5-icon>';
+                                    placeholder.style.display = 'flex';
+                                    placeholder.style.alignItems = 'center';
+                                    placeholder.style.justifyContent = 'center';
+                                    placeholder.style.width = '100%';
+                                    placeholder.style.height = '100%';
+                                    parent.appendChild(placeholder);
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <Icon
+                                name="product"
+                                style={{ color: 'var(--sapContent_IconColor)', fontSize: '1.5rem' }}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        fontSize: '0.75rem',
+                        color: 'var(--sapContent_LabelColor)',
+                      }}
+                    >
+                      <Text style={{ fontSize: '0.75rem', color: 'var(--sapContent_LabelColor)' }}>
+                        Created 2 days ago
+                      </Text>
+                      <Icon
+                        name="slim-arrow-right"
+                        style={{ color: 'var(--sapContent_IconColor)', fontSize: '0.875rem' }}
+                      />
+                    </div>
+                  </div>
                 </Card>
               ))}
-            </FlexBox>
+            </div>
           </div>
         )}
       </Page>
