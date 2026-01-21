@@ -177,10 +177,11 @@ export default async function projectRoutes(fastify: FastifyInstance) {
           fabric_type_base: articles.fabricTypeBase,
           detail_desc: articles.detailDesc,
           // Raw velocity: transactions per day of availability
+          // Note: DATE - DATE in PostgreSQL returns integer (days), so no EXTRACT needed
           velocity_score: sql<number>`
             CASE
-              WHEN MAX(${transactionsTrain.tDate}) = MIN(${transactionsTrain.tDate}) THEN COUNT(*)::float
-              ELSE COUNT(*)::float / (EXTRACT(EPOCH FROM (MAX(${transactionsTrain.tDate}) - MIN(${transactionsTrain.tDate}))) / 86400.0 + 1)
+              WHEN MAX(${transactionsTrain.tDate})::date = MIN(${transactionsTrain.tDate})::date THEN COUNT(*)::float
+              ELSE COUNT(*)::float / (MAX(${transactionsTrain.tDate})::date - MIN(${transactionsTrain.tDate})::date + 1)::float
             END
           `,
           transaction_count: sql<number>`COUNT(*)`,
@@ -204,12 +205,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
           articles.fabricTypeBase,
           articles.detailDesc
         )
-        .orderBy(desc(sql`
-          CASE
-            WHEN MAX(${transactionsTrain.tDate}) = MIN(${transactionsTrain.tDate}) THEN COUNT(*)::float
-            ELSE COUNT(*)::float / (EXTRACT(EPOCH FROM (MAX(${transactionsTrain.tDate}) - MIN(${transactionsTrain.tDate}))) / 86400.0 + 1)
-          END
-        `));
+        .orderBy(sql`13 DESC`);
 
       const allResults = await allArticlesQuery;
 
