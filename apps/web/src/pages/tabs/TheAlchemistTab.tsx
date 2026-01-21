@@ -12,6 +12,7 @@ import {
   MessageStrip,
   BusyIndicator,
   Toast,
+  Slider,
 } from '@ui5/webcomponents-react';
 import '@ui5/webcomponents-icons/dist/arrow-right.js';
 import '@ui5/webcomponents-icons/dist/arrow-left.js';
@@ -21,6 +22,7 @@ import '@ui5/webcomponents-icons/dist/decline.js';
 import '@ui5/webcomponents-icons/dist/add.js';
 import '@ui5/webcomponents-icons/dist/hint.js';
 import '@ui5/webcomponents-icons/dist/inspection.js';
+import '@ui5/webcomponents-icons/dist/target-group.js';
 
 // Article-level attribute keys (from database schema)
 const ARTICLE_ATTRIBUTES = [
@@ -85,6 +87,7 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [transmuting, setTransmuting] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [successScore, setSuccessScore] = useState(100); // Default to 100% (maximum success)
 
   // Format attribute name: convert snake_case to Title Case
   const formatAttributeName = (name: string): string => {
@@ -322,6 +325,7 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
         body: JSON.stringify({
           lockedAttributes: lockedAttrs,
           aiVariables: aiVars,
+          successScore: successScore, // Target success score (0-100)
         }),
       });
 
@@ -406,7 +410,10 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
         </Toast>
       )}
 
-      <Card>
+      {/* Main Layout: Parameters Card + Success Score Panel */}
+      <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
+        {/* Left: Transmutation Parameters Card */}
+        <Card style={{ flex: 1 }}>
         {/* Card Header */}
         <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--sapList_BorderColor)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -720,6 +727,92 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
           </div>
         </div>
       </Card>
+
+        {/* Right: Success Score Panel */}
+        <Card style={{ width: '280px', flexShrink: 0 }}>
+          <div style={{ padding: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
+              <Icon name="target-group" style={{ color: '#107E3E' }} />
+              <Text
+                style={{
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  fontSize: '0.75rem',
+                  letterSpacing: '0.5px',
+                  color: '#107E3E',
+                }}
+              >
+                Target Success
+              </Text>
+            </div>
+
+            <div style={{ marginBottom: '1.5rem' }}>
+              <Text style={{ fontSize: '0.875rem', color: 'var(--sapContent_LabelColor)', marginBottom: '0.75rem', display: 'block' }}>
+                Set the desired performance level for the generated design. Higher values target top-performing attribute combinations.
+              </Text>
+            </div>
+
+            {/* Success Score Display */}
+            <div
+              style={{
+                textAlign: 'center',
+                padding: '1.5rem',
+                background: 'linear-gradient(135deg, rgba(16, 126, 62, 0.1) 0%, rgba(16, 126, 62, 0.05) 100%)',
+                borderRadius: '0.75rem',
+                marginBottom: '1.5rem',
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: '3rem',
+                  fontWeight: 700,
+                  color: '#107E3E',
+                  lineHeight: 1,
+                }}
+              >
+                {successScore}
+              </Text>
+              <Text
+                style={{
+                  fontSize: '1rem',
+                  color: '#107E3E',
+                  marginLeft: '0.25rem',
+                }}
+              >
+                %
+              </Text>
+              <Text
+                style={{
+                  display: 'block',
+                  fontSize: '0.75rem',
+                  color: 'var(--sapContent_LabelColor)',
+                  marginTop: '0.5rem',
+                }}
+              >
+                {successScore >= 90 ? 'Top Performer' : successScore >= 70 ? 'Above Average' : successScore >= 50 ? 'Average' : 'Below Average'}
+              </Text>
+            </div>
+
+            {/* Slider */}
+            <div style={{ padding: '0 0.5rem' }}>
+              <Slider
+                value={successScore}
+                min={0}
+                max={100}
+                step={5}
+                showTickmarks
+                labelInterval={4}
+                onChange={(e: any) => setSuccessScore(e.target.value)}
+                style={{ width: '100%' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
+                <Text style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)' }}>Low</Text>
+                <Text style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)' }}>High</Text>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
 
       {/* Preview Dialog */}
       <Dialog

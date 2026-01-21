@@ -20,6 +20,7 @@ import { rpt1Config } from '@fashion/config';
 interface PredictRequestBody {
   lockedAttributes: Record<string, string>;
   aiVariables: string[];
+  successScore: number; // Target success score (0-100)
 }
 
 interface RPT1Response {
@@ -204,7 +205,7 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
   }>('/projects/:id/rpt1-predict', async (request, reply) => {
     try {
       const { id: projectId } = request.params;
-      const { lockedAttributes, aiVariables } = request.body;
+      const { lockedAttributes, aiVariables, successScore } = request.body;
 
       // Validate input
       if (!aiVariables || aiVariables.length === 0) {
@@ -221,6 +222,9 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
         });
       }
 
+      // Validate success score
+      const targetSuccessScore = typeof successScore === 'number' ? Math.max(0, Math.min(100, successScore)) : 100;
+
       // Verify project exists and is active
       const project = await db.query.projects.findFirst({
         where: eq(projects.id, projectId),
@@ -230,11 +234,12 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'Project not found' });
       }
 
-      // Fetch enriched context items with article data
+      // Fetch enriched context items with article data AND velocity score
       const contextItems = await db
         .select({
           articleId: projectContextItems.articleId,
           enrichedAttributes: projectContextItems.enrichedAttributes,
+          velocityScore: projectContextItems.velocityScore, // Normalized 0-100 score
           // Article-level attributes
           productType: articles.productType,
           productGroup: articles.productGroup,
@@ -306,10 +311,15 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
       };
 
       // Build context rows (only include attributes that are in locked + AI variables)
-      const contextRows: Record<string, string>[] = contextItems
+      // success_score is always included as the first column
+      const contextRows: Record<string, string | number>[] = contextItems
         .map((item) => {
-          const row: Record<string, string> = {};
+          const row: Record<string, string | number> = {};
           let hasAllValues = true;
+
+          // Add success_score as the first column (from normalized velocity score)
+          const velocityScoreNum = parseFloat(item.velocityScore || '0');
+          row['success_score'] = Math.round(velocityScoreNum); // Round to integer for cleaner data
 
           for (const key of allColumnKeys) {
             const value = getAttributeValue(item, key);
@@ -324,7 +334,7 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
 
           return hasAllValues ? row : null;
         })
-        .filter((row): row is Record<string, string> => row !== null);
+        .filter((row): row is Record<string, string | number> => row !== null);
 
       if (contextRows.length < 2) {
         return reply.status(400).send({
@@ -334,7 +344,9 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
       }
 
       // Build query row with locked values and [PREDICT] placeholders
-      const queryRow: Record<string, string> = {};
+      // success_score is set to the target value specified by the user
+      const queryRow: Record<string, string | number> = {};
+      queryRow['success_score'] = targetSuccessScore; // Target success score as first column
       for (const [key, value] of Object.entries(lockedAttributes)) {
         queryRow[key] = value;
       }
@@ -347,6 +359,7 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
           contextRowCount: contextRows.length,
           lockedAttributeCount: Object.keys(lockedAttributes).length,
           aiVariableCount: aiVariables.length,
+          targetSuccessScore,
         },
         'Preparing RPT-1 prediction request'
       );
@@ -444,7 +457,10 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
         .values({
           projectId,
           name: designName,
-          inputConstraints: lockedAttributes,
+          inputConstraints: {
+            ...lockedAttributes,
+            _targetSuccessScore: targetSuccessScore, // Store target success score with underscore prefix to distinguish
+          },
           predictedAttributes,
         })
         .returning();
@@ -454,6 +470,7 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
         designId: newDesign.id,
         designName: newDesign.name,
         inputConstraints: lockedAttributes,
+        targetSuccessScore,
         predictedAttributes,
         rpt1Metadata: {
           predictionId: rpt1Result.id,

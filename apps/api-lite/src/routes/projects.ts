@@ -160,6 +160,8 @@ export default async function projectRoutes(fastify: FastifyInstance) {
       });
 
       // Execute velocity calculation query for all matching articles
+      // Velocity = COUNT(transactions) / (last_transaction_date - first_transaction_date + 1)
+      // This measures units sold per day of availability (approximated by first/last sale)
       const allArticlesQuery = db
         .select({
           article_id: articles.articleId,
@@ -174,7 +176,16 @@ export default async function projectRoutes(fastify: FastifyInstance) {
           customer_segment: articles.customerSegment,
           fabric_type_base: articles.fabricTypeBase,
           detail_desc: articles.detailDesc,
-          velocity_score: sql<number>`SUM(${transactionsTrain.price})`,
+          // Raw velocity: transactions per day of availability
+          velocity_score: sql<number>`
+            CASE
+              WHEN MAX(${transactionsTrain.tDate}) = MIN(${transactionsTrain.tDate}) THEN COUNT(*)::float
+              ELSE COUNT(*)::float / (EXTRACT(EPOCH FROM (MAX(${transactionsTrain.tDate}) - MIN(${transactionsTrain.tDate}))) / 86400.0 + 1)
+            END
+          `,
+          transaction_count: sql<number>`COUNT(*)`,
+          first_sale: sql<string>`MIN(${transactionsTrain.tDate})::text`,
+          last_sale: sql<string>`MAX(${transactionsTrain.tDate})::text`,
         })
         .from(transactionsTrain)
         .innerJoin(articles, eq(articles.articleId, transactionsTrain.articleId))
@@ -193,7 +204,12 @@ export default async function projectRoutes(fastify: FastifyInstance) {
           articles.fabricTypeBase,
           articles.detailDesc
         )
-        .orderBy(desc(sql`SUM(${transactionsTrain.price})`));
+        .orderBy(desc(sql`
+          CASE
+            WHEN MAX(${transactionsTrain.tDate}) = MIN(${transactionsTrain.tDate}) THEN COUNT(*)::float
+            ELSE COUNT(*)::float / (EXTRACT(EPOCH FROM (MAX(${transactionsTrain.tDate}) - MIN(${transactionsTrain.tDate}))) / 86400.0 + 1)
+          END
+        `));
 
       const allResults = await allArticlesQuery;
 
@@ -259,17 +275,40 @@ export default async function projectRoutes(fastify: FastifyInstance) {
           })
           .where(eq(projects.id, projectId));
 
-        // Bulk insert context items
-        const contextItems = validatedInput.articles.map((article) => ({
-          projectId,
-          articleId: article.article_id,
-          velocityScore: article.velocity_score.toString(), // Convert to string for numeric type
-          enrichedAttributes: null,
-        }));
+        // Normalize velocity scores to 0-100
+        // Find min and max velocity scores from the input articles
+        const velocityScores = validatedInput.articles.map((a) => a.velocity_score);
+        const minVelocity = Math.min(...velocityScores);
+        const maxVelocity = Math.max(...velocityScores);
+        const velocityRange = maxVelocity - minVelocity;
+
+        // Bulk insert context items with normalized velocity scores
+        const contextItems = validatedInput.articles.map((article) => {
+          // Normalize to 0-100 scale
+          // If all articles have the same velocity, assign 100 to all
+          const normalizedVelocity = velocityRange === 0
+            ? 100
+            : ((article.velocity_score - minVelocity) / velocityRange) * 100;
+
+          return {
+            projectId,
+            articleId: article.article_id,
+            velocityScore: normalizedVelocity.toFixed(2), // Store normalized 0-100 score
+            enrichedAttributes: null,
+          };
+        });
 
         await tx.insert(projectContextItems).values(contextItems);
 
-        return { success: true, locked_count: validatedInput.articles.length };
+        return {
+          success: true,
+          locked_count: validatedInput.articles.length,
+          velocity_normalization: {
+            min_raw: minVelocity,
+            max_raw: maxVelocity,
+            normalized_range: '0-100'
+          }
+        };
       });
 
       return reply.status(200).send(result);
