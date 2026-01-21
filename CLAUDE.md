@@ -103,7 +103,7 @@ The application connects to a cloud-hosted PostgreSQL database. Typical workflow
 - **customers** - Customer demographics (customer_id, age)
 - **projects** - User projects with scope and status (draft/active)
 - **project_context_items** - Context articles per project: top 25 and worst 25 articles (by velocity score) when >50 total results, otherwise all matching articles (up to 50)
-- **generated_designs** - AI-generated design outputs (project_id, input_constraints, predicted_attributes, generated_image_url)
+- **generated_designs** - AI-generated design outputs (project_id, name, input_constraints, predicted_attributes, generated_image_url)
 - **collections** - User-created collections grouping generated designs (id, user_id, name, created_at)
 - **collection_items** - Junction table linking collections to generated designs (collection_id, generated_design_id)
 
@@ -135,6 +135,8 @@ The API server (`apps/api-lite/src/main.ts`) uses Fastify with the following end
 - `/api/projects/:id/preview-context` - Calculate velocity scores for context preview
 - `/api/projects/:id/lock-context` - Lock project context and save articles
 - `/api/collections` - List user collections with item counts and preview images (see `routes/collections.ts`)
+- `/api/projects/:id/rpt1-preview` - Get context row counts for RPT-1 preview
+- `/api/projects/:id/rpt1-predict` - Execute RPT-1 prediction via SAP AI Core
 
 ### Frontend Structure
 
@@ -159,11 +161,14 @@ The ProjectHub is the main workspace for working with a project after it's creat
 
 **Tab Components** (located in `src/pages/tabs/`):
 1. **TheAlchemistTab** - Transmutation Parameters configuration
-   - Displays attributes from project's `ontologySchema`
-   - Two-column layout: Locked Attributes (fixed values) vs AI Variables (to be predicted)
-   - Arrow buttons to move attributes between columns
-   - Locked attributes show dropdown with variants from ontology
-   - "Transmute (Run RPT-1)" button logs configuration to console (dummy)
+   - Three-column layout: Locked Attributes | AI Variables | Not Included
+   - Combines article-level attributes (from DB) and ontology-generated attributes
+   - Article attributes (product_type, color_family, etc.) get options from existing data
+   - Ontology attributes come from project's `ontologySchema`
+   - Maximum 10 AI Variables allowed (RPT-1 Large limit)
+   - Success Score slider (0-100%) on the right panel to set target performance
+   - "Preview Request" button shows context summary and query structure
+   - "Transmute (Run RPT-1)" button calls SAP AI Core to generate predictions
 2. **ResultOverviewTab** - Generated designs display
    - Paginated list of generated designs with search
    - Shows design name, category, confidence score, thumbnail
@@ -207,7 +212,18 @@ The system uses **MM-DD format** for date ranges that apply across all years:
 
 #### Velocity Score Calculation
 
-The "velocity score" is calculated as `SUM(price)` for each article, grouped by article attributes. This represents total revenue and is used to rank articles in project contexts. When there are more than 50 matching articles, the system stores the top 25 (highest velocity) and worst 25 (lowest velocity) to provide contrast for analysis.
+The velocity score measures sales performance normalized across products:
+
+**Formula:** `Velocity = Transaction Count / Days Available`
+- Days Available is approximated by `(last_transaction_date - first_transaction_date + 1)`
+- This measures how quickly items sell relative to their availability period
+
+**Normalization:** At lock time, raw velocity scores are normalized to 0-100:
+- `normalized = (score - min) / (max - min) * 100`
+- The lowest performer in context = 0, highest = 100
+- Stored in `project_context_items.velocityScore`
+
+**Usage in RPT-1:** The normalized score is sent as `success_score` (first column) to RPT-1, allowing users to target specific performance levels when generating new designs.
 
 #### Project Lifecycle
 
@@ -215,8 +231,8 @@ The "velocity score" is calculated as `SUM(price)` for each article, grouped by 
 2. **Preview Context**: System calculates velocity scores for all matching articles
    - If >50 articles match: selects top 25 and worst 25 by velocity score
    - If ≤50 articles match: includes all matching articles
-3. **Lock Context**: User confirms selection (via "Confirm Cohort"), project moves to "active", articles saved to `project_context_items`. User stays on the same page.
-4. **Active Status**: Context is locked, user can now enrich attributes and generate designs
+3. **Lock Context**: User confirms selection (via "Confirm Cohort"), project moves to "active", articles saved to `project_context_items` with normalized velocity scores (0-100). User stays on the same page.
+4. **Active Status**: Context is locked, user can now enrich attributes and generate designs via RPT-1
 
 ### Environment Configuration
 
@@ -230,8 +246,17 @@ PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD
 API_PORT (default: 3001)
 API_HOST (default: 0.0.0.0)
 
-# LLM Integration
+# LLM Integration (for ontology generation)
 LLM_API_URL, LLM_API_KEY, LLM_MODEL
+
+# Vision LLM (for image enrichment)
+LITELLM_PROXY_URL, LITELLM_API_KEY, VISION_LLM_MODEL
+
+# RPT-1 / SAP AI Core (for design prediction)
+AI_API_URL - SAP AI Core API endpoint
+AUTH_URL - OAuth2 authentication endpoint
+CLIENT_ID, CLIENT_SECRET - Service credentials
+RESOURCE_GROUP - AI Core resource group (e.g., "generative-ai")
 
 # S3/SeaweedFS (for image storage)
 S3_ENDPOINT, S3_REGION, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET
@@ -303,8 +328,12 @@ curl http://localhost:3001/health
 The system is being built in phases (see docs/PRD.md):
 
 - **Phase 1 (COMPLETE)**: Product analysis with filtering and pagination
-- **Phase 2**: LLM-based attribute enrichment for top performers
-- **Phase 3**: RPT-1 inverse design engine for predicting attributes
+- **Phase 2 (COMPLETE)**: LLM-based attribute enrichment for top performers
+- **Phase 3 (COMPLETE)**: RPT-1 inverse design engine for predicting attributes
+  - Three-column attribute management (Locked/AI/Not Included)
+  - Success score targeting (0-100%)
+  - SAP AI Core integration with OAuth2 authentication
+  - Velocity-based context with normalized scores
 - **Phase 4**: AI image generation for design visualization
 
-Current focus is on project management and LLM attribute enrichment (Phase 2).
+Current focus is on results display and image generation (Phase 4).

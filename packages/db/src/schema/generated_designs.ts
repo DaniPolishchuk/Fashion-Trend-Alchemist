@@ -3,7 +3,7 @@
  * Stores AI-generated design results and predictions
  */
 
-import { pgTable, uuid, jsonb, text } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, jsonb, text, varchar } from 'drizzle-orm/pg-core';
 import { projects } from './projects.js';
 
 /**
@@ -14,6 +14,7 @@ export const generatedDesigns = pgTable('generated_designs', {
   projectId: uuid('project_id')
     .notNull()
     .references(() => projects.id),
+  name: varchar('name', { length: 300 }).notNull().default('Unnamed Design'),
   inputConstraints: jsonb('input_constraints'),
   predictedAttributes: jsonb('predicted_attributes'),
   generatedImageUrl: text('generated_image_url'),

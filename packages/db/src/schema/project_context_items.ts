@@ -22,6 +22,7 @@ export const projectContextItems = pgTable(
       .references(() => articles.articleId),
     velocityScore: numeric('velocity_score', { precision: 10, scale: 2 }).notNull(),
     enrichedAttributes: jsonb('enriched_attributes'),
+    enrichmentError: varchar('enrichment_error', { length: 1000 }), // Error message if enrichment failed
   },
   (table) => ({
     // Composite primary key to ensure no duplicate articles per project

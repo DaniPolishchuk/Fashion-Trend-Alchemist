@@ -189,12 +189,40 @@ function Analysis() {
   const handleSeasonClick = (season: Season) => {
     if (selectedSeason === season) {
       setSelectedSeason(null);
-    } else {
-      setSelectedSeason(season);
+      // Clear date fields when deselecting season
       setStartDay('');
       setStartMonth('');
       setEndDay('');
       setEndMonth('');
+    } else {
+      setSelectedSeason(season);
+      // Set date fields based on selected season
+      switch (season) {
+        case 'spring':
+          setStartDay('01');
+          setStartMonth('03');
+          setEndDay('31');
+          setEndMonth('05');
+          break;
+        case 'summer':
+          setStartDay('01');
+          setStartMonth('06');
+          setEndDay('31');
+          setEndMonth('08');
+          break;
+        case 'autumn':
+          setStartDay('01');
+          setStartMonth('09');
+          setEndDay('30');
+          setEndMonth('11');
+          break;
+        case 'winter':
+          setStartDay('01');
+          setStartMonth('12');
+          setEndDay('28');
+          setEndMonth('02');
+          break;
+      }
     }
     setCurrentPage(1);
   };
@@ -540,10 +568,16 @@ function Analysis() {
   };
 
   const getPopularityLabel = () => {
-    if (selectedSeason)
-      return `${selectedSeason.charAt(0).toUpperCase() + selectedSeason.slice(1)} items`;
-    if (hasValidDateRange())
-      return `Items from ${formatDateString(startDay, startMonth)} to ${formatDateString(endDay, endMonth)}`;
+    if (selectedSeason) {
+      const fromDate = formatDateString(startDay, startMonth);
+      const toDate = formatDateString(endDay, endMonth);
+      return `${selectedSeason.charAt(0).toUpperCase() + selectedSeason.slice(1)} (${fromDate} - ${toDate})`;
+    }
+    if (hasValidDateRange()) {
+      const fromDate = formatDateString(startDay, startMonth);
+      const toDate = formatDateString(endDay, endMonth);
+      return `Items from ${fromDate} to ${toDate}`;
+    }
     return 'All time';
   };
 
