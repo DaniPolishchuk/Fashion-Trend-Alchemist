@@ -28,6 +28,12 @@ erDiagram
         jsonb season_config "Time Window"
         jsonb scope_config "Filter Settings"
         jsonb ontology_schema "Attribute Definitions"
+        enum enrichment_status "idle | running | completed | failed"
+        int enrichment_processed "Items processed count"
+        int enrichment_total "Total items to process"
+        string enrichment_current_article_id "Currently processing"
+        timestamp enrichment_started_at
+        timestamp enrichment_completed_at
         timestamp created_at
         timestamp deleted_at "Soft Delete"
     }
@@ -38,6 +44,7 @@ erDiagram
         string article_id FK
         decimal velocity_score
         jsonb enriched_attributes
+        string enrichment_error "Error message if enrichment failed"
     }
 
     %% 4. RESULTS (The Contract vs Fulfillment)
@@ -127,92 +134,67 @@ interface SeasonConfig {
 
 ---
 
-### 3. `projects.ontology_schema` - Attribute Definitions ⚠️ NOT YET IMPLEMENTED
+### 3. `projects.ontology_schema` - Attribute Definitions
 
-**Status:** Placeholder for future development
-
-Intended to store custom attribute definitions and taxonomies for the project.
+Stores LLM-generated attribute definitions for the project's product types. Used for Vision LLM enrichment and RPT-1 predictions.
 
 ```typescript
-interface OntologySchema {
-  attributes: Record<
-    string,
-    {
-      type: 'categorical' | 'numerical' | 'text';
-      values?: string[]; // For categorical
-      range?: [number, number]; // For numerical
-      required: boolean;
-    }
-  >;
-}
+// Structure: { productType: { attributeName: [variants] } }
+type OntologySchema = Record<string, Record<string, string[]>>;
 ```
 
-**Planned Example:**
+**Example (for skirts):**
 
 ```json
 {
-  "attributes": {
-    "neckline": {
-      "type": "categorical",
-      "values": ["Crew", "V-Neck", "Scoop", "Boat"],
-      "required": true
-    },
-    "price_range": {
-      "type": "numerical",
-      "range": [10, 500],
-      "required": false
-    }
-  }
-}
-```
-
----
-
-### 4. `project_context_items.enriched_attributes` - Enhanced Article Data
-
-Stores additional computed or enriched information about articles in the project context.
-
-```typescript
-interface EnrichedAttributes {
-  trend_score?: number; // Computed trend momentum
-  seasonality_index?: number; // How seasonal this item is
-  color_dominance?: number; // Color prominence in transactions
-  style_clustering?: {
-    // Style group analysis
-    cluster_id: string;
-    similarity_score: number;
-  };
-  market_position?: {
-    // Price positioning
-    percentile: number;
-    category: 'budget' | 'mid' | 'premium';
-  };
-}
-```
-
-**Example:**
-
-```json
-{
-  "trend_score": 0.85,
-  "seasonality_index": 0.3,
-  "color_dominance": 0.92,
-  "style_clustering": {
-    "cluster_id": "summer-casual",
-    "similarity_score": 0.78
-  },
-  "market_position": {
-    "percentile": 65,
-    "category": "mid"
+  "skirt": {
+    "style": ["A-line", "Pencil", "Wrap", "Pleated", "Maxi"],
+    "fit": ["Slim", "Regular", "Loose"],
+    "length": ["Mini", "Midi", "Maxi"],
+    "waist_style": ["High-waisted", "Mid-rise", "Low-rise"]
   }
 }
 ```
 
 **Usage:**
 
-- Currently set to `null` in lock-context endpoint
-- Future enhancement for ML-based article enrichment
-- Could be populated by separate analytics pipeline
+- Generated via LLM when user clicks "Generate Attributes" in the Attribute Generation Dialog
+- Saved when user confirms cohort (lock-context endpoint)
+- Used by Vision LLM enrichment to extract attributes from product images
+- Defines the AI Variables available in The Alchemist tab for RPT-1 predictions
+```
+
+---
+
+### 4. `project_context_items.enriched_attributes` - Vision LLM Extracted Attributes
+
+Stores attributes extracted from product images by the Vision LLM based on the project's ontology schema.
+
+```typescript
+// Structure matches ontology schema attributes
+type EnrichedAttributes = Record<string, string>;
+```
+
+**Example (for a skirt article):**
+
+```json
+{
+  "style": "A-line",
+  "fit": "Regular",
+  "length": "Midi",
+  "waist_style": "High-waisted"
+}
+```
+
+**Usage:**
+
+- Populated by Vision LLM enrichment process (POST /api/projects/:id/start-enrichment)
+- Each attribute key corresponds to an attribute in the project's ontology schema
+- Values are selected from the predefined variants in the ontology
+- Used as training data for RPT-1 predictions
+- Displayed in the Enhanced Table tab with dynamic columns
+
+**Note:** If enrichment fails for an item, `enriched_attributes` remains `null` and the error message is stored in `enrichment_error`.
 
 ---
 
@@ -346,5 +328,38 @@ whereClauses.push(sql`(${sql.join(monthConditions, sql` OR `)})`);
 2. **Race Condition Risk:** Lock-context endpoint checks project status outside transaction
 3. **Missing Indexes:** No database indexes defined for JSONB or foreign key columns
 4. **No JSONB Validation:** Database accepts any JSON structure without schema validation
+5. **Image Storage Dependency:** Images served via SeaweedFS Filer; requires port-forwarding for local dev
 
-These items are **documented as acceptable** for current RPT-1 demo phase but should be addressed before production deployment.
+These items are **documented as acceptable** for current demo phase but should be addressed before production deployment.
+
+---
+
+## Vision LLM Enrichment Flow
+
+The enrichment process extracts structured attributes from product images using a Vision LLM.
+
+### Enrichment States
+
+Projects track enrichment progress with these states:
+- **idle**: Not started or completed
+- **running**: Currently processing items
+- **completed**: All items processed successfully
+- **failed**: Stopped due to fatal error
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/projects/:id/start-enrichment` | POST | Start enrichment for all unenriched items |
+| `/api/projects/:id/enrichment-progress` | GET | SSE endpoint for real-time progress updates |
+| `/api/projects/:id/enrichment-status` | GET | Get current enrichment state (for page reload recovery) |
+| `/api/projects/:id/retry-enrichment` | POST | Retry failed items (optionally specify articleIds) |
+| `/api/projects/:id/context-items` | GET | Get all context items with enrichment status |
+
+### Processing Logic
+
+1. Items are processed where `enriched_attributes IS NULL AND enrichment_error IS NULL`
+2. Each item: fetch image → call Vision LLM → parse JSON response → store attributes
+3. Failed items get `enrichment_error` set (truncated to 1000 chars)
+4. Retry clears `enrichment_error` to `null`, making items eligible for reprocessing
+5. Progress tracked via SSE with `processed`, `total`, and `currentArticleId`
