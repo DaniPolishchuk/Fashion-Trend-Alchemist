@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ShellBar,
@@ -28,6 +28,7 @@ import '@ui5/webcomponents-icons/dist/accept.js';
 import '@ui5/webcomponents-icons/dist/decline.js';
 import '@ui5/webcomponents-icons/dist/palette.js';
 import '@ui5/webcomponents-icons/dist/hint.js';
+import '@ui5/webcomponents-icons/dist/sys-cancel.js';
 
 interface GeneratedDesign {
   id: string;
@@ -35,12 +36,15 @@ interface GeneratedDesign {
   predictedAttributes: Record<string, string> | null;
   inputConstraints: Record<string, string> | null;
   generatedImageUrl: string | null;
+  imageGenerationStatus?: 'pending' | 'generating' | 'completed' | 'failed';
 }
 
 interface Collection {
   id: string;
   name: string;
 }
+
+type ImageStatus = 'pending' | 'generating' | 'completed' | 'failed';
 
 function DesignDetail() {
   const { projectId, designId } = useParams<{ projectId: string; designId: string }>();
@@ -59,10 +63,14 @@ function DesignDetail() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [imageStatus, setImageStatus] = useState<ImageStatus>('pending');
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+
+  // Polling ref
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   // For now, we'll show a single image; in future could support multiple variations
-  const imageVariations = design?.generatedImageUrl ? [design.generatedImageUrl] : [];
-  const totalVariations = imageVariations.length || 1;
+  const totalVariations = 1;
 
   // Fetch design data
   useEffect(() => {
@@ -98,6 +106,11 @@ function DesignDetail() {
         }
 
         setDesign(currentDesign);
+
+        // Set initial image status
+        const status = currentDesign.imageGenerationStatus || 'pending';
+        setImageStatus(status);
+        setImageUrl(currentDesign.generatedImageUrl);
       } catch (err) {
         console.error('Failed to fetch design:', err);
         setError(err instanceof Error ? err.message : 'Failed to load design');
@@ -108,6 +121,39 @@ function DesignDetail() {
 
     fetchDesign();
   }, [projectId, designId]);
+
+  // Poll for image status when pending or generating
+  useEffect(() => {
+    if (!projectId || !designId) return;
+    if (imageStatus === 'completed' || imageStatus === 'failed') return;
+
+    const pollImageStatus = async () => {
+      try {
+        const response = await fetch(
+          `/api/projects/${projectId}/generated-designs/${designId}/image-status`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setImageStatus(data.status);
+          if (data.imageUrl) {
+            setImageUrl(data.imageUrl);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to poll image status:', err);
+      }
+    };
+
+    // Poll every 3 seconds
+    pollingRef.current = setInterval(pollImageStatus, 3000);
+
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
+  }, [projectId, designId, imageStatus]);
 
   // Fetch collections for save dialog
   useEffect(() => {
@@ -655,9 +701,9 @@ function DesignDetail() {
             )}
 
             {/* Image or Placeholder */}
-            {design.generatedImageUrl ? (
+            {imageStatus === 'completed' && imageUrl ? (
               <img
-                src={design.generatedImageUrl}
+                src={imageUrl}
                 alt={design.name}
                 style={{
                   maxWidth: '100%',
@@ -665,6 +711,40 @@ function DesignDetail() {
                   objectFit: 'contain',
                 }}
               />
+            ) : imageStatus === 'pending' || imageStatus === 'generating' ? (
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%)',
+                  gap: '1rem',
+                }}
+              >
+                <BusyIndicator active size="L" />
+                <Text style={{ color: 'var(--sapContent_LabelColor)' }}>
+                  {imageStatus === 'pending' ? 'Preparing image generation...' : 'Generating image...'}
+                </Text>
+              </div>
+            ) : imageStatus === 'failed' ? (
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%)',
+                  gap: '0.5rem',
+                }}
+              >
+                <Icon name="sys-cancel" style={{ color: 'var(--sapNegativeColor)', fontSize: '2rem' }} />
+                <Text style={{ color: 'var(--sapNegativeColor)' }}>Image generation failed</Text>
+              </div>
             ) : (
               <div
                 style={{

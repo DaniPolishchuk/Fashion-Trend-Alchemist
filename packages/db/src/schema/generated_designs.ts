@@ -18,6 +18,7 @@ export const generatedDesigns = pgTable('generated_designs', {
   inputConstraints: jsonb('input_constraints'),
   predictedAttributes: jsonb('predicted_attributes'),
   generatedImageUrl: text('generated_image_url'),
+  imageGenerationStatus: varchar('image_generation_status', { length: 20 }).default('pending'),
 });
 
 export type GeneratedDesign = typeof generatedDesigns.$inferSelect;

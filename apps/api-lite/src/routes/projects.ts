@@ -501,4 +501,34 @@ export default async function projectRoutes(fastify: FastifyInstance) {
       }
     }
   );
+
+  /**
+   * GET /api/projects/:projectId/generated-designs/:designId/image-status
+   * Get the image generation status for a specific design
+   */
+  fastify.get<{ Params: { projectId: string; designId: string } }>(
+    '/projects/:projectId/generated-designs/:designId/image-status',
+    async (request, reply) => {
+      try {
+        const { projectId, designId } = request.params;
+
+        // Fetch the design
+        const design = await db.query.generatedDesigns.findFirst({
+          where: and(eq(generatedDesigns.id, designId), eq(generatedDesigns.projectId, projectId)),
+        });
+
+        if (!design) {
+          return reply.status(404).send({ error: 'Generated design not found' });
+        }
+
+        return reply.status(200).send({
+          status: design.imageGenerationStatus || 'pending',
+          imageUrl: design.generatedImageUrl,
+        });
+      } catch (error: any) {
+        fastify.log.error({ error }, 'Failed to fetch image status');
+        return reply.status(500).send({ error: 'Internal Server Error' });
+      }
+    }
+  );
 }

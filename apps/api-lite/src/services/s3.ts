@@ -1,48 +1,14 @@
 /**
- * S3 Image Fetching Service
- * Fetches product images from SeaweedFS (S3 gateway or Filer HTTP) and encodes them to base64
+ * Image Service
+ * Fetches and uploads product images via SeaweedFS Filer HTTP
  */
 
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
-import { s3Config, filerConfig, imageStrategy } from '@fashion/config';
-
-// Initialize S3 client (only used when IMAGE_STRATEGY=s3)
-const s3Client = new S3Client({
-  endpoint: s3Config.endpoint,
-  region: s3Config.region,
-  credentials: {
-    accessKeyId: s3Config.accessKeyId,
-    secretAccessKey: s3Config.secretAccessKey,
-  },
-  forcePathStyle: s3Config.forcePathStyle,
-});
-
-/**
- * Fetches an image via S3 and returns it as base64
- */
-async function fetchImageViaS3(articleId: string): Promise<string> {
-  const folder = articleId.slice(0, 2);
-  const key = `${folder}/${articleId}.jpg`;
-
-  const command = new GetObjectCommand({
-    Bucket: s3Config.bucket,
-    Key: key,
-  });
-
-  const response = await s3Client.send(command);
-  const buffer = await response.Body?.transformToByteArray();
-
-  if (!buffer) {
-    throw new Error(`Image not found for article ${articleId}`);
-  }
-
-  return Buffer.from(buffer).toString('base64');
-}
+import { filerConfig } from '@fashion/config';
 
 /**
  * Fetches an image via HTTP Filer and returns it as base64
  */
-async function fetchImageViaFiler(articleId: string): Promise<string> {
+export async function fetchImageAsBase64(articleId: string): Promise<string> {
   const folder = articleId.slice(0, 2);
   const url = `${filerConfig.baseUrl}/${filerConfig.bucket}/${folder}/${articleId}.jpg`;
 
@@ -59,13 +25,81 @@ async function fetchImageViaFiler(articleId: string): Promise<string> {
 }
 
 /**
- * Fetches an image and returns it as a base64 encoded string
- * Uses the configured strategy (s3 or filer)
- * Images are stored with path pattern: {first-2-chars}/{articleId}.jpg
+ * Uploads a generated image via HTTP Filer
+ * @param designId - The UUID of the generated design
+ * @param imageBuffer - The image data as a Buffer
+ * @returns The public URL of the uploaded image
  */
-export async function fetchImageAsBase64(articleId: string): Promise<string> {
-  if (imageStrategy === 'filer') {
-    return fetchImageViaFiler(articleId);
+export async function uploadGeneratedImage(designId: string, imageBuffer: Buffer): Promise<string> {
+  const filename = `${designId}.png`;
+  const url = `${filerConfig.baseUrl}/${filerConfig.generatedBucket}/${filename}`;
+
+  console.log(`[ImageGen] Uploading ${imageBuffer.length} bytes to filer: ${url}`);
+
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'image/png',
+    },
+    body: imageBuffer,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[ImageGen] Upload failed:', {
+      status: response.status,
+      statusText: response.statusText,
+      url,
+      errorBody: errorText,
+    });
+    throw new Error(`Failed to upload image to filer: ${response.status} - ${errorText}`);
   }
-  return fetchImageViaS3(articleId);
+
+  console.log(`[ImageGen] Image uploaded successfully to: ${url}`);
+
+  // Verify upload by checking if file exists
+  try {
+    const verifyResponse = await fetch(url, { method: 'HEAD' });
+    if (!verifyResponse.ok) {
+      console.warn('[ImageGen] Upload verification failed - file may not be accessible');
+    } else {
+      console.log('[ImageGen] Upload verified successfully');
+    }
+  } catch (verifyError) {
+    console.warn('[ImageGen] Could not verify upload:', verifyError);
+  }
+
+  return url;
+}
+
+/**
+ * Uploads a generated image with retry logic
+ * @param designId - The UUID of the generated design
+ * @param imageBuffer - The image data as a Buffer
+ * @param maxRetries - Maximum number of retry attempts (default: 2)
+ * @returns The public URL of the uploaded image
+ */
+export async function uploadGeneratedImageWithRetry(
+  designId: string,
+  imageBuffer: Buffer,
+  maxRetries: number = 2
+): Promise<string> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt > 0) {
+        console.log(`[ImageGen] Upload retry attempt ${attempt}/${maxRetries}`);
+        // Exponential backoff: 1s, 2s, 4s, etc.
+        await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)));
+      }
+
+      return await uploadGeneratedImage(designId, imageBuffer);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.error(`[ImageGen] Upload attempt ${attempt + 1} failed:`, lastError.message);
+    }
+  }
+
+  throw lastError || new Error('Upload failed after all retry attempts');
 }

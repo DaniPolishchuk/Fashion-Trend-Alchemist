@@ -49,6 +49,7 @@ export const s3Config = {
  */
 export const filerConfig = {
   baseUrl: process.env.FILER_BASE_URL || 'http://localhost:8888',
+  generatedBucket: process.env.FILER_GENERATED_BUCKET || 'generatedProducts',
   bucket: process.env.FILER_BUCKET || 'images',
 } as const;
 
@@ -96,4 +97,18 @@ export const rpt1Config = {
   clientId: process.env.CLIENT_ID || '',
   clientSecret: process.env.CLIENT_SECRET || '',
   resourceGroup: process.env.RESOURCE_GROUP || 'default',
+} as const;
+
+/**
+ * Image Generation API configuration
+ */
+export const imageGenConfig = {
+  tokenUrl:
+    process.env.IMAGE_GEN_TOKEN_URL ||
+    'https://honhai-visionbay-ai-aws.authentication.jp10.hana.ondemand.com/oauth/token',
+  clientId: process.env.IMAGE_GEN_CLIENT_ID || '',
+  clientSecret: process.env.IMAGE_GEN_CLIENT_SECRET || '',
+  apiUrl: process.env.IMAGE_GEN_API_URL || 'https://image-api.c-84a98a5.kyma.ondemand.com/generate',
+  imageWidth: parseInt(process.env.IMAGE_GEN_WIDTH || '1024', 10),
+  imageHeight: parseInt(process.env.IMAGE_GEN_HEIGHT || '1024', 10),
 } as const;

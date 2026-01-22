@@ -16,6 +16,8 @@ import {
   sql,
 } from '@fashion/db';
 import { rpt1Config } from '@fashion/config';
+import { buildImagePrompt, generateImageWithRetry } from '../services/imageGeneration.js';
+import { uploadGeneratedImageWithRetry } from '../services/s3.js';
 
 interface PredictRequestBody {
   lockedAttributes: Record<string, string>;
@@ -223,7 +225,8 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
       }
 
       // Validate success score
-      const targetSuccessScore = typeof successScore === 'number' ? Math.max(0, Math.min(100, successScore)) : 100;
+      const targetSuccessScore =
+        typeof successScore === 'number' ? Math.max(0, Math.min(100, successScore)) : 100;
 
       // Verify project exists and is active
       const project = await db.query.projects.findFirst({
@@ -451,7 +454,7 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
       const sequenceNumber = (existingDesignsCount[0]?.count || 0) + 1;
       const designName = `${project.name}_${String(sequenceNumber).padStart(3, '0')}`;
 
-      // Store the generated design
+      // Store the generated design with pending image status
       const [newDesign] = await db
         .insert(generatedDesigns)
         .values({
@@ -462,8 +465,66 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
             _targetSuccessScore: targetSuccessScore, // Store target success score with underscore prefix to distinguish
           },
           predictedAttributes,
+          imageGenerationStatus: 'pending',
         })
         .returning();
+
+      // Start async image generation (don't await)
+      const designId = newDesign.id;
+      const asyncImageGeneration = async () => {
+        try {
+          // Update status to generating
+          await db
+            .update(generatedDesigns)
+            .set({ imageGenerationStatus: 'generating' })
+            .where(eq(generatedDesigns.id, designId));
+
+          fastify.log.info({ designId }, 'Starting async image generation');
+
+          // Build prompt from all attributes
+          const prompt = buildImagePrompt(lockedAttributes, predictedAttributes);
+
+          // Generate image with retry
+          const imageBuffer = await generateImageWithRetry(prompt, 1);
+
+          if (imageBuffer) {
+            // Upload to S3/SeaweedFS with retry logic
+            const imageUrl = await uploadGeneratedImageWithRetry(designId, imageBuffer, 2);
+
+            // Update design with image URL and completed status
+            await db
+              .update(generatedDesigns)
+              .set({
+                generatedImageUrl: imageUrl,
+                imageGenerationStatus: 'completed',
+              })
+              .where(eq(generatedDesigns.id, designId));
+
+            fastify.log.info({ designId, imageUrl }, 'Image generation completed');
+          } else {
+            // Image generation failed after retries
+            await db
+              .update(generatedDesigns)
+              .set({ imageGenerationStatus: 'failed' })
+              .where(eq(generatedDesigns.id, designId));
+
+            fastify.log.warn({ designId }, 'Image generation failed after retries');
+          }
+        } catch (error) {
+          fastify.log.error({ designId, error }, 'Async image generation error');
+
+          // Update status to failed
+          await db
+            .update(generatedDesigns)
+            .set({ imageGenerationStatus: 'failed' })
+            .where(eq(generatedDesigns.id, designId));
+        }
+      };
+
+      // Fire and forget - don't await
+      asyncImageGeneration().catch((err) => {
+        fastify.log.error({ designId, err }, 'Unhandled error in async image generation');
+      });
 
       return reply.status(201).send({
         success: true,
@@ -472,6 +533,7 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
         inputConstraints: lockedAttributes,
         targetSuccessScore,
         predictedAttributes,
+        imageGenerationStatus: 'pending',
         rpt1Metadata: {
           predictionId: rpt1Result.id,
           metadata: rpt1Result.metadata,
