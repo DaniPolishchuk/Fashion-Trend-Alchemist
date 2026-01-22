@@ -13,6 +13,7 @@ import projectRoutes from './routes/projects.js';
 import collectionRoutes from './routes/collections.js';
 import enrichmentRoutes from './routes/enrichment.js';
 import rpt1Routes from './routes/rpt1.js';
+import contextItemsRoutes from './routes/context-items.js';
 
 import { llmConfig } from '@fashion/config';
 import OpenAI from 'openai';
@@ -421,6 +422,9 @@ await fastify.register(enrichmentRoutes, { prefix: '/api' });
 
 // Register RPT-1 routes
 await fastify.register(rpt1Routes, { prefix: '/api' });
+
+// Register context items routes
+await fastify.register(contextItemsRoutes, { prefix: '/api' });
 
 /**
  * Helper function to extract JSON from LLM response

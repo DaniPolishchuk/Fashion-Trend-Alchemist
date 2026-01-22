@@ -4,7 +4,7 @@
  */
 
 import { FastifyInstance } from 'fastify';
-import { db, projects, eq } from '@fashion/db';
+import { db, projects, projectContextItems, eq, and, isNotNull, inArray } from '@fashion/db';
 import {
   processEnrichment,
   startEnrichment,
@@ -205,4 +205,138 @@ export default async function enrichmentRoutes(fastify: FastifyInstance) {
       }
     }
   );
+
+  /**
+   * POST /api/projects/:id/retry-enrichment
+   * Retries enrichment for failed items
+   * If articleIds provided, only retry those; otherwise retry all failed items
+   */
+  fastify.post<{
+    Params: { id: string };
+    Body: { articleIds?: string[] };
+  }>('/projects/:id/retry-enrichment', async (request, reply) => {
+    try {
+      const { id: projectId } = request.params;
+      const { articleIds } = request.body || {};
+
+      // Verify project exists
+      const [project] = await db
+        .select()
+        .from(projects)
+        .where(eq(projects.id, projectId));
+
+      if (!project) {
+        return reply.status(404).send({ error: 'Project not found' });
+      }
+
+      // Check project is active
+      if (project.status !== 'active') {
+        return reply.status(400).send({ error: 'Project must be active to retry enrichment' });
+      }
+
+      // Block if enrichment is already running
+      if (project.enrichmentStatus === 'running') {
+        return reply.status(400).send({ error: 'Enrichment is already running' });
+      }
+
+      // Clear enrichment errors for specified items (or all failed items)
+      let clearedCount: number;
+
+      if (articleIds && articleIds.length > 0) {
+        // Clear specific article IDs
+        await db
+          .update(projectContextItems)
+          .set({ enrichmentError: null })
+          .where(
+            and(
+              eq(projectContextItems.projectId, projectId),
+              inArray(projectContextItems.articleId, articleIds),
+              isNotNull(projectContextItems.enrichmentError)
+            )
+          );
+        clearedCount = articleIds.length;
+      } else {
+        // Clear all failed items
+        const failedItems = await db
+          .select({ articleId: projectContextItems.articleId })
+          .from(projectContextItems)
+          .where(
+            and(
+              eq(projectContextItems.projectId, projectId),
+              isNotNull(projectContextItems.enrichmentError)
+            )
+          );
+        clearedCount = failedItems.length;
+
+        if (clearedCount > 0) {
+          await db
+            .update(projectContextItems)
+            .set({ enrichmentError: null })
+            .where(
+              and(
+                eq(projectContextItems.projectId, projectId),
+                isNotNull(projectContextItems.enrichmentError)
+              )
+            );
+        }
+      }
+
+      if (clearedCount === 0) {
+        return reply.status(200).send({
+          success: true,
+          message: 'No failed items to retry',
+          queuedCount: 0,
+        });
+      }
+
+      // Set status to running
+      await startEnrichment(projectId);
+
+      // Start background processing (non-blocking)
+      setImmediate(async () => {
+        try {
+          const emitProgress: ProgressCallback = (data) => {
+            const connections = activeConnections.get(projectId);
+            if (connections) {
+              const eventData = `event: progress\ndata: ${JSON.stringify(data)}\n\n`;
+              connections.forEach((send) => send(eventData));
+            }
+          };
+
+          await processEnrichment(projectId, emitProgress);
+
+          // Emit completion event
+          const connections = activeConnections.get(projectId);
+          if (connections) {
+            const status = await getEnrichmentStatus(projectId);
+            const eventData = `event: completed\ndata: ${JSON.stringify({
+              processed: status?.processed || 0,
+              total: status?.total || 0,
+            })}\n\n`;
+            connections.forEach((send) => send(eventData));
+          }
+        } catch (error) {
+          fastify.log.error({ error, projectId }, 'Retry enrichment processing failed');
+
+          // Emit error event
+          const connections = activeConnections.get(projectId);
+          if (connections) {
+            const eventData = `event: error\ndata: ${JSON.stringify({
+              message: error instanceof Error ? error.message : 'Unknown error',
+            })}\n\n`;
+            connections.forEach((send) => send(eventData));
+          }
+        }
+      });
+
+      return reply.status(200).send({
+        success: true,
+        message: 'Enrichment retry started',
+        queuedCount: clearedCount,
+      });
+    } catch (error: any) {
+      fastify.log.error({ error }, 'Failed to retry enrichment');
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
 }
