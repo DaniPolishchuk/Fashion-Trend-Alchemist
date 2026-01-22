@@ -23,6 +23,7 @@ interface GeneratedDesign {
   id: string;
   name: string;
   predictedAttributes: Record<string, string> | null;
+  inputConstraints: Record<string, string> | null;
   generatedImageUrl: string | null;
 }
 
@@ -70,17 +71,27 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
     }
   }, [projectId]);
 
-  // Extract category and subcategory from predictedAttributes
+  // Extract given and predicted attributes for display
   const getDisplayInfo = (design: GeneratedDesign) => {
-    if (!design.predictedAttributes) {
-      return { category: '', subcategory: '' };
-    }
+    const given = design.inputConstraints || {};
+    const predicted = design.predictedAttributes || {};
 
-    const attributes = Object.entries(design.predictedAttributes);
-    const category = attributes[0]?.[1] || '';
-    const subcategory = attributes[1]?.[1] || '';
+    // Filter out internal keys (prefixed with _)
+    const givenEntries = Object.entries(given).filter(([key]) => !key.startsWith('_'));
+    const predictedEntries = Object.entries(predicted).filter(([key]) => !key.startsWith('_'));
 
-    return { category, subcategory };
+    // Get first 2 attributes from each
+    const givenText = givenEntries
+      .slice(0, 2)
+      .map(([_, value]) => value)
+      .join(', ');
+
+    const predictedText = predictedEntries
+      .slice(0, 2)
+      .map(([_, value]) => value)
+      .join(', ');
+
+    return { givenText, predictedText };
   };
 
   // Filter designs by search query
@@ -88,11 +99,11 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
     if (!searchQuery.trim()) return designs;
     const query = searchQuery.toLowerCase();
     return designs.filter((d) => {
-      const { category, subcategory } = getDisplayInfo(d);
+      const { givenText, predictedText } = getDisplayInfo(d);
       return (
         d.name.toLowerCase().includes(query) ||
-        category.toLowerCase().includes(query) ||
-        subcategory.toLowerCase().includes(query)
+        givenText.toLowerCase().includes(query) ||
+        predictedText.toLowerCase().includes(query)
       );
     });
   }, [designs, searchQuery]);
@@ -221,7 +232,7 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
             </div>
           ) : (
             paginatedDesigns.map((design, index) => {
-              const { category, subcategory } = getDisplayInfo(design);
+              const { givenText, predictedText } = getDisplayInfo(design);
               return (
                 <div
                   key={design.id}
@@ -283,10 +294,21 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
                       style={{
                         color: 'var(--sapContent_LabelColor)',
                         fontSize: '0.8125rem',
+                        display: 'block',
                       }}
                     >
-                      {category}
-                      {subcategory ? ` / ${subcategory}` : ''}
+                      {givenText && (
+                        <>
+                          <span style={{ fontWeight: 500 }}>Given:</span> {givenText}
+                        </>
+                      )}
+                      {givenText && predictedText && ' | '}
+                      {predictedText && (
+                        <>
+                          <span style={{ fontWeight: 500 }}>Predicted:</span> {predictedText}
+                        </>
+                      )}
+                      {!givenText && !predictedText && 'No attributes'}
                     </Text>
                   </div>
 

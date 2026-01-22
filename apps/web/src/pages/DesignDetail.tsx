@@ -404,7 +404,7 @@ function DesignDetail() {
         {/* Left Column - Attributes (Two Sub-columns) */}
         <div
           style={{
-            height: '50%',
+            height: '75%',
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
             gap: '1rem',
@@ -600,59 +600,7 @@ function DesignDetail() {
         </div>
 
         {/* Right Column - Image Gallery */}
-        <div style={{ position: 'relative', height: '50%' }}>
-          {/* Variation Badge */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '1rem',
-              left: '1rem',
-              zIndex: 10,
-              background: '#107c10',
-              color: 'white',
-              padding: '0.375rem 0.75rem',
-              borderRadius: '1rem',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-            }}
-          >
-            VARIATION {currentImageIndex + 1} OF {totalVariations}
-          </div>
-
-          {/* Action Buttons */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '1rem',
-              right: '1rem',
-              zIndex: 10,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.5rem',
-            }}
-          >
-            <Button
-              icon="zoom-in"
-              design="Default"
-              style={{
-                borderRadius: '0.5rem',
-                width: '40px',
-                height: '40px',
-              }}
-              tooltip="Zoom in"
-            />
-            <Button
-              icon="download"
-              design="Default"
-              style={{
-                borderRadius: '0.5rem',
-                width: '40px',
-                height: '40px',
-              }}
-              tooltip="Download image"
-            />
-          </div>
-
+        <div style={{ position: 'relative', height: '75%' }}>
           {/* Image Container */}
           <Card
             style={{
@@ -706,9 +654,9 @@ function DesignDetail() {
                 src={imageUrl}
                 alt={design.name}
                 style={{
-                  maxWidth: '100%',
-                  maxHeight: '100%',
-                  objectFit: 'contain',
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
                 }}
               />
             ) : imageStatus === 'pending' || imageStatus === 'generating' ? (
@@ -726,7 +674,9 @@ function DesignDetail() {
               >
                 <BusyIndicator active size="L" />
                 <Text style={{ color: 'var(--sapContent_LabelColor)' }}>
-                  {imageStatus === 'pending' ? 'Preparing image generation...' : 'Generating image...'}
+                  {imageStatus === 'pending'
+                    ? 'Preparing image generation...'
+                    : 'Generating image...'}
                 </Text>
               </div>
             ) : imageStatus === 'failed' ? (
@@ -742,7 +692,10 @@ function DesignDetail() {
                   gap: '0.5rem',
                 }}
               >
-                <Icon name="sys-cancel" style={{ color: 'var(--sapNegativeColor)', fontSize: '2rem' }} />
+                <Icon
+                  name="sys-cancel"
+                  style={{ color: 'var(--sapNegativeColor)', fontSize: '2rem' }}
+                />
                 <Text style={{ color: 'var(--sapNegativeColor)' }}>Image generation failed</Text>
               </div>
             ) : (

@@ -409,7 +409,9 @@ export default async function projectRoutes(fastify: FastifyInstance) {
             id: generatedDesigns.id,
             name: generatedDesigns.name,
             predictedAttributes: generatedDesigns.predictedAttributes,
+            inputConstraints: generatedDesigns.inputConstraints,
             generatedImageUrl: generatedDesigns.generatedImageUrl,
+            imageGenerationStatus: generatedDesigns.imageGenerationStatus,
           })
           .from(generatedDesigns)
           .where(eq(generatedDesigns.projectId, projectId))
@@ -484,10 +486,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
         }
 
         // Update the design
-        await db
-          .update(generatedDesigns)
-          .set(updates)
-          .where(eq(generatedDesigns.id, designId));
+        await db.update(generatedDesigns).set(updates).where(eq(generatedDesigns.id, designId));
 
         // Fetch and return the updated design
         const updatedDesign = await db.query.generatedDesigns.findFirst({
