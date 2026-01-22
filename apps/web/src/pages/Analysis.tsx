@@ -15,6 +15,7 @@ import {
   Label,
   Breadcrumbs,
   BreadcrumbsItem,
+  MessageStrip,
 } from '@ui5/webcomponents-react';
 import '@ui5/webcomponents-icons/dist/calendar.js';
 import '@ui5/webcomponents-icons/dist/group.js';
@@ -91,6 +92,10 @@ function Analysis() {
   const [currentPage, setCurrentPage] = useState(1);
   const [limit] = useState(10);
   const [lockingContext, setLockingContext] = useState(false);
+
+  // --- Error Dialog State ---
+  const [errorDialogOpen, setErrorDialogOpen] = useState(false);
+  const [errorDialogMessage, setErrorDialogMessage] = useState('');
 
   // --- Helper Functions ---
   const getMaxDaysInMonth = (month: number): number => {
@@ -471,6 +476,9 @@ function Analysis() {
       const createdProject = await createResponse.json();
       console.log('Project created successfully:', createdProject);
 
+      // Navigate to Project Hub immediately after successful project creation
+      navigate(`/project/${createdProject.id}`);
+
       const params = new URLSearchParams();
       // Only add date/season params if they exist, otherwise all year is analyzed
       if (selectedSeason) {
@@ -543,7 +551,10 @@ function Analysis() {
       });
     } catch (err) {
       console.error('Failed to create project and lock context:', err);
-      setError(err instanceof Error ? err.message : 'Failed to create project and lock context');
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to create project and lock context';
+      setErrorDialogMessage(errorMessage);
+      setErrorDialogOpen(true);
     } finally {
       setLockingContext(false);
     }
@@ -746,7 +757,11 @@ function Analysis() {
 
   return (
     <div
-      style={{ background: 'var(--sapBackgroundColor)', minHeight: 'calc(100vh - 44px)', paddingBottom: '2rem' }}
+      style={{
+        background: 'var(--sapBackgroundColor)',
+        minHeight: 'calc(100vh - 44px)',
+        paddingBottom: '2rem',
+      }}
     >
       {/* Breadcrumbs */}
       <div style={{ padding: '12px 2rem 0' }}>
@@ -1038,40 +1053,39 @@ function Analysis() {
             </div>
           )}
 
-          {project?.status !== 'locked' && (
-            <>
-              {!ontologySchema && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    padding: '0.5rem 1rem',
-                    background: 'var(--sapInformationBackground)',
-                    border: '1px solid var(--sapInformationBorderColor)',
-                    borderRadius: '0.25rem',
-                    fontSize: '0.875rem',
-                  }}
-                >
-                  <Icon name="lightbulb" style={{ color: 'var(--sapInformativeColor)' }} />
-                  <Text style={{ color: 'var(--sapInformativeColor)' }}>
-                    Please generate attributes before confirming cohort
-                  </Text>
-                </div>
-              )}
-              <Button
-                design="Emphasized"
-                onClick={handleLockContext}
-                disabled={lockingContext || totalProducts === 0 || !ontologySchema}
-              >
-                {lockingContext ? 'Confirming...' : 'Confirm Cohort'}
-              </Button>
-            </>
+          {project?.status !== 'locked' && !ontologySchema && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.5rem 1rem',
+                background: 'var(--sapInformationBackground)',
+                border: '1px solid var(--sapInformationBorderColor)',
+                borderRadius: '0.25rem',
+                fontSize: '0.875rem',
+              }}
+            >
+              <Icon name="lightbulb" style={{ color: 'var(--sapInformativeColor)' }} />
+              <Text style={{ color: 'var(--sapInformativeColor)' }}>
+                Please generate attributes before confirming cohort
+              </Text>
+            </div>
           )}
 
           <Button design="Emphasized" icon="lightbulb" onClick={handleOpenAttributeDialog}>
             Generate Attributes
           </Button>
+
+          {project?.status !== 'locked' && (
+            <Button
+              design="Emphasized"
+              onClick={handleLockContext}
+              disabled={lockingContext || totalProducts === 0 || !ontologySchema}
+            >
+              {lockingContext ? 'Creating Project...' : 'Confirm & create Project'}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1292,6 +1306,32 @@ function Analysis() {
         onRegenerate={handleRegenerate}
         onSave={handleSaveAttributes}
       />
+
+      {/* Error Dialog */}
+      <Dialog
+        open={errorDialogOpen}
+        headerText="Project Creation Failed"
+        footer={
+          <Bar
+            design="Footer"
+            endContent={
+              <Button design="Emphasized" onClick={() => setErrorDialogOpen(false)}>
+                OK
+              </Button>
+            }
+          />
+        }
+      >
+        <div style={{ padding: '1rem', minWidth: '400px' }}>
+          <MessageStrip design="Negative" style={{ marginBottom: '1rem' }}>
+            {errorDialogMessage}
+          </MessageStrip>
+          <Text>
+            The project creation failed. Please check your configuration and try again. If the
+            problem persists, please contact support.
+          </Text>
+        </div>
+      </Dialog>
     </div>
   );
 }
