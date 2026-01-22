@@ -52,3 +52,47 @@ export type ContextItem = z.infer<typeof ContextItemSchema>;
 export type EnrichedAttributes = z.infer<typeof EnrichedAttributesSchema>;
 export type ProjectContextItem = z.infer<typeof ProjectContextItemSchema>;
 export type PreviewContextResponse = z.infer<typeof PreviewContextResponseSchema>;
+
+/**
+ * Schema for context item response in Enhanced Table
+ */
+export const ContextItemResponseSchema = z.object({
+  articleId: z.string(),
+  productType: z.string(),
+  productGroup: z.string().nullable(),
+  colorFamily: z.string().nullable(),
+  patternStyle: z.string().nullable(),
+  detailDesc: z.string().nullable(),
+  velocityScore: z.number(),
+  enrichedAttributes: z.record(z.string(), z.string()).nullable(),
+  enrichmentError: z.string().nullable(),
+  imageUrl: z.string(),
+});
+
+/**
+ * Schema for context items summary
+ */
+export const ContextItemsSummarySchema = z.object({
+  total: z.number(),
+  successful: z.number(),
+  pending: z.number(),
+  failed: z.number(),
+});
+
+/**
+ * Schema for context items response
+ */
+export const ContextItemsResponseSchema = z.object({
+  items: z.array(ContextItemResponseSchema),
+  summary: ContextItemsSummarySchema,
+  ontologyAttributes: z.array(z.string()),
+  enrichmentStatus: z.enum(['idle', 'running', 'completed', 'failed']),
+  currentArticleId: z.string().nullable(),
+});
+
+/**
+ * TypeScript types for Enhanced Table
+ */
+export type ContextItemResponse = z.infer<typeof ContextItemResponseSchema>;
+export type ContextItemsSummary = z.infer<typeof ContextItemsSummarySchema>;
+export type ContextItemsResponse = z.infer<typeof ContextItemsResponseSchema>;

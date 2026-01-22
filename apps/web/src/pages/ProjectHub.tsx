@@ -56,6 +56,7 @@ function ProjectHub() {
   // Enrichment state
   const [enrichmentStatus, setEnrichmentStatus] = useState<'idle' | 'running' | 'completed' | 'failed'>('idle');
   const [enrichmentProgress, setEnrichmentProgress] = useState({ processed: 0, total: 0 });
+  const [currentArticleId, setCurrentArticleId] = useState<string | null>(null);
 
   // Fetch project data and enrichment status
   useEffect(() => {
@@ -86,6 +87,7 @@ function ProjectHub() {
           const statusData = await statusResponse.json();
           setEnrichmentStatus(statusData.status || 'idle');
           setEnrichmentProgress(statusData.progress || { processed: 0, total: 0 });
+          setCurrentArticleId(statusData.currentArticleId || null);
         }
       } catch (err) {
         console.error('Failed to fetch project:', err);
@@ -107,15 +109,18 @@ function ProjectHub() {
     eventSource.addEventListener('progress', (e) => {
       const data = JSON.parse(e.data);
       setEnrichmentProgress({ processed: data.processed, total: data.total });
+      setCurrentArticleId(data.currentArticleId || null);
     });
 
     eventSource.addEventListener('completed', () => {
       setEnrichmentStatus('completed');
+      setCurrentArticleId(null);
       eventSource.close();
     });
 
     eventSource.addEventListener('error', () => {
       setEnrichmentStatus('failed');
+      setCurrentArticleId(null);
       eventSource.close();
     });
 
@@ -156,7 +161,13 @@ function ProjectHub() {
       case 'alchemist':
         return <TheAlchemistTab project={project} />;
       case 'enhanced-table':
-        return <EnhancedTableTab />;
+        return (
+          <EnhancedTableTab
+            projectId={project.id}
+            enrichmentStatus={enrichmentStatus}
+            currentArticleId={currentArticleId}
+          />
+        );
       case 'result-overview':
         return <ResultOverviewTab projectId={project.id} />;
       case 'data-analysis':
