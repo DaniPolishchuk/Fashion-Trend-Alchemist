@@ -9,7 +9,6 @@ import {
   Button,
   Bar,
   BusyIndicator,
-  ProgressIndicator,
   ObjectStatus,
   CheckBox,
   Select,
@@ -57,6 +56,25 @@ type FilterType = 'all' | 'successful' | 'pending' | 'failed';
 type SortField = 'velocityScore' | 'articleId' | 'productType';
 
 const ITEMS_PER_PAGE = 25;
+
+/**
+ * Format attribute name: replace underscores with spaces and capitalize first letter
+ */
+function formatAttributeName(attr: string): string {
+  return attr
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Get color for velocity score based on value (0-100)
+ * Returns SAP theme-compatible colors
+ */
+function getVelocityColor(score: number): string {
+  if (score >= 70) return 'var(--sapPositiveColor)'; // Green for high performers
+  if (score >= 40) return 'var(--sapNeutralColor)'; // Neutral/gray for medium
+  return 'var(--sapNegativeColor)'; // Red for low performers
+}
 
 function EnhancedTableTab({ projectId, enrichmentStatus, currentArticleId }: EnhancedTableTabProps) {
   // Data state
@@ -516,7 +534,7 @@ function EnhancedTableTab({ projectId, enrichmentStatus, currentArticleId }: Enh
                 {/* Dynamic LLM attribute columns */}
                 {ontologyAttributes.map((attr) => (
                   <th key={attr} style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>
-                    {attr.charAt(0).toUpperCase() + attr.slice(1)}
+                    {formatAttributeName(attr)}
                   </th>
                 ))}
                 <th style={{ padding: '0.75rem 1rem', textAlign: 'center', width: '100px' }}>Status</th>
@@ -596,11 +614,34 @@ function EnhancedTableTab({ projectId, enrichmentStatus, currentArticleId }: Enh
                       {/* Velocity Score */}
                       <td style={{ padding: '0.75rem 1rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <ProgressIndicator
-                            value={item.velocityScore}
-                            style={{ width: '60px', height: '6px' }}
-                          />
-                          <Text style={{ fontSize: '0.75rem', color: 'var(--sapContent_LabelColor)' }}>
+                          {/* Custom progress bar without percentage label */}
+                          <div
+                            style={{
+                              width: '60px',
+                              height: '6px',
+                              backgroundColor: 'var(--sapContent_ForegroundBorderColor)',
+                              borderRadius: '3px',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: `${item.velocityScore}%`,
+                                height: '100%',
+                                backgroundColor: getVelocityColor(item.velocityScore),
+                                borderRadius: '3px',
+                                transition: 'width 0.3s ease',
+                              }}
+                            />
+                          </div>
+                          <Text
+                            style={{
+                              fontSize: '0.75rem',
+                              color: getVelocityColor(item.velocityScore),
+                              fontWeight: 600,
+                              minWidth: '35px',
+                            }}
+                          >
                             {item.velocityScore.toFixed(1)}
                           </Text>
                         </div>

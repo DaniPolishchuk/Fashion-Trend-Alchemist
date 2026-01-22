@@ -137,6 +137,8 @@ The API server (`apps/api-lite/src/main.ts`) uses Fastify with the following end
 - `/api/collections` - List user collections with item counts and preview images (see `routes/collections.ts`)
 - `/api/projects/:id/rpt1-preview` - Get context row counts for RPT-1 preview
 - `/api/projects/:id/rpt1-predict` - Execute RPT-1 prediction via SAP AI Core
+- `/api/projects/:id/context-items` - Get all context items with enrichment status for Enhanced Table (see `routes/context-items.ts`)
+- `/api/projects/:id/retry-enrichment` - Retry failed enrichment items (POST with optional articleIds array)
 
 ### Frontend Structure
 
@@ -173,7 +175,18 @@ The ProjectHub is the main workspace for working with a project after it's creat
    - Paginated list of generated designs with search
    - Shows design name, category, confidence score, thumbnail
    - Uses mock data (ready for API integration)
-3. **EnhancedTableTab** - Placeholder (displays "Enhanced Table")
+3. **EnhancedTableTab** - Context items table with enrichment monitoring
+   - Displays all project context items joined with article data
+   - Shows enrichment status (successful/pending/failed) per item
+   - Collapsible control panel with status summary and retry controls
+   - Filter chips (All/Successful/Pending/Failed) for quick filtering
+   - Sortable columns (velocity score, article ID, product type) with "Failed first" option
+   - Dynamic columns for LLM-enriched attributes from ontology schema
+   - Image thumbnails with fallback placeholder on load error
+   - Single item retry and bulk "Retry All Failed" functionality
+   - CSV export with all base and enriched attributes
+   - Processing row highlight animation during active enrichment
+   - Pagination (25 items per page)
 4. **DataAnalysisTab** - Placeholder (displays "Data Analysis")
 
 #### Ontology Schema Structure
