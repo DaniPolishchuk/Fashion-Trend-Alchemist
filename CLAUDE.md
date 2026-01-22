@@ -187,6 +187,10 @@ The ProjectHub is the main workspace for working with a project after it's creat
    - CSV export with all base and enriched attributes
    - Processing row highlight animation during active enrichment
    - Pagination (25 items per page)
+   - **Expandable rows**: Click any row to expand and see full article details, larger image, all enriched attributes, and error messages (accordion behavior - only one row expanded at a time)
+   - **Image modal**: Click zoom icon on expanded image to view full-size in dialog
+   - **Real-time updates**: 5-second polling during enrichment (when tab is visible)
+   - **Color-coded velocity scores**: Green (≥70), gray (40-69), red (<40)
 4. **DataAnalysisTab** - Placeholder (displays "Data Analysis")
 
 #### Ontology Schema Structure
