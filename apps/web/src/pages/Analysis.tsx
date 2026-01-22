@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  ShellBar,
   Button,
   Title,
   Text,
@@ -10,7 +9,6 @@ import {
   IllustratedMessage,
   Bar,
   Icon,
-  Avatar,
   Dialog,
   CheckBox,
   Input,
@@ -748,15 +746,8 @@ function Analysis() {
 
   return (
     <div
-      style={{ background: 'var(--sapBackgroundColor)', minHeight: '100vh', paddingBottom: '2rem' }}
+      style={{ background: 'var(--sapBackgroundColor)', minHeight: 'calc(100vh - 44px)', paddingBottom: '2rem' }}
     >
-      <ShellBar
-        primaryTitle="The Fashion Trend Alchemist"
-        profile={
-          <Avatar icon="employee" size="XS" style={{ background: 'var(--sapAccentColor1)' }} />
-        }
-      />
-
       {/* Breadcrumbs */}
       <div style={{ padding: '12px 2rem 0' }}>
         <Breadcrumbs

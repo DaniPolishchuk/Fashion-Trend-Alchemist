@@ -149,12 +149,16 @@ The frontend (`apps/web/src/`) uses:
 - **State**: Local state + localStorage for persistence
 - **API Communication**: Fetch API with manual state management
 
+Key components:
+- `components/AppShell.tsx` - Unified SAP Fiori-style shell wrapper with header (ShellBar), logo, search, notifications popover, and user profile popover with menu. Wraps all pages via App.tsx.
+- `components/AttributeGenerationDialog.tsx` - LLM attribute generation UI
+
 Key pages:
 - `Home.tsx` - Dashboard with searchable/paginated projects table and collections grid
 - `ProductSelection.tsx` - Product type taxonomy browser
 - `Analysis.tsx` - Filtering and analysis dashboard
 - `ProjectHub.tsx` - Project workspace hub with tabbed navigation (see below)
-- `components/AttributeGenerationDialog.tsx` - LLM attribute generation UI
+- `DesignDetail.tsx` - Individual design detail view
 
 #### ProjectHub Page (`/project/:projectId`)
 The ProjectHub is the main workspace for working with a project after it's created. It features:

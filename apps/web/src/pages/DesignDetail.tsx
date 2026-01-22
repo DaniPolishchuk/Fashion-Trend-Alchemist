@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ShellBar,
   BusyIndicator,
   IllustratedMessage,
   Text,
   Button,
   Title,
-  Avatar,
   Icon,
   Breadcrumbs,
   BreadcrumbsItem,
@@ -220,46 +218,32 @@ function DesignDetail() {
 
   if (loading) {
     return (
-      <>
-        <ShellBar
-          primaryTitle="The Fashion Trend Alchemist"
-          showNotifications
-          showProductSwitch={false}
-        />
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            height: 'calc(100vh - 44px)',
-          }}
-        >
-          <BusyIndicator active size="L" />
-        </div>
-      </>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: 'calc(100vh - 44px)',
+        }}
+      >
+        <BusyIndicator active size="L" />
+      </div>
     );
   }
 
   if (error || !design) {
     return (
-      <>
-        <ShellBar
-          primaryTitle="The Fashion Trend Alchemist"
-          showNotifications
-          showProductSwitch={false}
-        />
-        <div style={{ padding: '2rem' }}>
-          <IllustratedMessage
-            name="NoData"
-            titleText="Error Loading Design"
-            subtitleText={error || 'Design not found'}
-          >
-            <Button design="Emphasized" onClick={() => navigate(`/project/${projectId}`)}>
-              Back to Project
-            </Button>
-          </IllustratedMessage>
-        </div>
-      </>
+      <div style={{ padding: '2rem' }}>
+        <IllustratedMessage
+          name="NoData"
+          titleText="Error Loading Design"
+          subtitleText={error || 'Design not found'}
+        >
+          <Button design="Emphasized" onClick={() => navigate(`/project/${projectId}`)}>
+            Back to Project
+          </Button>
+        </IllustratedMessage>
+      </div>
     );
   }
 
@@ -268,14 +252,7 @@ function DesignDetail() {
   const inputConstraints = design.inputConstraints || {};
 
   return (
-    <div style={{ background: 'var(--sapBackgroundColor)', minHeight: '100vh' }}>
-      <ShellBar
-        primaryTitle="The Fashion Trend Alchemist"
-        profile={
-          <Avatar icon="employee" size="XS" style={{ background: 'var(--sapAccentColor1)' }} />
-        }
-      />
-
+    <div style={{ background: 'var(--sapBackgroundColor)', minHeight: 'calc(100vh - 44px)' }}>
       {/* Breadcrumbs */}
       <div style={{ padding: '12px 2rem 0' }}>
         <Breadcrumbs
