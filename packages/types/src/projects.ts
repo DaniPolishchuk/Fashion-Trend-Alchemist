@@ -94,7 +94,7 @@ export const LockContextInputSchema = z.object({
     })
     .optional()
     .nullable(), // Allow null for seasonConfig
-  ontologySchema: z.record(z.string(), z.any()).optional(),
+  ontologySchema: z.record(z.string(), z.any()).optional().nullable(), // Allow null or undefined
 });
 
 /**

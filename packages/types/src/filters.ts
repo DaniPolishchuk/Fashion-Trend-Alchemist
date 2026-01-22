@@ -22,18 +22,35 @@ export interface FiltersResponse {
  */
 export interface ProductListItem {
   articleId: string;
+  article_id?: string; // Support both camelCase and snake_case from API
   productType: string;
+  product_type?: string;
+  productName?: string;
+  product_name?: string;
   productGroup: string | null;
+  product_group?: string | null;
   productFamily: string | null;
+  product_family?: string | null;
   styleConcept: string | null;
+  style_concept?: string | null;
   patternStyle: string | null;
+  pattern_style?: string | null;
   colorFamily: string | null;
+  color_family?: string | null;
   specificColor: string | null;
+  specific_color?: string | null;
   colorIntensity: string | null;
+  color_intensity?: string | null;
   customerSegment: string | null;
+  customer_segment?: string | null;
   fabricTypeBase: string | null;
-  transactionCount: number;
-  lastSaleDate: string | null;
+  fabric_type_base?: string | null;
+  detailDesc?: string | null;
+  detail_desc?: string | null;
+  transactionCount?: number;
+  lastSaleDate?: string | null;
+  // Allow additional dynamic properties from database
+  [key: string]: string | number | null | undefined;
 }
 
 /**

@@ -18,7 +18,7 @@ import { llmConfig } from '@fashion/config';
 import OpenAI from 'openai';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-
+import { cache, CACHE_TTL } from './services/cache.js';
 
 const fastify = Fastify({
   logger: true,
@@ -152,6 +152,18 @@ fastify.get<{
 
     if (!types) return reply.status(400).send({ error: 'Missing types' } as any);
 
+    // Generate cache key from query parameters
+    const cacheKey = cache.generateKey('filters', { types, season, mdFrom, mdTo });
+
+    // Try to get from cache first
+    const cached = await cache.get<FiltersResponse>(cacheKey);
+    if (cached) {
+      console.log('✅ Cache HIT for filters:', cacheKey);
+      return reply.status(200).send(cached);
+    }
+
+    console.log('❌ Cache MISS for filters:', cacheKey);
+
     const typeArray = types
       .split(',')
       .map((t: string) => t.trim())
@@ -175,7 +187,9 @@ fastify.get<{
       const [toMonth, toDay] = mdTo.split('-').map(Number);
 
       if (fromMonth === toMonth && fromDay === toDay) {
-        whereClauses.push(`(EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) = ${fromDay})`);
+        whereClauses.push(
+          `(EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) = ${fromDay})`
+        );
       } else if (fromMonth < toMonth || (fromMonth === toMonth && fromDay <= toDay)) {
         whereClauses.push(`(
           (EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) >= ${fromDay})
@@ -211,7 +225,7 @@ fastify.get<{
     const result = await pool.query(query, params);
     const row = result.rows[0] || {};
 
-    return reply.status(200).send({
+    const response: FiltersResponse = {
       productGroup: row.product_group || [],
       productFamily: row.product_family || [],
       styleConcept: row.style_concept || [],
@@ -221,7 +235,13 @@ fastify.get<{
       specificColor: row.specific_color || [],
       customerSegment: row.customer_segment || [],
       fabricTypeBase: row.fabric_type_base || [],
-    });
+    };
+
+    // Store in cache for future requests
+    await cache.set(cacheKey, response, CACHE_TTL.FILTER_OPTIONS);
+    console.log('💾 Cached filter options for:', cacheKey);
+
+    return reply.status(200).send(response);
   } catch (error) {
     request.log.error({ error }, 'Failed to fetch filter attributes');
     return reply.status(500).send({ error: 'Internal Server Error' } as any);
@@ -251,6 +271,18 @@ const productsHandler = async (
 
     if (!types) return reply.status(400).send({ error: 'Missing types' } as any);
 
+    // Generate cache key including all query parameters
+    const cacheKey = cache.generateKey('products', request.query);
+
+    // Try to get from cache first
+    const cached = await cache.get<ProductsResponse>(cacheKey);
+    if (cached) {
+      console.log('✅ Cache HIT for products:', cacheKey);
+      return reply.send(cached);
+    }
+
+    console.log('❌ Cache MISS for products:', cacheKey);
+
     const typeArray = types
       .split(',')
       .map((t: string) => t.trim())
@@ -262,7 +294,6 @@ const productsHandler = async (
 
     const typePlaceholders = typeArray.map((_: string, i: number) => `$${i + 1}`).join(', ');
     whereClauses.push(`a.product_type IN (${typePlaceholders})`);
-
 
     // --- Time/Season Filters ---
 
@@ -279,8 +310,9 @@ const productsHandler = async (
       const [fromMonth, fromDay] = mdFrom.split('-').map(Number);
       const [toMonth, toDay] = mdTo.split('-').map(Number);
       if (fromMonth === toMonth && fromDay === toDay) {
-
-        whereClauses.push(`(EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) = ${fromDay})`);
+        whereClauses.push(
+          `(EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) = ${fromDay})`
+        );
       } else if (fromMonth < toMonth || (fromMonth === toMonth && fromDay <= toDay)) {
         whereClauses.push(`(
           (EXTRACT(MONTH FROM t.t_date) = ${fromMonth} AND EXTRACT(DAY FROM t.t_date) >= ${fromDay})
@@ -340,63 +372,65 @@ const productsHandler = async (
       }
     }
 
-
     const whereClause = whereClauses.join(' AND ');
     const sortD = sortDir.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
-    const orderByClause = `ORDER BY a.${sortBy === 'article_id' ? 'article_id' : sortBy} ${sortD}`;
-
-
-    const idsQuery = `
-      SELECT DISTINCT a.article_id
-      FROM transactions_train t
-      INNER JOIN articles a ON a.article_id = t.article_id
-      WHERE ${whereClause}
-      ${orderByClause}
-      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-    `;
-
-    const countQuery = `
-      SELECT COUNT(DISTINCT a.article_id) as total
-      FROM transactions_train t
-      INNER JOIN articles a ON a.article_id = t.article_id
-      WHERE ${whereClause}
-    `;
+    const sortColumn = sortBy === 'article_id' ? 'article_id' : sortBy;
 
     const limitNum = parseInt(limit, 10) || 10;
     const offsetNum = parseInt(offset, 10) || 0;
 
-    const [idsResult, countResult] = await Promise.all([
-      pool.query(idsQuery, [...params, limitNum, offsetNum]),
-      pool.query(countQuery, params),
-    ]);
+    // Optimized single-query approach using CTEs
+    // This combines the count and data fetch into one database round trip
+    const optimizedQuery = `
+      WITH filtered_articles AS (
+        SELECT DISTINCT a.article_id
+        FROM transactions_train t
+        INNER JOIN articles a ON a.article_id = t.article_id
+        WHERE ${whereClause}
+      ),
+      total_count AS (
+        SELECT COUNT(*) as cnt FROM filtered_articles
+      ),
+      paginated_ids AS (
+        SELECT fa.article_id
+        FROM filtered_articles fa
+        INNER JOIN articles a ON a.article_id = fa.article_id
+        ORDER BY a.${sortColumn} ${sortD}
+        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+      )
+      SELECT 
+        a.*,
+        tc.cnt as total_count
+      FROM paginated_ids pi
+      INNER JOIN articles a ON a.article_id = pi.article_id
+      CROSS JOIN total_count tc
+      ORDER BY a.${sortColumn} ${sortD};
+    `;
 
-    if (idsResult.rows.length === 0) {
+    const result = await pool.query(optimizedQuery, [...params, limitNum, offsetNum]);
+
+    if (result.rows.length === 0) {
       return reply.send({ items: [], total: 0, limit: limitNum, offset: offsetNum });
     }
 
-
-    const foundIds = idsResult.rows.map((r: any) => r.article_id);
-    const idPlaceholders = foundIds.map((_: string, i: number) => `$${i + 1}`).join(', ');
-    const detailsResult = await pool.query(
-      `SELECT * FROM articles WHERE article_id IN (${idPlaceholders})`,
-      foundIds
-    );
-
-    const detailsMap = new Map();
-    detailsResult.rows.forEach((d: any) => detailsMap.set(d.article_id, d));
-
-    const items = idsResult.rows.map((row: any) => {
-      const details = detailsMap.get(row.article_id) || {};
-      return { ...details, articleId: row.article_id };
-
+    const total = parseInt(result.rows[0]?.total_count || '0', 10);
+    const items = result.rows.map((row: any) => {
+      const { total_count, ...article } = row;
+      return { ...article, articleId: row.article_id };
     });
 
-    return reply.send({
+    const response: ProductsResponse = {
       items,
-      total: parseInt(countResult.rows[0]?.total || '0', 10),
+      total,
       limit: limitNum,
       offset: offsetNum,
-    });
+    };
+
+    // Store in cache for future requests
+    await cache.set(cacheKey, response, CACHE_TTL.PRODUCTS_LIST);
+    console.log('💾 Cached products for:', cacheKey);
+
+    return reply.send(response);
   } catch (error) {
     request.log.error({ error }, 'Failed to fetch products');
     return reply.status(500).send({ error: 'Internal Server Error' } as any);
@@ -404,7 +438,10 @@ const productsHandler = async (
 };
 
 // Register products endpoints
-fastify.get<{ Querystring: ProductsQuery; Reply: ProductsResponse }>('/api/products', productsHandler);
+fastify.get<{ Querystring: ProductsQuery; Reply: ProductsResponse }>(
+  '/api/products',
+  productsHandler
+);
 fastify.get<{ Querystring: ProductsQuery; Reply: ProductsResponse }>(
   '/api/products/preview',
   productsHandler
@@ -423,17 +460,54 @@ await fastify.register(enrichmentRoutes, { prefix: '/api' });
 await fastify.register(rpt1Routes, { prefix: '/api' });
 
 /**
+ * POST /api/cache/invalidate
+ * Invalidate cache for specific patterns or clear all
+ */
+fastify.post<{
+  Body: { pattern?: string; clearAll?: boolean };
+}>('/api/cache/invalidate', async (request, reply) => {
+  try {
+    const { pattern, clearAll } = request.body;
+
+    if (clearAll) {
+      const success = await cache.flush();
+      return reply.send({
+        success,
+        message: success ? 'All cache cleared' : 'Cache clear failed or not available',
+      });
+    }
+
+    if (pattern) {
+      const count = await cache.deletePattern(pattern);
+      return reply.send({
+        success: count > 0,
+        message: `Deleted ${count} cache entries matching pattern: ${pattern}`,
+        deletedCount: count,
+      });
+    }
+
+    return reply.status(400).send({
+      error: 'Must provide either "pattern" or "clearAll: true"',
+    });
+  } catch (error) {
+    request.log.error({ error }, 'Failed to invalidate cache');
+    return reply.status(500).send({ error: 'Internal Server Error' });
+  }
+});
+
+/**
  * Helper function to extract JSON from LLM response
  */
 function extractJSON(text: string): string {
   // Try to find JSON in code blocks first
-  const codeBlockMatch = text.match(/```json\n([\s\S]*?)\n```/) || text.match(/```\n([\s\S]*?)\n```/);
+  const codeBlockMatch =
+    text.match(/```json\n([\s\S]*?)\n```/) || text.match(/```\n([\s\S]*?)\n```/);
   if (codeBlockMatch) return codeBlockMatch[1].trim();
-  
+
   // Try to find JSON object directly
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (jsonMatch) return jsonMatch[0].trim();
-  
+
   // Return as-is if no patterns found
   return text.trim();
 }
@@ -443,16 +517,16 @@ function extractJSON(text: string): string {
  * UI-based attribute generation with conversation history support
  * Includes automatic retry logic for JSON parsing failures
  */
-fastify.post<{ 
-  Body: { 
+fastify.post<{
+  Body: {
     productTypes: string[];
     feedback?: string;
     conversationHistory?: any[];
-  } 
+  };
 }>('/api/generate-attributes', async (request, reply) => {
   try {
     const { productTypes, feedback, conversationHistory } = request.body;
-    
+
     if (!productTypes || productTypes.length === 0) {
       return reply.status(400).send({ error: 'No product types provided' });
     }
@@ -461,8 +535,14 @@ fastify.post<{
     if (feedback) console.log(`💬 With feedback: ${feedback}`);
 
     // Read files from monorepo root (go up from apps/api-lite to monorepo root)
-    const systemPrompt = readFileSync(resolve(process.cwd(), '../..', 'attributeSetSystemPromt.txt'), 'utf-8');
-    const examples = readFileSync(resolve(process.cwd(), '../..', 'attributeSetExamples.json'), 'utf-8');
+    const systemPrompt = readFileSync(
+      resolve(process.cwd(), '../..', 'attributeSetSystemPromt.txt'),
+      'utf-8'
+    );
+    const examples = readFileSync(
+      resolve(process.cwd(), '../..', 'attributeSetExamples.json'),
+      'utf-8'
+    );
 
     // Initialize OpenAI client
     const openai = new OpenAI({
@@ -472,14 +552,14 @@ fastify.post<{
 
     // Build initial messages array
     let messages: any[];
-    
+
     if (conversationHistory && conversationHistory.length > 0) {
       // Continue existing conversation with feedback
       messages = [...conversationHistory];
       if (feedback) {
         messages.push({
           role: 'user',
-          content: `The previous attribute set needs improvement. Here is the feedback:\n\n${feedback}\n\nPlease regenerate the attribute schema addressing this feedback. Remember to follow the same JSON format.`
+          content: `The previous attribute set needs improvement. Here is the feedback:\n\n${feedback}\n\nPlease regenerate the attribute schema addressing this feedback. Remember to follow the same JSON format.`,
         });
       }
     } else {
@@ -493,7 +573,7 @@ Please generate a comprehensive attribute schema following the format in the exa
 
       messages = [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: initialUserMessage }
+        { role: 'user', content: initialUserMessage },
       ];
     }
 
@@ -501,11 +581,11 @@ Please generate a comprehensive attribute schema following the format in the exa
     const MAX_RETRIES = 3;
     let attributeSet: any;
     let lastError: any = null;
-    
+
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
         console.log(`⏳ Calling LLM (attempt ${attempt}/${MAX_RETRIES})...`);
-        
+
         const completion = await openai.chat.completions.create({
           model: llmConfig.model,
           messages: messages,
@@ -513,45 +593,44 @@ Please generate a comprehensive attribute schema following the format in the exa
         });
 
         const responseContent = completion.choices[0]?.message?.content || '';
-        
+
         // Add assistant response to conversation history
         messages.push({ role: 'assistant', content: responseContent });
-        
+
         // Try to parse JSON from response
         const jsonString = extractJSON(responseContent);
         attributeSet = JSON.parse(jsonString);
-        
+
         // Success! Exit retry loop
         console.log('✅ Attributes generated and parsed successfully\n');
-        return reply.send({ 
-          success: true, 
+        return reply.send({
+          success: true,
           attributeSet,
-          conversationHistory: messages
+          conversationHistory: messages,
         });
-        
       } catch (parseError) {
         lastError = parseError;
         console.error(`❌ JSON parse failed on attempt ${attempt}/${MAX_RETRIES}`);
-        
+
         if (attempt < MAX_RETRIES) {
           // Add retry instruction to conversation
           messages.push({
             role: 'user',
-            content: 'The previous response was not valid JSON. Please provide ONLY valid JSON in your response, wrapped in ```json code blocks. Ensure the JSON is properly formatted with no syntax errors.'
+            content:
+              'The previous response was not valid JSON. Please provide ONLY valid JSON in your response, wrapped in ```json code blocks. Ensure the JSON is properly formatted with no syntax errors.',
           });
           console.log('🔄 Retrying with JSON formatting instructions...');
         } else {
           // All retries exhausted
           console.error('❌ Failed to parse JSON after all retries');
-          return reply.status(500).send({ 
+          return reply.status(500).send({
             error: 'Failed to parse LLM response after multiple attempts',
             details: lastError instanceof Error ? lastError.message : 'Unknown error',
-            rawResponse: messages[messages.length - 1]?.content
+            rawResponse: messages[messages.length - 1]?.content,
           });
         }
       }
     }
-    
   } catch (error) {
     request.log.error({ error }, 'Failed to generate attributes');
     console.error('❌ Error generating attributes:', error);

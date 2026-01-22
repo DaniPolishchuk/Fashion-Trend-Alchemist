@@ -44,4 +44,5 @@ packages/db/drizzle/
 temp/
 tmp/
 
-correration/
+values.yaml
+script.py
