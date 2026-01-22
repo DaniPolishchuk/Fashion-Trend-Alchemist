@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Card,
   Title,
@@ -32,6 +33,7 @@ interface ResultOverviewTabProps {
 const ITEMS_PER_PAGE = 5;
 
 function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [designs, setDesigns] = useState<GeneratedDesign[]>([]);
@@ -234,6 +236,7 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
                     cursor: 'pointer',
                     transition: 'background 0.2s',
                   }}
+                  onClick={() => navigate(`/project/${projectId}/design/${design.id}`)}
                   onMouseEnter={(e) =>
                     (e.currentTarget.style.background = 'var(--sapList_Hover_Background)')
                   }

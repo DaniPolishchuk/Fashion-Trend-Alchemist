@@ -3,6 +3,7 @@ import Home from './pages/Home';
 import ProductSelection from './pages/ProductSelection';
 import Analysis from './pages/Analysis';
 import ProjectHub from './pages/ProjectHub';
+import DesignDetail from './pages/DesignDetail';
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
         <Route path="/analysis" element={<Analysis />} />
         <Route path="/project/:projectId" element={<ProjectHub />} />
         <Route path="/project/:projectId/analysis" element={<Analysis />} />
+        <Route path="/project/:projectId/design/:designId" element={<DesignDetail />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

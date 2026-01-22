@@ -452,4 +452,53 @@ export default async function projectRoutes(fastify: FastifyInstance) {
       }
     }
   );
+
+  /**
+   * PATCH /api/projects/:projectId/generated-designs/:designId
+   * Update a specific generated design (e.g., rename)
+   */
+  fastify.patch<{ Params: { projectId: string; designId: string }; Body: { name?: string } }>(
+    '/projects/:projectId/generated-designs/:designId',
+    async (request, reply) => {
+      try {
+        const { projectId, designId } = request.params;
+        const { name } = request.body;
+
+        // Verify the design exists and belongs to the project
+        const design = await db.query.generatedDesigns.findFirst({
+          where: and(eq(generatedDesigns.id, designId), eq(generatedDesigns.projectId, projectId)),
+        });
+
+        if (!design) {
+          return reply.status(404).send({ error: 'Generated design not found' });
+        }
+
+        // Build update object
+        const updates: { name?: string } = {};
+        if (name !== undefined) {
+          updates.name = name.trim();
+        }
+
+        if (Object.keys(updates).length === 0) {
+          return reply.status(400).send({ error: 'No valid fields to update' });
+        }
+
+        // Update the design
+        await db
+          .update(generatedDesigns)
+          .set(updates)
+          .where(eq(generatedDesigns.id, designId));
+
+        // Fetch and return the updated design
+        const updatedDesign = await db.query.generatedDesigns.findFirst({
+          where: eq(generatedDesigns.id, designId),
+        });
+
+        return reply.status(200).send(updatedDesign);
+      } catch (error: any) {
+        fastify.log.error({ error }, 'Failed to update generated design');
+        return reply.status(500).send({ error: 'Internal Server Error' });
+      }
+    }
+  );
 }
