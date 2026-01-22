@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ShellBar,
   Page,
   Bar,
   Button,
@@ -168,41 +167,27 @@ function Home() {
 
   if (loading) {
     return (
-      <>
-        <ShellBar
-          primaryTitle="The Fashion Trend Alchemist"
-          showNotifications
-          showProductSwitch={false}
-        />
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            height: 'calc(100vh - 44px)',
-          }}
-        >
-          <BusyIndicator active size="L" />
-        </div>
-      </>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: 'calc(100vh - 44px)',
+        }}
+      >
+        <BusyIndicator active size="L" />
+      </div>
     );
   }
 
   return (
-    <>
-      <ShellBar
-        primaryTitle="The Fashion Trend Alchemist"
-        showNotifications
-        showProductSwitch={false}
-      />
-
-      <Page
-        style={{
-          height: 'calc(100vh - 44px)',
-          padding: '1.5rem 2rem',
-          background: 'var(--sapBackgroundColor)',
-        }}
-      >
+    <Page
+      style={{
+        height: 'calc(100vh - 44px)',
+        padding: '1.5rem 2rem',
+        background: 'var(--sapBackgroundColor)',
+      }}
+    >
         {/* Projects Section */}
         <Card
           style={{ marginBottom: '1.5rem' }}
@@ -499,7 +484,6 @@ function Home() {
           </div>
         )}
       </Page>
-    </>
   );
 }
 

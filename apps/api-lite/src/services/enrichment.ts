@@ -1,11 +1,13 @@
 /**
  * Enrichment Service
  * Handles Vision LLM-based attribute extraction from product images
+ * Uses parallel processing with configurable concurrency
  */
 
 import OpenAI from 'openai';
+import pMap from 'p-map';
 import { db, eq, and, projects, projectContextItems, articles, isNull } from '@fashion/db';
-import { visionLlmConfig } from '@fashion/config';
+import { visionLlmConfig, enrichmentConfig } from '@fashion/config';
 import { fetchImageAsBase64 } from './s3.js';
 
 // Initialize OpenAI client with LiteLLM proxy
@@ -23,6 +25,13 @@ export type ProgressCallback = (data: {
   total: number;
   currentArticleId: string;
 }) => void;
+
+// Type for enrichment item
+type EnrichmentItem = {
+  articleId: string;
+  productType: string;
+  detailDesc: string | null;
+};
 
 /**
  * Builds a JSON Schema from the ontology schema for structured LLM output
@@ -231,8 +240,46 @@ async function markProjectFailed(projectId: string) {
 }
 
 /**
+ * Process a single item with retry logic
+ * Returns true on success, false on failure (failure is recorded in DB)
+ */
+async function processItem(
+  projectId: string,
+  item: EnrichmentItem,
+  schema: ReturnType<typeof buildDynamicSchema>
+): Promise<boolean> {
+  try {
+    let result: Record<string, string> | null = null;
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const base64Image = await fetchImageAsBase64(item.articleId);
+        result = await callVisionLLM(base64Image, schema, {
+          productType: item.productType,
+          detailDesc: item.detailDesc,
+        });
+        break;
+      } catch (e) {
+        if (attempt === 3) throw e;
+        await sleep(1000 * attempt); // Exponential backoff
+      }
+    }
+
+    if (result) {
+      await updateEnrichedAttributes(projectId, item.articleId, result);
+      return true;
+    }
+    return false;
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+    await markItemFailed(projectId, item.articleId, errorMessage);
+    return false;
+  }
+}
+
+/**
  * Main enrichment processing function
- * Processes all unenriched context items for a project
+ * Processes all unenriched context items for a project using parallel processing
  */
 export async function processEnrichment(
   projectId: string,
@@ -260,43 +307,50 @@ export async function processEnrichment(
       return;
     }
 
-    let processed = 0;
     const total = items.length;
+    let processed = 0;
+    let lastEmittedProcessed = 0;
+    let currentArticleIds: string[] = [];
 
     // Update initial total count
     await updateProjectProgress(projectId, 0, total, items[0].articleId);
 
-    for (const item of items) {
-      try {
-        // Retry logic with exponential backoff (3 attempts)
-        let result: Record<string, string> | null = null;
-
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          try {
-            const base64Image = await fetchImageAsBase64(item.articleId);
-            result = await callVisionLLM(base64Image, schema, {
-              productType: item.productType,
-              detailDesc: item.detailDesc,
-            });
-            break;
-          } catch (e) {
-            if (attempt === 3) throw e;
-            await sleep(1000 * attempt); // Exponential backoff
-          }
-        }
-
-        if (result) {
-          await updateEnrichedAttributes(projectId, item.articleId, result);
-        }
-      } catch (e) {
-        const errorMessage = e instanceof Error ? e.message : 'Unknown error';
-        await markItemFailed(projectId, item.articleId, errorMessage);
+    // Set up batched progress reporting
+    const progressInterval = setInterval(async () => {
+      if (processed !== lastEmittedProcessed) {
+        lastEmittedProcessed = processed;
+        const currentArticle = currentArticleIds[0] || '';
+        await updateProjectProgress(projectId, processed, total, currentArticle);
+        emitProgress({ processed, total, currentArticleId: currentArticle });
       }
+    }, enrichmentConfig.progressIntervalMs);
 
-      processed++;
-      await updateProjectProgress(projectId, processed, total, item.articleId);
-      emitProgress({ processed, total, currentArticleId: item.articleId });
+    try {
+      // Process items in parallel with controlled concurrency
+      await pMap(
+        items,
+        async (item) => {
+          // Track currently processing items
+          currentArticleIds.push(item.articleId);
+
+          try {
+            await processItem(projectId, item, schema);
+          } finally {
+            // Remove from current and increment processed
+            currentArticleIds = currentArticleIds.filter((id) => id !== item.articleId);
+            processed++;
+          }
+        },
+        { concurrency: enrichmentConfig.concurrency }
+      );
+    } finally {
+      // Clear progress interval
+      clearInterval(progressInterval);
     }
+
+    // Final progress update
+    await updateProjectProgress(projectId, processed, total, '');
+    emitProgress({ processed, total, currentArticleId: '' });
 
     await markProjectCompleted(projectId);
   } catch (e) {

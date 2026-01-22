@@ -117,7 +117,7 @@ The application connects to a cloud-hosted PostgreSQL database. Typical workflow
 1. **Product Selection Flow**: User selects product types from taxonomy → stored in localStorage
 2. **Analysis Flow**: Filters applied (date/season + attributes) → API queries with dynamic WHERE clauses → paginated results
 3. **Project Flow**: Create project (draft) → preview context with velocity calculation → lock context (moves to active)
-4. **LLM Enrichment Flow**: Frontend batches 100+ requests → API forwards to OpenAI → enriched attributes stored in DB
+4. **LLM Enrichment Flow**: Project context items are processed in parallel (configurable concurrency) → Vision LLM extracts attributes from product images → enriched attributes stored in DB with SSE progress updates
 
 ### API Structure
 
@@ -149,12 +149,16 @@ The frontend (`apps/web/src/`) uses:
 - **State**: Local state + localStorage for persistence
 - **API Communication**: Fetch API with manual state management
 
+Key components:
+- `components/AppShell.tsx` - Unified SAP Fiori-style shell wrapper with header (ShellBar), logo, search, notifications popover, and user profile popover with menu. Wraps all pages via App.tsx.
+- `components/AttributeGenerationDialog.tsx` - LLM attribute generation UI
+
 Key pages:
 - `Home.tsx` - Dashboard with searchable/paginated projects table and collections grid
 - `ProductSelection.tsx` - Product type taxonomy browser
 - `Analysis.tsx` - Filtering and analysis dashboard
 - `ProjectHub.tsx` - Project workspace hub with tabbed navigation (see below)
-- `components/AttributeGenerationDialog.tsx` - LLM attribute generation UI
+- `DesignDetail.tsx` - Individual design detail view
 
 #### ProjectHub Page (`/project/:projectId`)
 The ProjectHub is the main workspace for working with a project after it's created. It features:
@@ -268,6 +272,10 @@ LLM_API_URL, LLM_API_KEY, LLM_MODEL
 
 # Vision LLM (for image enrichment)
 LITELLM_PROXY_URL, LITELLM_API_KEY, VISION_LLM_MODEL
+
+# Enrichment Processing
+ENRICHMENT_CONCURRENCY (default: 5) - Number of parallel Vision LLM requests
+ENRICHMENT_PROGRESS_INTERVAL_MS (default: 500) - Progress update batching interval
 
 # RPT-1 / SAP AI Core (for design prediction)
 AI_API_URL - SAP AI Core API endpoint

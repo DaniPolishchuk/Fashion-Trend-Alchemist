@@ -89,6 +89,14 @@ export const visionLlmConfig = {
 } as const;
 
 /**
+ * Enrichment processing configuration
+ */
+export const enrichmentConfig = {
+  concurrency: parseInt(process.env.ENRICHMENT_CONCURRENCY || '5', 10),
+  progressIntervalMs: parseInt(process.env.ENRICHMENT_PROGRESS_INTERVAL_MS || '500', 10),
+} as const;
+
+/**
  * RPT-1 configuration (SAP AI Core)
  */
 export const rpt1Config = {

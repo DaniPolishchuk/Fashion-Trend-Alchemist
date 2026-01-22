@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ShellBar,
   BusyIndicator,
   IllustratedMessage,
   Text,
   Button,
   Title,
-  Avatar,
   Icon,
   Breadcrumbs,
   BreadcrumbsItem,
@@ -179,60 +177,39 @@ function ProjectHub() {
 
   if (loading) {
     return (
-      <>
-        <ShellBar
-          primaryTitle="The Fashion Trend Alchemist"
-          showNotifications
-          showProductSwitch={false}
-        />
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            height: 'calc(100vh - 44px)',
-          }}
-        >
-          <BusyIndicator active size="L" />
-        </div>
-      </>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: 'calc(100vh - 44px)',
+        }}
+      >
+        <BusyIndicator active size="L" />
+      </div>
     );
   }
 
   if (error || !project) {
     return (
-      <>
-        <ShellBar
-          primaryTitle="The Fashion Trend Alchemist"
-          showNotifications
-          showProductSwitch={false}
-        />
-        <div style={{ padding: '2rem' }}>
-          <IllustratedMessage
-            name="NoData"
-            titleText="Error Loading Project"
-            subtitleText={error || 'Project not found'}
-          >
-            <Button design="Emphasized" onClick={() => navigate('/')}>
-              Back to Home
-            </Button>
-          </IllustratedMessage>
-        </div>
-      </>
+      <div style={{ padding: '2rem' }}>
+        <IllustratedMessage
+          name="NoData"
+          titleText="Error Loading Project"
+          subtitleText={error || 'Project not found'}
+        >
+          <Button design="Emphasized" onClick={() => navigate('/')}>
+            Back to Home
+          </Button>
+        </IllustratedMessage>
+      </div>
     );
   }
 
   return (
     <div
-      style={{ background: 'var(--sapBackgroundColor)', minHeight: '100vh', paddingBottom: '2rem' }}
+      style={{ background: 'var(--sapBackgroundColor)', minHeight: 'calc(100vh - 44px)', paddingBottom: '2rem' }}
     >
-      <ShellBar
-        primaryTitle="The Fashion Trend Alchemist"
-        profile={
-          <Avatar icon="employee" size="XS" style={{ background: 'var(--sapAccentColor1)' }} />
-        }
-      />
-
       {/* Breadcrumbs */}
       <div style={{ padding: '12px 2rem 0' }}>
         <Breadcrumbs
