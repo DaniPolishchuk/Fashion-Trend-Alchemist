@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ShellBar,
   Page,
   Bar,
   Button,
@@ -249,50 +248,41 @@ function ProductSelection() {
 
   if (loading) {
     return (
-      <>
-        <ShellBar primaryTitle="The Fashion Trend Alchemist" />
-        <Page style={{ height: 'calc(100vh - 44px)' }}>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              height: '100%',
-            }}
-          >
-            <BusyIndicator active size="L" />
-          </div>
-        </Page>
-      </>
+      <Page style={{ height: 'calc(100vh - 44px)' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            height: '100%',
+          }}
+        >
+          <BusyIndicator active size="L" />
+        </div>
+      </Page>
     );
   }
 
   if (error) {
     return (
-      <>
-        <ShellBar primaryTitle="The Fashion Trend Alchemist" />
-        <Page style={{ height: 'calc(100vh - 44px)' }}>
-          <MessageStrip design="Negative">Error loading product taxonomy: {error}</MessageStrip>
-          <Button onClick={fetchTaxonomy}>Retry</Button>
-        </Page>
-      </>
+      <Page style={{ height: 'calc(100vh - 44px)' }}>
+        <MessageStrip design="Negative">Error loading product taxonomy: {error}</MessageStrip>
+        <Button onClick={fetchTaxonomy}>Retry</Button>
+      </Page>
     );
   }
 
   const sortedGroups = getSortedGroups();
 
   return (
-    <>
-      <ShellBar primaryTitle="The Fashion Trend Alchemist" />
-
-      <Page
-        style={{
-          height: 'calc(100vh - 44px)',
-          paddingBottom: '80px',
-        }}
-      >
-        {/* Breadcrumbs */}
-        <div style={{ padding: '12px 16px 0 16px' }}>
+    <Page
+      style={{
+        height: 'calc(100vh - 44px)',
+        paddingBottom: '80px',
+      }}
+    >
+      {/* Breadcrumbs */}
+      <div style={{ padding: '12px 16px 0 16px' }}>
           <Breadcrumbs
             onItemClick={(e: any) => {
               const text = e.detail.item.textContent?.trim();
@@ -491,49 +481,48 @@ function ProductSelection() {
             );
           })}
         </div>
-      </Page>
 
-      {/* Selection Footer Bar */}
-      <Bar
-        design="FloatingFooter"
-        style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: 1000,
-          boxShadow: '0 -2px 8px rgba(0,0,0,0.1)',
-        }}
-        startContent={
-          <Text>
-            <strong>{selectedTypes.size} items selected</strong>
-            {selectedTypes.size > 0 && (
-              <span style={{ marginLeft: '1rem', color: 'var(--sapContent_LabelColor)' }}>
-                from {new Set(Array.from(selectedTypes).map((s) => s.split('::')[0])).size}{' '}
-                categories
-              </span>
-            )}
-          </Text>
-        }
-        endContent={
-          <>
-            <Button design="Transparent" onClick={handleClearAll}>
-              Clear all
-            </Button>
-            <Button design="Transparent" onClick={() => navigate('/')}>
-              Cancel
-            </Button>
-            <Button
-              design="Emphasized"
-              onClick={handleProceed}
-              disabled={selectedTypes.size === 0 || !projectName.trim() || projectCreating}
-            >
-              {projectCreating ? 'Creating Project...' : 'Proceed to Analysis'}
-            </Button>
-          </>
-        }
-      />
-    </>
+        {/* Selection Footer Bar */}
+        <Bar
+          design="FloatingFooter"
+          style={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 1000,
+            boxShadow: '0 -2px 8px rgba(0,0,0,0.1)',
+          }}
+          startContent={
+            <Text>
+              <strong>{selectedTypes.size} items selected</strong>
+              {selectedTypes.size > 0 && (
+                <span style={{ marginLeft: '1rem', color: 'var(--sapContent_LabelColor)' }}>
+                  from {new Set(Array.from(selectedTypes).map((s) => s.split('::')[0])).size}{' '}
+                  categories
+                </span>
+              )}
+            </Text>
+          }
+          endContent={
+            <>
+              <Button design="Transparent" onClick={handleClearAll}>
+                Clear all
+              </Button>
+              <Button design="Transparent" onClick={() => navigate('/')}>
+                Cancel
+              </Button>
+              <Button
+                design="Emphasized"
+                onClick={handleProceed}
+                disabled={selectedTypes.size === 0 || !projectName.trim() || projectCreating}
+              >
+                {projectCreating ? 'Creating Project...' : 'Proceed to Analysis'}
+              </Button>
+            </>
+          }
+        />
+      </Page>
   );
 }
 
