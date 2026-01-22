@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Card,
   CardHeader,
@@ -13,6 +13,7 @@ import {
   CheckBox,
   Select,
   Option,
+  Dialog,
 } from '@ui5/webcomponents-react';
 import '@ui5/webcomponents-icons/dist/search.js';
 import '@ui5/webcomponents-icons/dist/download.js';
@@ -25,6 +26,8 @@ import '@ui5/webcomponents-icons/dist/alert.js';
 import '@ui5/webcomponents-icons/dist/pending.js';
 import '@ui5/webcomponents-icons/dist/slim-arrow-down.js';
 import '@ui5/webcomponents-icons/dist/slim-arrow-up.js';
+import '@ui5/webcomponents-icons/dist/slim-arrow-right.js';
+import '@ui5/webcomponents-icons/dist/zoom-in.js';
 
 interface ContextItem {
   articleId: string;
@@ -97,6 +100,13 @@ function EnhancedTableTab({ projectId, enrichmentStatus, currentArticleId }: Enh
   const [retryingItems, setRetryingItems] = useState<Set<string>>(new Set());
   const [retryingAll, setRetryingAll] = useState(false);
 
+  // Expandable row state (accordion - only one at a time)
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+
+  // Image modal state
+  const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [imageModalUrl, setImageModalUrl] = useState<string>('');
+
   // Fetch context items
   const fetchContextItems = useCallback(async () => {
     try {
@@ -137,6 +147,27 @@ function EnhancedTableTab({ projectId, enrichmentStatus, currentArticleId }: Enh
       fetchContextItems();
     }
   }, [enrichmentStatus, fetchContextItems]);
+
+  // Poll for updates every 5 seconds while enrichment is running
+  useEffect(() => {
+    if (enrichmentStatus !== 'running') return;
+
+    const pollInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        // Silent refresh without showing loading state
+        fetch(`/api/projects/${projectId}/context-items`)
+          .then((res) => res.json())
+          .then((data) => {
+            setContextItems(data.items);
+            setSummary(data.summary);
+            setOntologyAttributes(data.ontologyAttributes);
+          })
+          .catch((err) => console.error('Polling error:', err));
+      }
+    }, 5000);
+
+    return () => clearInterval(pollInterval);
+  }, [enrichmentStatus, projectId]);
 
   // Filter items
   const filteredItems = useMemo(() => {
@@ -334,6 +365,17 @@ function EnhancedTableTab({ projectId, enrichmentStatus, currentArticleId }: Enh
     return { icon: 'pending', state: 'Information' as const, label: 'Pending' };
   };
 
+  // Toggle row expansion (accordion behavior)
+  const handleRowToggle = (articleId: string) => {
+    setExpandedRowId((prev) => (prev === articleId ? null : articleId));
+  };
+
+  // Open image in modal
+  const handleImageClick = (imageUrl: string) => {
+    setImageModalUrl(imageUrl);
+    setImageModalOpen(true);
+  };
+
   if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
@@ -523,6 +565,7 @@ function EnhancedTableTab({ projectId, enrichmentStatus, currentArticleId }: Enh
           >
             <thead style={{ background: 'var(--sapList_HeaderBackground)' }}>
               <tr>
+                <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center', width: '40px' }}></th>
                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', width: '60px' }}>Image</th>
                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Article ID</th>
                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Product Type</th>
@@ -544,7 +587,7 @@ function EnhancedTableTab({ projectId, enrichmentStatus, currentArticleId }: Enh
               {paginatedItems.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7 + ontologyAttributes.length}
+                    colSpan={8 + ontologyAttributes.length}
                     style={{ padding: '3rem', textAlign: 'center' }}
                   >
                     <Text style={{ color: 'var(--sapContent_LabelColor)' }}>
@@ -557,140 +600,383 @@ function EnhancedTableTab({ projectId, enrichmentStatus, currentArticleId }: Enh
                   const statusInfo = getStatusDisplay(item);
                   const isProcessing = currentArticleId === item.articleId;
                   const isRetrying = retryingItems.has(item.articleId);
+                  const isExpanded = expandedRowId === item.articleId;
 
                   return (
-                    <tr
-                      key={item.articleId}
-                      style={{
-                        borderBottom: '1px solid var(--sapList_BorderColor)',
-                        animation: isProcessing ? 'pulse 2s ease-in-out infinite' : undefined,
-                        backgroundColor: isProcessing ? 'var(--sapInformationBackground)' : undefined,
-                      }}
-                    >
-                      {/* Image */}
-                      <td style={{ padding: '0.5rem 1rem' }}>
-                        <div
-                          style={{
-                            width: '50px',
-                            height: '50px',
-                            borderRadius: '4px',
-                            overflow: 'hidden',
-                            backgroundColor: 'var(--sapNeutralBackground)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <img
-                            src={item.imageUrl}
-                            alt={item.articleId}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            onError={(e) => {
-                              const target = e.currentTarget;
-                              target.style.display = 'none';
-                              const parent = target.parentElement;
-                              if (parent && !parent.querySelector('ui5-icon')) {
-                                const icon = document.createElement('ui5-icon');
-                                icon.setAttribute('name', 'product');
-                                icon.style.color = 'var(--sapContent_IconColor)';
-                                icon.style.fontSize = '1.5rem';
-                                parent.appendChild(icon);
-                              }
-                            }}
+                    <React.Fragment key={item.articleId}>
+                      {/* Main Row */}
+                      <tr
+                        style={{
+                          borderBottom: isExpanded ? 'none' : '1px solid var(--sapList_BorderColor)',
+                          animation: isProcessing ? 'pulse 2s ease-in-out infinite' : undefined,
+                          backgroundColor: isProcessing ? 'var(--sapInformationBackground)' : undefined,
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => handleRowToggle(item.articleId)}
+                      >
+                        {/* Expand Icon */}
+                        <td style={{ padding: '0.5rem', textAlign: 'center' }}>
+                          <Icon
+                            name={isExpanded ? 'slim-arrow-down' : 'slim-arrow-right'}
+                            style={{ color: 'var(--sapContent_IconColor)' }}
                           />
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Article ID */}
-                      <td style={{ padding: '0.75rem 1rem' }}>
-                        <Text style={{ fontWeight: 500 }}>{item.articleId}</Text>
-                      </td>
-
-                      {/* Product Type */}
-                      <td style={{ padding: '0.75rem 1rem' }}>
-                        <Text>{item.productType}</Text>
-                      </td>
-
-                      {/* Velocity Score */}
-                      <td style={{ padding: '0.75rem 1rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          {/* Custom progress bar without percentage label */}
+                        {/* Image */}
+                        <td style={{ padding: '0.5rem 1rem' }}>
                           <div
                             style={{
-                              width: '60px',
-                              height: '6px',
-                              backgroundColor: 'var(--sapContent_ForegroundBorderColor)',
-                              borderRadius: '3px',
+                              width: '50px',
+                              height: '50px',
+                              borderRadius: '4px',
                               overflow: 'hidden',
+                              backgroundColor: 'var(--sapNeutralBackground)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
                             }}
                           >
-                            <div
-                              style={{
-                                width: `${item.velocityScore}%`,
-                                height: '100%',
-                                backgroundColor: getVelocityColor(item.velocityScore),
-                                borderRadius: '3px',
-                                transition: 'width 0.3s ease',
+                            <img
+                              src={item.imageUrl}
+                              alt={item.articleId}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                target.style.display = 'none';
+                                const parent = target.parentElement;
+                                if (parent && !parent.querySelector('ui5-icon')) {
+                                  const icon = document.createElement('ui5-icon');
+                                  icon.setAttribute('name', 'product');
+                                  icon.style.color = 'var(--sapContent_IconColor)';
+                                  icon.style.fontSize = '1.5rem';
+                                  parent.appendChild(icon);
+                                }
                               }}
                             />
                           </div>
-                          <Text
+                        </td>
+
+                        {/* Article ID */}
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          <Text style={{ fontWeight: 500 }}>{item.articleId}</Text>
+                        </td>
+
+                        {/* Product Type */}
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          <Text>{item.productType}</Text>
+                        </td>
+
+                        {/* Velocity Score */}
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div
+                              style={{
+                                width: '60px',
+                                height: '6px',
+                                backgroundColor: 'var(--sapContent_ForegroundBorderColor)',
+                                borderRadius: '3px',
+                                overflow: 'hidden',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: `${item.velocityScore}%`,
+                                  height: '100%',
+                                  backgroundColor: getVelocityColor(item.velocityScore),
+                                  borderRadius: '3px',
+                                  transition: 'width 0.3s ease',
+                                }}
+                              />
+                            </div>
+                            <Text
+                              style={{
+                                fontSize: '0.75rem',
+                                color: getVelocityColor(item.velocityScore),
+                                fontWeight: 600,
+                                minWidth: '35px',
+                              }}
+                            >
+                              {item.velocityScore.toFixed(1)}
+                            </Text>
+                          </div>
+                        </td>
+
+                        {/* Color Family */}
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          <Text>{item.colorFamily || '-'}</Text>
+                        </td>
+
+                        {/* Pattern Style */}
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          <Text>{item.patternStyle || '-'}</Text>
+                        </td>
+
+                        {/* Dynamic LLM attributes */}
+                        {ontologyAttributes.map((attr) => (
+                          <td key={attr} style={{ padding: '0.75rem 1rem' }}>
+                            <Text>
+                              {(item.enrichedAttributes && item.enrichedAttributes[attr]) || '-'}
+                            </Text>
+                          </td>
+                        ))}
+
+                        {/* Status */}
+                        <td
+                          style={{ padding: '0.75rem 1rem', textAlign: 'center' }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div
                             style={{
-                              fontSize: '0.75rem',
-                              color: getVelocityColor(item.velocityScore),
-                              fontWeight: 600,
-                              minWidth: '35px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '0.5rem',
                             }}
                           >
-                            {item.velocityScore.toFixed(1)}
-                          </Text>
-                        </div>
-                      </td>
-
-                      {/* Color Family */}
-                      <td style={{ padding: '0.75rem 1rem' }}>
-                        <Text>{item.colorFamily || '-'}</Text>
-                      </td>
-
-                      {/* Pattern Style */}
-                      <td style={{ padding: '0.75rem 1rem' }}>
-                        <Text>{item.patternStyle || '-'}</Text>
-                      </td>
-
-                      {/* Dynamic LLM attributes */}
-                      {ontologyAttributes.map((attr) => (
-                        <td key={attr} style={{ padding: '0.75rem 1rem' }}>
-                          <Text>
-                            {(item.enrichedAttributes && item.enrichedAttributes[attr]) || '-'}
-                          </Text>
+                            <ObjectStatus state={statusInfo.state}>
+                              <Icon name={statusInfo.icon} />
+                            </ObjectStatus>
+                            {item.enrichmentError && enrichmentStatus !== 'running' && (
+                              <Button
+                                icon="refresh"
+                                design="Transparent"
+                                tooltip={`Retry: ${item.enrichmentError}`}
+                                onClick={() => handleRetryItem(item.articleId)}
+                                disabled={isRetrying}
+                              />
+                            )}
+                          </div>
                         </td>
-                      ))}
+                      </tr>
 
-                      {/* Status */}
-                      <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '0.5rem',
-                          }}
-                        >
-                          <ObjectStatus state={statusInfo.state}>
-                            <Icon name={statusInfo.icon} />
-                          </ObjectStatus>
-                          {item.enrichmentError && enrichmentStatus !== 'running' && (
-                            <Button
-                              icon="refresh"
-                              design="Transparent"
-                              tooltip={`Retry: ${item.enrichmentError}`}
-                              onClick={() => handleRetryItem(item.articleId)}
-                              disabled={isRetrying}
-                            />
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                      {/* Expanded Detail Row */}
+                      {isExpanded && (
+                        <tr style={{ borderBottom: '1px solid var(--sapList_BorderColor)' }}>
+                          <td
+                            colSpan={8 + ontologyAttributes.length}
+                            style={{
+                              padding: '1rem 1.5rem',
+                              backgroundColor: 'var(--sapList_Background)',
+                            }}
+                          >
+                            <div style={{ display: 'flex', gap: '2rem' }}>
+                              {/* Large Image */}
+                              <div
+                                style={{
+                                  width: '150px',
+                                  height: '150px',
+                                  borderRadius: '8px',
+                                  overflow: 'hidden',
+                                  backgroundColor: 'var(--sapNeutralBackground)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                  cursor: 'pointer',
+                                  position: 'relative',
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleImageClick(item.imageUrl);
+                                }}
+                              >
+                                <img
+                                  src={item.imageUrl}
+                                  alt={item.articleId}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  onError={(e) => {
+                                    const target = e.currentTarget;
+                                    target.style.display = 'none';
+                                  }}
+                                />
+                                <div
+                                  style={{
+                                    position: 'absolute',
+                                    bottom: '8px',
+                                    right: '8px',
+                                    backgroundColor: 'rgba(0,0,0,0.5)',
+                                    borderRadius: '4px',
+                                    padding: '4px',
+                                  }}
+                                >
+                                  <Icon name="zoom-in" style={{ color: 'white', fontSize: '1rem' }} />
+                                </div>
+                              </div>
+
+                              {/* Details */}
+                              <div style={{ flex: 1 }}>
+                                <Title level="H5" style={{ marginBottom: '1rem' }}>
+                                  Article Details
+                                </Title>
+
+                                <div
+                                  style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                                    gap: '0.75rem 2rem',
+                                  }}
+                                >
+                                  {/* Base Attributes */}
+                                  <div>
+                                    <Text
+                                      style={{
+                                        fontSize: '0.75rem',
+                                        color: 'var(--sapContent_LabelColor)',
+                                      }}
+                                    >
+                                      Product Group
+                                    </Text>
+                                    <Text style={{ display: 'block' }}>
+                                      {item.productGroup || '-'}
+                                    </Text>
+                                  </div>
+                                  <div>
+                                    <Text
+                                      style={{
+                                        fontSize: '0.75rem',
+                                        color: 'var(--sapContent_LabelColor)',
+                                      }}
+                                    >
+                                      Product Type
+                                    </Text>
+                                    <Text style={{ display: 'block' }}>{item.productType}</Text>
+                                  </div>
+                                  <div>
+                                    <Text
+                                      style={{
+                                        fontSize: '0.75rem',
+                                        color: 'var(--sapContent_LabelColor)',
+                                      }}
+                                    >
+                                      Color Family
+                                    </Text>
+                                    <Text style={{ display: 'block' }}>
+                                      {item.colorFamily || '-'}
+                                    </Text>
+                                  </div>
+                                  <div>
+                                    <Text
+                                      style={{
+                                        fontSize: '0.75rem',
+                                        color: 'var(--sapContent_LabelColor)',
+                                      }}
+                                    >
+                                      Pattern Style
+                                    </Text>
+                                    <Text style={{ display: 'block' }}>
+                                      {item.patternStyle || '-'}
+                                    </Text>
+                                  </div>
+                                  <div>
+                                    <Text
+                                      style={{
+                                        fontSize: '0.75rem',
+                                        color: 'var(--sapContent_LabelColor)',
+                                      }}
+                                    >
+                                      Velocity Score
+                                    </Text>
+                                    <Text
+                                      style={{
+                                        display: 'block',
+                                        color: getVelocityColor(item.velocityScore),
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      {item.velocityScore.toFixed(2)}
+                                    </Text>
+                                  </div>
+                                </div>
+
+                                {/* Description */}
+                                {item.detailDesc && (
+                                  <div style={{ marginTop: '1rem' }}>
+                                    <Text
+                                      style={{
+                                        fontSize: '0.75rem',
+                                        color: 'var(--sapContent_LabelColor)',
+                                      }}
+                                    >
+                                      Description
+                                    </Text>
+                                    <Text style={{ display: 'block' }}>{item.detailDesc}</Text>
+                                  </div>
+                                )}
+
+                                {/* Enriched Attributes */}
+                                {item.enrichedAttributes &&
+                                  Object.keys(item.enrichedAttributes).length > 0 && (
+                                    <div style={{ marginTop: '1rem' }}>
+                                      <Text
+                                        style={{
+                                          fontSize: '0.875rem',
+                                          fontWeight: 600,
+                                          marginBottom: '0.5rem',
+                                          display: 'block',
+                                        }}
+                                      >
+                                        Enriched Attributes
+                                      </Text>
+                                      <div
+                                        style={{
+                                          display: 'grid',
+                                          gridTemplateColumns:
+                                            'repeat(auto-fill, minmax(200px, 1fr))',
+                                          gap: '0.5rem 2rem',
+                                        }}
+                                      >
+                                        {Object.entries(item.enrichedAttributes).map(
+                                          ([key, value]) => (
+                                            <div key={key}>
+                                              <Text
+                                                style={{
+                                                  fontSize: '0.75rem',
+                                                  color: 'var(--sapContent_LabelColor)',
+                                                }}
+                                              >
+                                                {formatAttributeName(key)}
+                                              </Text>
+                                              <Text style={{ display: 'block' }}>{value}</Text>
+                                            </div>
+                                          )
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                {/* Error Message */}
+                                {item.enrichmentError && (
+                                  <div
+                                    style={{
+                                      marginTop: '1rem',
+                                      padding: '0.75rem',
+                                      backgroundColor: 'var(--sapErrorBackground)',
+                                      borderRadius: '4px',
+                                      border: '1px solid var(--sapErrorBorderColor)',
+                                    }}
+                                  >
+                                    <Text
+                                      style={{
+                                        fontSize: '0.875rem',
+                                        fontWeight: 600,
+                                        color: 'var(--sapNegativeColor)',
+                                        display: 'block',
+                                        marginBottom: '0.25rem',
+                                      }}
+                                    >
+                                      Enrichment Error
+                                    </Text>
+                                    <Text style={{ color: 'var(--sapNegativeColor)' }}>
+                                      {item.enrichmentError}
+                                    </Text>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })
               )}
@@ -738,6 +1024,26 @@ function EnhancedTableTab({ projectId, enrichmentStatus, currentArticleId }: Enh
           50% { background-color: var(--sapInformationBackground); }
         }
       `}</style>
+
+      {/* Image Modal */}
+      <Dialog
+        open={imageModalOpen}
+        onClose={() => setImageModalOpen(false)}
+        headerText="Product Image"
+      >
+        <div style={{ padding: '1rem', textAlign: 'center' }}>
+          <img
+            src={imageModalUrl}
+            alt="Product"
+            style={{
+              maxWidth: '100%',
+              maxHeight: '70vh',
+              objectFit: 'contain',
+              borderRadius: '8px',
+            }}
+          />
+        </div>
+      </Dialog>
     </div>
   );
 }
