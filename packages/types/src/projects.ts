@@ -128,8 +128,10 @@ export interface ProjectListItem {
   id: string;
   name: string;
   status: 'draft' | 'active';
-  timePeriod: string | null; // Derived from season_config
-  productGroup: string | null; // Derived from scope_config
+  timePeriod: string | null;
+  productGroup: string | null;
   generatedProductsCount: number;
   createdAt: string;
+  isPinned?: boolean;
+  pinnedAt?: string | null;
 }

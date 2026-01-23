@@ -321,10 +321,11 @@ export default async function projectRoutes(fastify: FastifyInstance) {
   /**
    * GET /api/projects
    * List all projects for the hardcoded user with generated products count
+   * Pinned projects appear first, sorted by pin time, then unpinned by creation time
    */
   fastify.get('/projects', async (_request, reply) => {
     try {
-      // Query projects with generated designs count
+      // Query projects with generated designs count and pin status
       const userProjects = await db
         .select({
           id: projects.id,
@@ -336,6 +337,8 @@ export default async function projectRoutes(fastify: FastifyInstance) {
           ontologySchema: projects.ontologySchema,
           createdAt: projects.createdAt,
           deletedAt: projects.deletedAt,
+          isPinned: projects.isPinned,
+          pinnedAt: projects.pinnedAt,
           generatedProductsCount: sql<number>`COUNT(${generatedDesigns.id})::int`,
         })
         .from(projects)
@@ -350,9 +353,15 @@ export default async function projectRoutes(fastify: FastifyInstance) {
           projects.scopeConfig,
           projects.ontologySchema,
           projects.createdAt,
-          projects.deletedAt
+          projects.deletedAt,
+          projects.isPinned,
+          projects.pinnedAt
         )
-        .orderBy(desc(projects.createdAt));
+        .orderBy(
+          desc(projects.isPinned), // Pinned first
+          desc(projects.pinnedAt), // Then by pin time
+          desc(projects.createdAt) // Then by creation time
+        );
 
       return reply.status(200).send(userProjects);
     } catch (error: any) {
@@ -360,6 +369,101 @@ export default async function projectRoutes(fastify: FastifyInstance) {
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
   });
+
+  /**
+   * DELETE /api/projects/:id
+   * Delete a project and all its related data (cascade delete)
+   */
+  fastify.delete<{ Params: { id: string } }>('/projects/:id', async (request, reply) => {
+    try {
+      const { id: projectId } = request.params;
+
+      // Verify project exists
+      const project = await db.query.projects.findFirst({
+        where: eq(projects.id, projectId),
+      });
+
+      if (!project) {
+        return reply.status(404).send({ error: 'Project not found' });
+      }
+
+      // Delete in transaction for atomicity
+      await db.transaction(async (tx) => {
+        // 1. Delete all generated designs for this project
+        await tx.delete(generatedDesigns).where(eq(generatedDesigns.projectId, projectId));
+
+        // 2. Delete all project context items
+        await tx.delete(projectContextItems).where(eq(projectContextItems.projectId, projectId));
+
+        // 3. Delete the project itself
+        await tx.delete(projects).where(eq(projects.id, projectId));
+      });
+
+      fastify.log.info({ projectId }, 'Project deleted successfully with all related data');
+
+      return reply.status(204).send();
+    } catch (error: any) {
+      fastify.log.error({ error }, 'Failed to delete project');
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
+  /**
+   * PATCH /api/projects/:id/pin
+   * Toggle project pin status (max 3 projects can be pinned)
+   */
+  fastify.patch<{ Params: { id: string }; Body: { isPinned: boolean } }>(
+    '/projects/:id/pin',
+    async (request, reply) => {
+      try {
+        const { id: projectId } = request.params;
+        const { isPinned } = request.body;
+
+        // Verify project exists
+        const project = await db.query.projects.findFirst({
+          where: eq(projects.id, projectId),
+        });
+
+        if (!project) {
+          return reply.status(404).send({ error: 'Project not found' });
+        }
+
+        // If pinning, check current pinned count
+        if (isPinned) {
+          const pinnedCountResult = await db
+            .select({ count: sql<number>`COUNT(*)::int` })
+            .from(projects)
+            .where(and(eq(projects.isPinned, true), eq(projects.userId, HARDCODED_USER_ID)));
+
+          const pinnedCount = pinnedCountResult[0]?.count || 0;
+
+          if (pinnedCount >= 3) {
+            return reply.status(400).send({
+              error: 'Maximum 3 projects can be pinned',
+              code: 'MAX_PINS_REACHED',
+            });
+          }
+        }
+
+        // Update pin status
+        const [updatedProject] = await db
+          .update(projects)
+          .set({
+            isPinned: isPinned,
+            pinnedAt: isPinned ? new Date() : null,
+          })
+          .where(eq(projects.id, projectId))
+          .returning();
+
+        fastify.log.info({ projectId, isPinned }, 'Project pin status updated');
+
+        return reply.status(200).send(updatedProject);
+      } catch (error: any) {
+        fastify.log.error({ error }, 'Failed to update pin status');
+        return reply.status(500).send({ error: 'Internal Server Error' });
+      }
+    }
+  );
 
   /**
    * GET /api/projects/:id

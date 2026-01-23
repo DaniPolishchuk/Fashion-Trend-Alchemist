@@ -75,6 +75,9 @@ importers:
       '@ui5/webcomponents':
         specifier: ^2.5.0
         version: 2.18.1
+      '@ui5/webcomponents-base':
+        specifier: ^2.18.1
+        version: 2.18.1
       '@ui5/webcomponents-fiori':
         specifier: ^2.5.0
         version: 2.18.1

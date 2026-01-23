@@ -3,7 +3,16 @@
  * Defines the structure of user projects for trend analysis
  */
 
-import { pgTable, uuid, varchar, jsonb, timestamp, pgEnum, integer } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  varchar,
+  jsonb,
+  timestamp,
+  pgEnum,
+  integer,
+  boolean,
+} from 'drizzle-orm/pg-core';
 
 /**
  * Project status enum - represents the lifecycle state
@@ -14,10 +23,10 @@ export const projectStatusEnum = pgEnum('project_status', ['draft', 'active']);
  * Enrichment status enum - represents the Vision LLM enrichment state
  */
 export const enrichmentStatusEnum = pgEnum('enrichment_status', [
-  'idle',      // Not started or completed
-  'running',   // Currently processing
+  'idle', // Not started or completed
+  'running', // Currently processing
   'completed', // All items processed
-  'failed'     // Stopped due to error
+  'failed', // Stopped due to error
 ]);
 
 /**
@@ -40,6 +49,9 @@ export const projects = pgTable('projects', {
   enrichmentCurrentArticleId: varchar('enrichment_current_article_id', { length: 50 }),
   enrichmentStartedAt: timestamp('enrichment_started_at'),
   enrichmentCompletedAt: timestamp('enrichment_completed_at'),
+  // Pinning columns
+  isPinned: boolean('is_pinned').notNull().default(false),
+  pinnedAt: timestamp('pinned_at'),
 });
 
 export type Project = typeof projects.$inferSelect;

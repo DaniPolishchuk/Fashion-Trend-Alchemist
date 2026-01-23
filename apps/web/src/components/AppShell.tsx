@@ -33,12 +33,28 @@ function AppShell({ children }: AppShellProps) {
   const [notificationPopoverOpen, setNotificationPopoverOpen] = useState(false);
   const [notificationButtonRef, setNotificationButtonRef] = useState<HTMLElement | null>(null);
 
-  // Theme state - initialize from localStorage
+  // Theme state - initialize from localStorage (defaults to light theme if not set)
   const [isDarkTheme, setIsDarkTheme] = useState(() => {
-    return localStorage.getItem('theme') === 'dark';
+    const savedTheme = localStorage.getItem('theme');
+    // If no theme is saved, default to light theme (false)
+    if (savedTheme === null) return false;
+    return savedTheme === 'dark';
   });
 
-  // Apply theme on mount
+  // Apply saved theme immediately on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme');
+    // Default to light theme if nothing is saved
+    const theme = savedTheme === 'dark' ? 'sap_horizon_dark' : 'sap_horizon';
+    setTheme(theme);
+
+    // If no theme preference is saved yet, save the default (light)
+    if (savedTheme === null) {
+      localStorage.setItem('theme', 'light');
+    }
+  }, []); // Run once on mount
+
+  // Apply theme when it changes
   useEffect(() => {
     const theme = isDarkTheme ? 'sap_horizon_dark' : 'sap_horizon';
     setTheme(theme);
