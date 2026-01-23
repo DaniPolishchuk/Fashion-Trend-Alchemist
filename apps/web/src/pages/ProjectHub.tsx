@@ -11,7 +11,6 @@ import {
   BreadcrumbsItem,
   ObjectStatus,
   ProgressIndicator,
-  Card,
 } from '@ui5/webcomponents-react';
 import '@ui5/webcomponents-icons/dist/ai.js';
 import '@ui5/webcomponents-icons/dist/table-chart.js';
