@@ -14,19 +14,19 @@ import {
   ObjectStatus,
   IllustratedMessage,
   BusyIndicator,
+  Dialog,
+  MessageStrip,
 } from '@ui5/webcomponents-react';
 import '@ui5/webcomponents-icons/dist/add.js';
 import '@ui5/webcomponents-icons/dist/search.js';
-import '@ui5/webcomponents-icons/dist/action-settings.js';
-import '@ui5/webcomponents-icons/dist/accept.js';
-import '@ui5/webcomponents-icons/dist/synchronize.js';
+import '@ui5/webcomponents-icons/dist/delete.js';
 import '@ui5/webcomponents-icons/dist/navigation-right-arrow.js';
 import '@ui5/webcomponents-icons/dist/navigation-left-arrow.js';
 import '@ui5/webcomponents-icons/dist/product.js';
 import '@ui5/webcomponents-icons/dist/pushpin-off.js';
+import '@ui5/webcomponents-icons/dist/pushpin-on.js';
 import '@ui5/webcomponents-icons/dist/slim-arrow-right.js';
 import '@ui5/webcomponents-fiori/dist/illustrations/NoData.js';
-import '@ui5/webcomponents-fiori/dist/illustrations/NoEntries.js';
 
 import type { ProjectListItem, CollectionListItem } from '@fashion/types';
 
@@ -41,6 +41,8 @@ interface ProjectFromAPI {
   createdAt: string;
   deletedAt: string | null;
   generatedProductsCount: number;
+  isPinned?: boolean;
+  pinnedAt?: string | null;
 }
 
 const ITEMS_PER_PAGE = 5;
@@ -55,42 +57,52 @@ function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Fetch projects and collections on mount
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [projectsRes, collectionsRes] = await Promise.all([
-          fetch('/api/projects'),
-          fetch('/api/collections'),
-        ]);
+  // Delete dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<ProjectListItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-        if (projectsRes.ok) {
-          const projectsData: ProjectFromAPI[] = await projectsRes.json();
-          // Transform projects to ProjectListItem format
-          const transformedProjects: ProjectListItem[] = projectsData.map((p) => ({
-            id: p.id,
-            name: p.name,
-            status: p.status,
-            timePeriod: deriveTimePeriod(p.seasonConfig),
-            productGroup: deriveProductGroup(p.scopeConfig),
-            generatedProductsCount: p.generatedProductsCount,
-            createdAt: p.createdAt,
-          }));
-          setProjects(transformedProjects);
-        }
+  // Pin notification state
+  const [pinMessage, setPinMessage] = useState<string | null>(null);
 
-        if (collectionsRes.ok) {
-          const collectionsData: CollectionListItem[] = await collectionsRes.json();
-          setCollections(collectionsData);
-        }
-      } catch (error) {
-        console.error('Failed to fetch data:', error);
-      } finally {
-        setLoading(false);
+  // Fetch projects and collections
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [projectsRes, collectionsRes] = await Promise.all([
+        fetch('/api/projects'),
+        fetch('/api/collections'),
+      ]);
+
+      if (projectsRes.ok) {
+        const projectsData: ProjectFromAPI[] = await projectsRes.json();
+        // Transform projects to ProjectListItem format
+        const transformedProjects: ProjectListItem[] = projectsData.map((p) => ({
+          id: p.id,
+          name: p.name,
+          status: p.status,
+          timePeriod: deriveTimePeriod(p.seasonConfig),
+          productGroup: deriveProductGroup(p.scopeConfig),
+          generatedProductsCount: p.generatedProductsCount,
+          createdAt: p.createdAt,
+          isPinned: p.isPinned,
+          pinnedAt: p.pinnedAt,
+        }));
+        setProjects(transformedProjects);
       }
-    };
 
+      if (collectionsRes.ok) {
+        const collectionsData: CollectionListItem[] = await collectionsRes.json();
+        setCollections(collectionsData);
+      }
+    } catch (error) {
+      console.error('Failed to fetch data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -144,6 +156,7 @@ function Home() {
     return filteredProjects.slice(start, start + ITEMS_PER_PAGE);
   }, [filteredProjects, currentPage]);
 
+  // Handlers
   const handleCreateProject = () => {
     navigate('/product-selection');
   };
@@ -158,6 +171,94 @@ function Home() {
 
   const handleNextPage = () => {
     if (currentPage < totalPages) setCurrentPage((prev) => prev + 1);
+  };
+
+  // Pin toggle handler with optimistic UI update
+  const handlePinToggle = async (e: any, project: ProjectListItem) => {
+    e.stopPropagation(); // Don't navigate to project
+
+    try {
+      const newPinState = !project.isPinned;
+
+      const response = await fetch(`/api/projects/${project.id}/pin`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPinned: newPinState }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        if (error.code === 'MAX_PINS_REACHED') {
+          setPinMessage('Maximum 3 projects can be pinned');
+          setTimeout(() => setPinMessage(null), 5000);
+          return;
+        }
+        throw new Error('Failed to pin project');
+      }
+
+      // Optimistic UI update - update local state without refetching
+      setProjects((prev) => {
+        const updated = prev.map((p) =>
+          p.id === project.id
+            ? {
+                ...p,
+                isPinned: newPinState,
+                pinnedAt: newPinState ? new Date().toISOString() : null,
+              }
+            : p
+        );
+
+        // Sort: pinned first, then by pinnedAt, then by createdAt
+        return updated.sort((a, b) => {
+          if (a.isPinned && !b.isPinned) return -1;
+          if (!a.isPinned && b.isPinned) return 1;
+          if (a.isPinned && b.isPinned) {
+            return (b.pinnedAt || '').localeCompare(a.pinnedAt || '');
+          }
+          return b.createdAt.localeCompare(a.createdAt);
+        });
+      });
+    } catch (error) {
+      console.error('Pin toggle failed:', error);
+      setPinMessage('Failed to update pin status');
+      setTimeout(() => setPinMessage(null), 5000);
+    }
+  };
+
+  // Delete handlers
+  const handleDeleteClick = (e: any, project: ProjectListItem) => {
+    e.stopPropagation(); // Don't navigate to project
+    setProjectToDelete(project);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!projectToDelete) return;
+
+    try {
+      setDeleting(true);
+      const response = await fetch(`/api/projects/${projectToDelete.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete project');
+      }
+
+      // Remove from local state
+      setProjects((prev) => prev.filter((p) => p.id !== projectToDelete.id));
+      setDeleteDialogOpen(false);
+      setProjectToDelete(null);
+    } catch (error) {
+      console.error('Delete failed:', error);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setProjectToDelete(null);
   };
 
   // Reset to page 1 when search changes
@@ -183,38 +284,53 @@ function Home() {
   return (
     <Page
       style={{
-        height: 'calc(100vh - 44px)',
-        padding: '1.5rem 2rem',
+        minHeight: 'calc(100vh - 44px)',
+        padding: '1.5rem 0',
         background: 'var(--sapBackgroundColor)',
+        maxWidth: '100vw',
+        boxSizing: 'border-box',
       }}
     >
+      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 2rem' }}>
+        {/* Pin notification message */}
+        {pinMessage && (
+          <div style={{ marginBottom: '1rem' }}>
+            <MessageStrip design="Information" hideCloseButton>
+              {pinMessage}
+            </MessageStrip>
+          </div>
+        )}
+
         {/* Projects Section */}
-        <Card
-          style={{ marginBottom: '1.5rem' }}
-          header={
-            <CardHeader
-              titleText={`Projects (${filteredProjects.length})`}
-              interactive={false}
-              action={
-                <FlexBox alignItems="Center" style={{ gap: '0.5rem' }}>
-                  <Input
-                    placeholder="Search projects..."
-                    icon={<Icon name="search" />}
-                    value={searchQuery}
-                    onInput={(e: CustomEvent) =>
-                      setSearchQuery((e.target as HTMLInputElement).value)
-                    }
-                    style={{ width: '200px' }}
-                  />
-                  <Button icon="action-settings" design="Transparent" />
-                  <Button icon="add" design="Emphasized" onClick={handleCreateProject}>
-                    Create New Project
-                  </Button>
-                </FlexBox>
-              }
-            />
-          }
-        >
+        <Card style={{ marginBottom: '1.5rem', maxWidth: '100%' }}>
+          {/* Header Bar with same styling as footer */}
+          <Bar
+            design="Header"
+            startContent={
+              <Title level="H5" style={{ margin: 0 }}>
+                Projects ({filteredProjects.length})
+              </Title>
+            }
+            endContent={
+              <FlexBox alignItems="Center" style={{ gap: '0.5rem' }}>
+                <Input
+                  placeholder="Search projects..."
+                  showClearIcon
+                  value={searchQuery}
+                  onInput={(e: CustomEvent) => setSearchQuery((e.target as HTMLInputElement).value)}
+                  style={{
+                    width: '200px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    backgroundColor: 'var(--sapBackgroundColor)',
+                  }}
+                ></Input>
+                <Button icon="add" design="Emphasized" onClick={handleCreateProject}>
+                  Create New Project
+                </Button>
+              </FlexBox>
+            }
+          />
           {paginatedProjects.length === 0 ? (
             <div style={{ padding: '3rem', display: 'flex', justifyContent: 'center' }}>
               <IllustratedMessage
@@ -236,7 +352,7 @@ function Home() {
           ) : (
             <>
               {/* Table */}
-              <div style={{ overflowX: 'auto' }}>
+              <div>
                 <table
                   style={{
                     width: '100%',
@@ -246,9 +362,9 @@ function Home() {
                 >
                   <thead style={{ background: 'var(--sapList_HeaderBackground)' }}>
                     <tr>
-                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', width: '40px' }}>
-                        <Icon name="pushpin-off" style={{ color: 'var(--sapContent_IconColor)' }} />
-                      </th>
+                      <th
+                        style={{ padding: '0.75rem 1rem', textAlign: 'left', width: '40px' }}
+                      ></th>
                       <th style={{ padding: '0.75rem 1rem', textAlign: 'left', width: '100px' }}>
                         Status
                       </th>
@@ -258,7 +374,9 @@ function Home() {
                       <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
                         Generated Products
                       </th>
-                      <th style={{ padding: '0.75rem 1rem', width: '40px' }}></th>
+                      <th style={{ padding: '0.75rem 1rem', width: '80px', textAlign: 'center' }}>
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -269,22 +387,32 @@ function Home() {
                         style={{
                           cursor: 'pointer',
                           borderBottom: '1px solid var(--sapList_BorderColor)',
+                          backgroundColor: project.isPinned
+                            ? 'var(--sapList_SelectionBackground)'
+                            : 'transparent',
+                          borderLeft: project.isPinned
+                            ? '3px solid var(--sapButton_Emphasized_Background)'
+                            : '3px solid transparent',
                         }}
-                        onMouseEnter={(e) =>
-                          (e.currentTarget.style.backgroundColor =
-                            'var(--sapList_Hover_Background)')
-                        }
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.backgroundColor = 'transparent')
-                        }
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = 'var(--sapList_Hover_Background)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = project.isPinned
+                            ? 'var(--sapList_SelectionBackground)'
+                            : 'transparent';
+                        }}
                       >
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <Icon
-                            name="pushpin-off"
+                        <td style={{ padding: '0.5rem 0.75rem' }}>
+                          <Button
+                            icon={project.isPinned ? 'pushpin-on' : 'pushpin-off'}
+                            design="Transparent"
+                            onClick={(e: any) => handlePinToggle(e, project)}
+                            tooltip={project.isPinned ? 'Unpin project' : 'Pin project'}
                             style={{
-                              color: 'var(--sapContent_IconColor)',
-                              opacity: 0.3,
-                              cursor: 'pointer',
+                              color: project.isPinned
+                                ? 'var(--sapButton_Emphasized_Background)'
+                                : 'var(--sapContent_IconColor)',
                             }}
                           />
                         </td>
@@ -318,11 +446,18 @@ function Home() {
                         <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
                           <Text>{project.generatedProductsCount}</Text>
                         </td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <Icon
-                            name="slim-arrow-right"
-                            style={{ color: 'var(--sapContent_IconColor)' }}
-                          />
+                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>
+                          <FlexBox justifyContent="Center" style={{ gap: '0.25rem' }}>
+                            <Button
+                              icon="delete"
+                              design="Transparent"
+                              onClick={(e: any) => handleDeleteClick(e, project)}
+                              tooltip="Delete project"
+                              style={{
+                                color: 'var(--sapNegativeColor)',
+                              }}
+                            />
+                          </FlexBox>
                         </td>
                       </tr>
                     ))}
@@ -368,7 +503,7 @@ function Home() {
 
         {/* Collections Section - Only show if collections exist */}
         {collections.length > 0 && (
-          <div>
+          <div style={{ marginBottom: '2rem' }}>
             <FlexBox
               justifyContent="SpaceBetween"
               alignItems="Center"
@@ -384,6 +519,7 @@ function Home() {
                 gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
                 gap: '1rem',
                 maxWidth: '100%',
+                marginBottom: '1rem',
               }}
             >
               {collections.slice(0, 8).map((collection) => (
@@ -411,7 +547,6 @@ function Home() {
                         marginBottom: '0.75rem',
                       }}
                     >
-                      {/* Show up to 4 images in a 2x2 grid */}
                       {[0, 1, 2, 3].map((index) => {
                         const imageUrl = collection.imageUrls[index];
                         return (
@@ -434,7 +569,6 @@ function Home() {
                                 alt=""
                                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                 onError={(e) => {
-                                  // Hide broken images and show placeholder
                                   const target = e.currentTarget;
                                   target.style.display = 'none';
                                   const parent = target.parentElement;
@@ -465,8 +599,6 @@ function Home() {
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        fontSize: '0.75rem',
-                        color: 'var(--sapContent_LabelColor)',
                       }}
                     >
                       <Text style={{ fontSize: '0.75rem', color: 'var(--sapContent_LabelColor)' }}>
@@ -483,7 +615,42 @@ function Home() {
             </div>
           </div>
         )}
-      </Page>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog
+          open={deleteDialogOpen}
+          headerText="Delete Project?"
+          footer={
+            <div style={{ display: 'flex', gap: '0.5rem', padding: '0.5rem 1rem' }}>
+              <Button onClick={handleDeleteCancel} disabled={deleting}>
+                Cancel
+              </Button>
+              <Button design="Negative" onClick={handleDeleteConfirm} disabled={deleting}>
+                {deleting ? 'Deleting...' : 'Delete'}
+              </Button>
+            </div>
+          }
+        >
+          <div style={{ padding: '1rem' }}>
+            <Text>
+              Are you sure you want to delete <strong>"{projectToDelete?.name}"</strong>?
+            </Text>
+            <br />
+            <br />
+            <Text>
+              This will also delete all{' '}
+              <strong>{projectToDelete?.generatedProductsCount || 0}</strong> generated products
+              associated with this project.
+            </Text>
+            <br />
+            <br />
+            <Text style={{ color: 'var(--sapNegativeColor)', fontWeight: 600 }}>
+              This action cannot be undone.
+            </Text>
+          </div>
+        </Dialog>
+      </div>
+    </Page>
   );
 }
 

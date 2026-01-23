@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShellBar,
@@ -8,13 +8,19 @@ import {
   ListItemStandard,
   Input,
   Icon,
+  Text,
+  Label,
+  Title,
 } from '@ui5/webcomponents-react';
+import { setTheme } from '@ui5/webcomponents-base/dist/config/Theme.js';
 import '@ui5/webcomponents-icons/dist/search.js';
 import '@ui5/webcomponents-icons/dist/bell.js';
 import '@ui5/webcomponents-icons/dist/user-settings.js';
 import '@ui5/webcomponents-icons/dist/sys-help.js';
 import '@ui5/webcomponents-icons/dist/log.js';
 import '@ui5/webcomponents-icons/dist/employee.js';
+import '@ui5/webcomponents-icons/dist/weather-proofing.js'; // moon icon
+import '@ui5/webcomponents-icons/dist/lightbulb.js'; // sun icon
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -27,24 +33,56 @@ function AppShell({ children }: AppShellProps) {
   const [notificationPopoverOpen, setNotificationPopoverOpen] = useState(false);
   const [notificationButtonRef, setNotificationButtonRef] = useState<HTMLElement | null>(null);
 
+  // Theme state - initialize from localStorage
+  const [isDarkTheme, setIsDarkTheme] = useState(() => {
+    return localStorage.getItem('theme') === 'dark';
+  });
+
+  // Apply theme on mount
+  useEffect(() => {
+    const theme = isDarkTheme ? 'sap_horizon_dark' : 'sap_horizon';
+    setTheme(theme);
+  }, [isDarkTheme]);
+
+  // Theme toggle handler - keeps popup open
+  const handleThemeToggle = async (e: any) => {
+    e.stopPropagation(); // Prevent event bubbling
+
+    const newTheme = !isDarkTheme;
+    const theme = newTheme ? 'sap_horizon_dark' : 'sap_horizon';
+
+    // Update state and localStorage
+    setIsDarkTheme(newTheme);
+    localStorage.setItem('theme', newTheme ? 'dark' : 'light');
+
+    // Apply theme using UI5 web components API
+    await setTheme(theme);
+
+    // Keep popup open - don't call setProfilePopoverOpen(false)
+  };
+
   const handleLogoClick = () => {
     navigate('/');
   };
 
   const handleProfileClick = (e: CustomEvent) => {
     setProfileButtonRef(e.detail.targetRef);
-    setProfilePopoverOpen(true);
+    // Toggle profile popup (close if open, open if closed)
+    setProfilePopoverOpen(!profilePopoverOpen);
+    // Close notification popup if it's open
+    if (notificationPopoverOpen) {
+      setNotificationPopoverOpen(false);
+    }
   };
 
   const handleNotificationClick = (e: CustomEvent) => {
     setNotificationButtonRef(e.detail.targetRef);
-    setNotificationPopoverOpen(true);
-  };
-
-  const handleProfileMenuClick = (action: string) => {
-    console.log('Profile action clicked:', action);
-    setProfilePopoverOpen(false);
-    // All actions are dummy - just log and close
+    // Toggle notification popup (close if open, open if closed)
+    setNotificationPopoverOpen(!notificationPopoverOpen);
+    // Close profile popup if it's open
+    if (profilePopoverOpen) {
+      setProfilePopoverOpen(false);
+    }
   };
 
   return (
@@ -68,8 +106,11 @@ function AppShell({ children }: AppShellProps) {
           <Input
             placeholder="Search..."
             showClearIcon
-            icon={<Icon name="search" />}
-            style={{ width: '300px' }}
+            style={{
+              width: '300px',
+              display: 'inline-flex',
+              alignItems: 'center',
+            }}
           />
         }
         showNotifications
@@ -77,12 +118,7 @@ function AppShell({ children }: AppShellProps) {
         onNotificationsClick={handleNotificationClick}
         onProfileClick={handleProfileClick}
         profile={
-          <Avatar
-            size="XS"
-            initials="JD"
-            colorScheme="Accent6"
-            style={{ cursor: 'pointer' }}
-          />
+          <Avatar size="XS" initials="JD" colorScheme="Accent6" style={{ cursor: 'pointer' }} />
         }
       />
 
@@ -97,39 +133,50 @@ function AppShell({ children }: AppShellProps) {
         <div style={{ padding: '1rem', borderBottom: '1px solid var(--sapList_BorderColor)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <Avatar size="M" initials="JD" colorScheme="Accent6" />
-            <div>
-              <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>John Doe</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--sapContent_LabelColor)' }}>
-                john.doe@company.com
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <Text style={{ fontWeight: 600 }}>John Doe</Text>
+              <Label>john.doe@company.com</Label>
             </div>
           </div>
         </div>
         <List>
+          <ListItemStandard icon="employee">My Profile</ListItemStandard>
+          <ListItemStandard icon="user-settings">Settings</ListItemStandard>
           <ListItemStandard
-            icon="employee"
-            onClick={() => handleProfileMenuClick('profile')}
+            onClick={handleThemeToggle}
+            style={{
+              transition: 'all 0.3s ease-in-out',
+            }}
           >
-            My Profile
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                transition: 'all 0.3s ease-in-out',
+              }}
+            >
+              <Icon
+                name={isDarkTheme ? 'light-mode' : 'dark-mode'}
+                style={{
+                  transition: 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out',
+                  transform: isDarkTheme ? 'rotate(0deg) scale(1)' : 'rotate(360deg) scale(1)',
+                  opacity: 1,
+                }}
+              />
+              <span>{isDarkTheme ? 'Light Theme' : 'Dark Theme'}</span>
+              <Icon
+                name={isDarkTheme ? 'light-mode' : 'dark-mode'}
+                style={{
+                  transition: 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out',
+                  transform: isDarkTheme ? 'rotate(0deg) scale(1)' : 'rotate(360deg) scale(1)',
+                  opacity: 1,
+                }}
+              />
+            </div>
           </ListItemStandard>
-          <ListItemStandard
-            icon="user-settings"
-            onClick={() => handleProfileMenuClick('settings')}
-          >
-            Settings
-          </ListItemStandard>
-          <ListItemStandard
-            icon="sys-help"
-            onClick={() => handleProfileMenuClick('help')}
-          >
-            Help
-          </ListItemStandard>
-          <ListItemStandard
-            icon="log"
-            onClick={() => handleProfileMenuClick('logout')}
-          >
-            Sign Out
-          </ListItemStandard>
+          <ListItemStandard icon="sys-help">Help</ListItemStandard>
+          <ListItemStandard icon="log">Sign Out</ListItemStandard>
         </List>
       </Popover>
 
@@ -142,22 +189,15 @@ function AppShell({ children }: AppShellProps) {
         horizontalAlign="End"
       >
         <div style={{ padding: '1rem', minWidth: '300px' }}>
-          <div style={{ fontWeight: 600, marginBottom: '0.75rem' }}>Notifications</div>
+          <Title level="H5" style={{ marginBottom: '0.75rem' }}>
+            Notifications
+          </Title>
           <List>
-            <ListItemStandard
-              description="2 hours ago"
-              additionalText="New"
-            >
+            <ListItemStandard description="2 hours ago" additionalText="New">
               Enrichment completed for Project A
             </ListItemStandard>
-            <ListItemStandard
-              description="Yesterday"
-            >
-              3 new designs generated
-            </ListItemStandard>
-            <ListItemStandard
-              description="2 days ago"
-            >
+            <ListItemStandard description="Yesterday">3 new designs generated</ListItemStandard>
+            <ListItemStandard description="2 days ago">
               Welcome to Fashion Trend Alchemist!
             </ListItemStandard>
           </List>
@@ -165,9 +205,7 @@ function AppShell({ children }: AppShellProps) {
       </Popover>
 
       {/* Main Content */}
-      <div style={{ flex: 1 }}>
-        {children}
-      </div>
+      <div style={{ flex: 1 }}>{children}</div>
     </div>
   );
 }

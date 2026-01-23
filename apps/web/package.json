@@ -12,6 +12,7 @@
     "@fashion/types": "workspace:*",
     "@tanstack/react-query": "^5.90.19",
     "@ui5/webcomponents": "^2.5.0",
+    "@ui5/webcomponents-base": "^2.18.1",
     "@ui5/webcomponents-fiori": "^2.5.0",
     "@ui5/webcomponents-icons": "^2.5.0",
     "@ui5/webcomponents-react": "^2.5.0",
