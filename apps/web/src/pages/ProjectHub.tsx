@@ -259,10 +259,9 @@ function ProjectHub() {
           <div
             style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}
           >
-            <Title level="H2">{project.name}</Title>
-            <ObjectStatus state={project.status === 'active' ? 'Positive' : 'Information'} inverted>
-              {project.status === 'active' ? 'ACTIVE' : 'DRAFT'}
-            </ObjectStatus>
+            <Title level="H2" style={{ fontSize: '30px' }}>
+              {project.name}
+            </Title>
           </div>
           <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '0.875rem' }}>
             Created on {formatCreationDate(project.createdAt)}
@@ -282,7 +281,7 @@ function ProjectHub() {
             /* Stage 3: Completion State - Clean success card */
             <div
               style={{
-                minWidth: '280px',
+                minWidth: '308px',
                 border: '1px solid #107E3E',
                 borderRadius: '0.5rem',
                 padding: '1rem',
@@ -318,20 +317,9 @@ function ProjectHub() {
                   >
                     Image Enrichment
                   </Text>
-                  <div
-                    style={{
-                      background: '#107E3E',
-                      color: 'white',
-                      padding: '0.125rem 0.5rem',
-                      borderRadius: '0.25rem',
-                      fontSize: '0.7rem',
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px',
-                    }}
-                  >
+                  <ObjectStatus state="Positive" inverted>
                     COMPLETED
-                  </div>
+                  </ObjectStatus>
                 </div>
                 <Text
                   style={{
@@ -349,100 +337,143 @@ function ProjectHub() {
             </div>
           ) : enrichmentStatus === 'failed' ? (
             /* Stage 4: Failed State - Red error card with retry option */
-            <>
+            <div
+              style={{
+                minWidth: '308px',
+                border: '1px solid #BB0000',
+                borderRadius: '0.5rem',
+                padding: '1rem',
+                background:
+                  'linear-gradient(135deg, rgba(187, 0, 0, 0.08) 0%, rgba(187, 0, 0, 0.03) 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1rem',
+              }}
+            >
               <Button
                 icon="play"
                 design="Transparent"
                 onClick={handleStartEnrichment}
                 disabled={project.status !== 'active'}
                 tooltip="Retry Image Enrichment"
+                style={{ minWidth: 'auto', padding: '0.5rem' }}
               >
                 Retry
               </Button>
-              <div
-                style={{
-                  minWidth: '280px',
-                  border: '1px solid #BB0000',
-                  borderRadius: '0.5rem',
-                  padding: '1rem',
-                  background:
-                    'linear-gradient(135deg, rgba(187, 0, 0, 0.08) 0%, rgba(187, 0, 0, 0.03) 100%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '1rem',
-                }}
-              >
-                <Icon
-                  name="error"
-                  style={{
-                    fontSize: '1.5rem',
-                    color: '#BB0000',
-                  }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: '0.25rem',
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: '0.875rem',
-                        fontWeight: 600,
-                        color: '#BB0000',
-                      }}
-                    >
-                      Image Enrichment
-                    </Text>
-                    <div
-                      style={{
-                        background: '#BB0000',
-                        color: 'white',
-                        padding: '0.125rem 0.5rem',
-                        borderRadius: '0.25rem',
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px',
-                      }}
-                    >
-                      FAILED
-                    </div>
-                  </div>
-                  <Text
-                    style={{
-                      fontSize: '0.75rem',
-                      color: 'var(--sapContent_LabelColor)',
-                    }}
-                  >
-                    Processing stopped at {enrichmentProgress.processed}/{enrichmentProgress.total}
-                  </Text>
-                </div>
-              </div>
-            </>
-          ) : enrichmentStatus === 'running' ? (
-            /* Stage 2: Running State - Blue progress bar */
-            <>
-              <Button icon="play" design="Transparent" disabled tooltip="Enrichment in Progress" />
-              <div
-                style={{
-                  minWidth: '280px',
-                  border: '1px solid #0070F2',
-                  borderRadius: '0.5rem',
-                  padding: '1rem',
-                  background:
-                    'linear-gradient(135deg, rgba(0, 112, 242, 0.08) 0%, rgba(0, 112, 242, 0.03) 100%)',
-                }}
-              >
+              <div style={{ flex: 1 }}>
                 <div
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    marginBottom: '0.5rem',
+                    marginBottom: '0.25rem',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: '0.875rem',
+                      fontWeight: 600,
+                      color: '#BB0000',
+                    }}
+                  >
+                    Image Enrichment
+                  </Text>
+                  <ObjectStatus state="Negative" inverted>
+                    FAILED
+                  </ObjectStatus>
+                </div>
+                <Text
+                  style={{
+                    fontSize: '0.75rem',
+                    color: 'var(--sapContent_LabelColor)',
+                  }}
+                >
+                  Processing stopped at {enrichmentProgress.processed}/{enrichmentProgress.total}
+                </Text>
+              </div>
+            </div>
+          ) : enrichmentStatus === 'running' ? (
+            /* Stage 2: Running State - Blue progress bar */
+            <div
+              style={{
+                minWidth: '308px',
+                border: '1px solid #0070F2',
+                borderRadius: '0.5rem',
+                padding: '1rem',
+                background:
+                  'linear-gradient(135deg, rgba(0, 112, 242, 0.08) 0%, rgba(0, 112, 242, 0.03) 100%)',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '0.5rem',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    color: '#0070F2',
+                  }}
+                >
+                  Image Enrichment
+                </Text>
+                <ObjectStatus state="Information" inverted>
+                  RUNNING
+                </ObjectStatus>
+              </div>
+              <Text
+                style={{
+                  fontSize: '0.75rem',
+                  color: 'var(--sapContent_LabelColor)',
+                  marginBottom: '0.5rem',
+                }}
+              >
+                Processing {enrichmentProgress.processed} of {enrichmentProgress.total} items
+              </Text>
+              <ProgressIndicator
+                value={
+                  enrichmentProgress.total > 0
+                    ? (enrichmentProgress.processed / enrichmentProgress.total) * 100
+                    : 0
+                }
+                valueState="Information"
+                style={{ width: '100%' }}
+              />
+            </div>
+          ) : (
+            /* Stage 1: Idle/Ready State - SAP Blue ready to start */
+            <div
+              style={{
+                minWidth: '308px',
+                border: '1px solid #0070F2',
+                borderRadius: '0.5rem',
+                padding: '1rem',
+                background:
+                  'linear-gradient(135deg, rgba(0, 112, 242, 0.08) 0%, rgba(0, 112, 242, 0.03) 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1rem',
+              }}
+            >
+              <Button
+                icon="play"
+                design="Transparent"
+                onClick={handleStartEnrichment}
+                disabled={project.status !== 'active'}
+                tooltip="Start Image Enrichment"
+                style={{ minWidth: 'auto', padding: '0.5rem' }}
+              />
+              <div style={{ flex: 1 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '0.25rem',
                   }}
                 >
                   <Text
@@ -454,117 +485,22 @@ function ProjectHub() {
                   >
                     Image Enrichment
                   </Text>
-                  <div
-                    style={{
-                      background: '#0070F2',
-                      color: 'white',
-                      padding: '0.125rem 0.5rem',
-                      borderRadius: '0.25rem',
-                      fontSize: '0.7rem',
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px',
-                    }}
-                  >
-                    RUNNING
-                  </div>
+                  <ObjectStatus state="Information" inverted>
+                    READY
+                  </ObjectStatus>
                 </div>
                 <Text
                   style={{
                     fontSize: '0.75rem',
                     color: 'var(--sapContent_LabelColor)',
-                    marginBottom: '0.5rem',
                   }}
                 >
-                  Processing {enrichmentProgress.processed} of {enrichmentProgress.total} items
+                  {project.status === 'active'
+                    ? 'Ready to enrich article context '
+                    : 'Activate project to start enrichment'}
                 </Text>
-                <ProgressIndicator
-                  value={
-                    enrichmentProgress.total > 0
-                      ? (enrichmentProgress.processed / enrichmentProgress.total) * 100
-                      : 0
-                  }
-                  valueState="Information"
-                  style={{ width: '100%' }}
-                />
               </div>
-            </>
-          ) : (
-            /* Stage 1: Idle/Ready State - SAP Blue ready to start */
-            <>
-              <Button
-                icon="play"
-                design="Transparent"
-                onClick={handleStartEnrichment}
-                disabled={project.status !== 'active'}
-                tooltip="Start Image Enrichment"
-              />
-              <div
-                style={{
-                  minWidth: '280px',
-                  border: '1px solid #0070F2',
-                  borderRadius: '0.5rem',
-                  padding: '1rem',
-                  background:
-                    'linear-gradient(135deg, rgba(0, 112, 242, 0.08) 0%, rgba(0, 112, 242, 0.03) 100%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '1rem',
-                }}
-              >
-                <Icon
-                  name="play"
-                  style={{
-                    fontSize: '1.5rem',
-                    color: '#0070F2',
-                  }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: '0.25rem',
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: '0.875rem',
-                        fontWeight: 600,
-                        color: '#0070F2',
-                      }}
-                    >
-                      Image Enrichment
-                    </Text>
-                    <div
-                      style={{
-                        background: '#0070F2',
-                        color: 'white',
-                        padding: '0.125rem 0.5rem',
-                        borderRadius: '0.25rem',
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px',
-                      }}
-                    >
-                      READY
-                    </div>
-                  </div>
-                  <Text
-                    style={{
-                      fontSize: '0.75rem',
-                      color: 'var(--sapContent_LabelColor)',
-                    }}
-                  >
-                    {project.status === 'active'
-                      ? 'Ready to analyze product images with AI'
-                      : 'Activate project to start enrichment'}
-                  </Text>
-                </div>
-              </div>
-            </>
+            </div>
           )}
         </div>
       </div>
