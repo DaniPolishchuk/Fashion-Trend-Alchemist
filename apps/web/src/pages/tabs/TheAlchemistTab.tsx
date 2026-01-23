@@ -80,8 +80,8 @@ interface PreviewData {
 
 function TheAlchemistTab({ project }: TheAlchemistTabProps) {
   const [attributes, setAttributes] = useState<AttributeConfig[]>([]);
-  const [articleAttributeOptions, setArticleAttributeOptions] = useState<Record<string, string[]>>({});
-  const [loading, setLoading] = useState(true);
+  const [articleAttributeOptions, setArticleAttributeOptions] = useState<Record<string, string[]> | null>(null);
+  const [attributesInitialized, setAttributesInitialized] = useState(false);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -102,7 +102,8 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
     const fetchArticleAttributes = async () => {
       const productTypes = project.scopeConfig?.productTypes;
       if (!productTypes || productTypes.length === 0) {
-        setLoading(false);
+        // No product types - set empty options so initialization can proceed
+        setArticleAttributeOptions({});
         return;
       }
 
@@ -126,20 +127,27 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
             // product_type comes from scopeConfig
             product_type: productTypes,
           });
+        } else {
+          // On error, set empty options so initialization can proceed
+          setArticleAttributeOptions({});
         }
       } catch (error) {
         console.error('Failed to fetch article attributes:', error);
-      } finally {
-        setLoading(false);
+        // On error, set empty options so initialization can proceed
+        setArticleAttributeOptions({});
       }
     };
 
     fetchArticleAttributes();
   }, [project.scopeConfig?.productTypes]);
 
-  // Initialize attributes from ontology schema + article-level attributes
+  // Initialize attributes ONCE when article options are loaded
+  // Uses attributesInitialized flag to prevent re-initialization on subsequent renders
   useEffect(() => {
-    if (loading) return;
+    // Wait until article attributes have been fetched (null = not yet fetched)
+    if (articleAttributeOptions === null) return;
+    // Only initialize once
+    if (attributesInitialized) return;
 
     const initialAttributes: AttributeConfig[] = [];
 
@@ -180,7 +188,8 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
     }
 
     setAttributes(initialAttributes);
-  }, [project.ontologySchema, articleAttributeOptions, loading]);
+    setAttributesInitialized(true);
+  }, [project.ontologySchema, articleAttributeOptions, attributesInitialized]);
 
   // Move attribute to locked
   const handleMoveToLocked = (key: string) => {
@@ -371,7 +380,10 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
   const isOverLimit = aiVariableCount > MAX_AI_VARIABLES;
   const canTransmute = aiVariableCount > 0 && aiVariableCount <= MAX_AI_VARIABLES && !transmuting;
 
-  if (loading) {
+  // Show loading state until all data is fetched and attributes are initialized
+  const isLoading = articleAttributeOptions === null || !attributesInitialized;
+
+  if (isLoading) {
     return (
       <Card style={{ padding: '2rem', textAlign: 'center' }}>
         <BusyIndicator active size="M" />
@@ -380,7 +392,7 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
     );
   }
 
-  if (!project.ontologySchema && Object.keys(articleAttributeOptions).length === 0) {
+  if (!project.ontologySchema && Object.keys(articleAttributeOptions || {}).length === 0) {
     return (
       <Card style={{ padding: '2rem', textAlign: 'center' }}>
         <Text>No attributes available for this project.</Text>
