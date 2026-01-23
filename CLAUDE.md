@@ -252,8 +252,10 @@ The velocity score measures sales performance normalized across products:
 2. **Preview Context**: System calculates velocity scores for all matching articles
    - If >50 articles match: selects top 25 and worst 25 by velocity score
    - If ≤50 articles match: includes all matching articles
-3. **Lock Context**: User confirms selection (via "Confirm Cohort"), project moves to "active", articles saved to `project_context_items` with normalized velocity scores (0-100). User stays on the same page.
+3. **Lock Context**: User confirms selection (via "Confirm Cohort"), project moves to "active", articles saved to `project_context_items` with normalized velocity scores (0-100), ontologySchema is saved. User is then redirected to ProjectHub.
 4. **Active Status**: Context is locked, user can now enrich attributes and generate designs via RPT-1
+
+**Important**: Navigation to ProjectHub happens **after** lock-context completes to ensure `ontologySchema` is available when TheAlchemistTab loads. This prevents a race condition where the tab would only show article attributes without ontology attributes.
 
 ### Environment Configuration
 
