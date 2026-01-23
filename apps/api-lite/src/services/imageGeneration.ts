@@ -69,19 +69,19 @@ export function buildImagePrompt(
   lockedAttributes: Record<string, string>,
   predictedAttributes: Record<string, string>
 ): string {
+  console.log('[ImageGen] Building prompt with attributes:');
+  console.log('  Locked attributes:', JSON.stringify(lockedAttributes, null, 2));
+  console.log('  Predicted attributes:', JSON.stringify(predictedAttributes, null, 2));
+
   const allAttributes = { ...lockedAttributes, ...predictedAttributes };
 
   // Remove internal keys (prefixed with _)
-  const filteredAttributes = Object.entries(allAttributes).filter(
-    ([key]) => !key.startsWith('_')
-  );
+  const filteredAttributes = Object.entries(allAttributes).filter(([key]) => !key.startsWith('_'));
 
   // Extract key attribute values for the prompt
   const getAttrValue = (keys: string[]): string | null => {
     for (const key of keys) {
-      const entry = filteredAttributes.find(([k]) =>
-        k.toLowerCase().includes(key.toLowerCase())
-      );
+      const entry = filteredAttributes.find(([k]) => k.toLowerCase().includes(key.toLowerCase()));
       if (entry && entry[1]) return entry[1];
     }
     return null;
@@ -133,7 +133,10 @@ export async function generateImage(prompt: string): Promise<Buffer> {
     height: imageGenConfig.imageHeight,
   };
 
-  console.log('[ImageGen] Generating image with prompt:', prompt.substring(0, 200) + '...');
+  console.log('[ImageGen] Generating image with FULL prompt:');
+  console.log('='.repeat(80));
+  console.log(prompt);
+  console.log('='.repeat(80));
 
   const response = await fetch(imageGenConfig.apiUrl, {
     method: 'POST',
