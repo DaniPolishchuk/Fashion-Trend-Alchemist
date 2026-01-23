@@ -64,25 +64,34 @@ const ITEMS_PER_PAGE = 25;
  * Format attribute name: replace underscores with spaces and capitalize first letter
  */
 function formatAttributeName(attr: string): string {
-  return attr
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return attr.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /**
  * Get color for velocity score based on value (0-100)
- * Returns SAP theme-compatible colors
+ * Returns heat map style colors (red-green gradient) for intuitive velocity performance visualization
  */
 function getVelocityColor(score: number): string {
-  if (score >= 70) return 'var(--sapPositiveColor)'; // Green for high performers
-  if (score >= 40) return 'var(--sapNeutralColor)'; // Neutral/gray for medium
-  return 'var(--sapNegativeColor)'; // Red for low performers
+  if (score >= 90) return '#1D7044'; // Deep Green - Exceptional performers
+  if (score >= 70) return '#4CAF50'; // Light Green - Strong performers
+  if (score >= 50) return '#FFC107'; // Yellow - Average performers
+  if (score >= 30) return '#FF9800'; // Orange - Below average
+  return '#D32F2F'; // Red - Poor performers
 }
 
-function EnhancedTableTab({ projectId, enrichmentStatus, currentArticleId }: EnhancedTableTabProps) {
+function EnhancedTableTab({
+  projectId,
+  enrichmentStatus,
+  currentArticleId,
+}: EnhancedTableTabProps) {
   // Data state
   const [contextItems, setContextItems] = useState<ContextItem[]>([]);
-  const [summary, setSummary] = useState<Summary>({ total: 0, successful: 0, pending: 0, failed: 0 });
+  const [summary, setSummary] = useState<Summary>({
+    total: 0,
+    successful: 0,
+    pending: 0,
+    failed: 0,
+  });
   const [ontologyAttributes, setOntologyAttributes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -177,7 +186,9 @@ function EnhancedTableTab({ projectId, enrichmentStatus, currentArticleId }: Enh
     if (activeFilter === 'successful') {
       items = items.filter((item) => item.enrichedAttributes !== null);
     } else if (activeFilter === 'pending') {
-      items = items.filter((item) => item.enrichedAttributes === null && item.enrichmentError === null);
+      items = items.filter(
+        (item) => item.enrichedAttributes === null && item.enrichmentError === null
+      );
     } else if (activeFilter === 'failed') {
       items = items.filter((item) => item.enrichmentError !== null);
     }
@@ -314,7 +325,11 @@ function EnhancedTableTab({ projectId, enrichmentStatus, currentArticleId }: Enh
     ];
 
     const rows = sortedItems.map((item) => {
-      const status = item.enrichedAttributes ? 'Success' : item.enrichmentError ? 'Failed' : 'Pending';
+      const status = item.enrichedAttributes
+        ? 'Success'
+        : item.enrichmentError
+          ? 'Failed'
+          : 'Pending';
       const baseData = [
         item.articleId,
         item.productType,
@@ -378,7 +393,9 @@ function EnhancedTableTab({ projectId, enrichmentStatus, currentArticleId }: Enh
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
+      <div
+        style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}
+      >
         <BusyIndicator active size="L" />
       </div>
     );
@@ -544,7 +561,12 @@ function EnhancedTableTab({ projectId, enrichmentStatus, currentArticleId }: Enh
             style={{ width: '200px' }}
           />
 
-          <Button icon="download" design="Transparent" onClick={handleExportCSV} tooltip="Export CSV" />
+          <Button
+            icon="download"
+            design="Transparent"
+            onClick={handleExportCSV}
+            tooltip="Export CSV"
+          />
         </div>
       </div>
 
@@ -580,7 +602,9 @@ function EnhancedTableTab({ projectId, enrichmentStatus, currentArticleId }: Enh
                     {formatAttributeName(attr)}
                   </th>
                 ))}
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'center', width: '100px' }}>Status</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'center', width: '100px' }}>
+                  Status
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -607,9 +631,13 @@ function EnhancedTableTab({ projectId, enrichmentStatus, currentArticleId }: Enh
                       {/* Main Row */}
                       <tr
                         style={{
-                          borderBottom: isExpanded ? 'none' : '1px solid var(--sapList_BorderColor)',
+                          borderBottom: isExpanded
+                            ? 'none'
+                            : '1px solid var(--sapList_BorderColor)',
                           animation: isProcessing ? 'pulse 2s ease-in-out infinite' : undefined,
-                          backgroundColor: isProcessing ? 'var(--sapInformationBackground)' : undefined,
+                          backgroundColor: isProcessing
+                            ? 'var(--sapInformationBackground)'
+                            : undefined,
                           cursor: 'pointer',
                         }}
                         onClick={() => handleRowToggle(item.articleId)}
@@ -799,7 +827,10 @@ function EnhancedTableTab({ projectId, enrichmentStatus, currentArticleId }: Enh
                                     padding: '4px',
                                   }}
                                 >
-                                  <Icon name="zoom-in" style={{ color: 'white', fontSize: '1rem' }} />
+                                  <Icon
+                                    name="zoom-in"
+                                    style={{ color: 'white', fontSize: '1rem' }}
+                                  />
                                 </div>
                               </div>
 

@@ -12,7 +12,6 @@ import {
   BusyIndicator,
 } from '@ui5/webcomponents-react';
 import '@ui5/webcomponents-icons/dist/search.js';
-import '@ui5/webcomponents-icons/dist/filter.js';
 import '@ui5/webcomponents-icons/dist/navigation-right-arrow.js';
 import '@ui5/webcomponents-icons/dist/navigation-left-arrow.js';
 import '@ui5/webcomponents-icons/dist/slim-arrow-right.js';
@@ -199,7 +198,6 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
           onInput={(e: any) => handleSearchChange(e.target.value)}
           style={{ flex: 1 }}
         />
-        <Button icon="filter" design="Transparent" tooltip="Filter options" />
       </div>
 
       {/* Results Header */}

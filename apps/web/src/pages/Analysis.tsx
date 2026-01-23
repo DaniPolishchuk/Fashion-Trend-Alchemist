@@ -476,9 +476,6 @@ function Analysis() {
       const createdProject = await createResponse.json();
       console.log('Project created successfully:', createdProject);
 
-      // Navigate to Project Hub immediately after successful project creation
-      navigate(`/project/${createdProject.id}`);
-
       const params = new URLSearchParams();
       // Only add date/season params if they exist, otherwise all year is analyzed
       if (selectedSeason) {
@@ -549,6 +546,10 @@ function Analysis() {
         status: 'active',
         lockedAt: new Date().toISOString(),
       });
+
+      // Navigate to Project Hub AFTER lock-context completes
+      // This ensures ontologySchema is populated when the Alchemist tab loads
+      navigate(`/project/${createdProject.id}`);
     } catch (err) {
       console.error('Failed to create project and lock context:', err);
       const errorMessage =
