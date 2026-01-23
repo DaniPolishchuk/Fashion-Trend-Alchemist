@@ -21,6 +21,7 @@ import {
 } from '@ui5/webcomponents-react';
 import '@ui5/webcomponents-icons/dist/filter.js';
 import '@ui5/webcomponents-icons/dist/sort-ascending.js';
+import '@ui5/webcomponents-icons/dist/product.js';
 
 interface ProductGroupTaxonomy {
   productGroup: string;
@@ -113,7 +114,9 @@ function ProductSelection() {
       const types = Array.from(selectedTypes).map((key) => key.split('::')[1]);
       const typesParam = types.join(',');
 
-      const response = await fetch(`/api/transactions/count?types=${encodeURIComponent(typesParam)}`);
+      const response = await fetch(
+        `/api/transactions/count?types=${encodeURIComponent(typesParam)}`
+      );
 
       if (!response.ok) {
         throw new Error('Failed to fetch row count');
@@ -230,7 +233,6 @@ function ProductSelection() {
     } finally {
       setProjectCreating(false);
     }
-
   };
 
   const filterTypes = (types: string[]) => {
@@ -240,7 +242,7 @@ function ProductSelection() {
 
   const getSortedGroups = () => {
     if (!taxonomy) return [];
-    const groups = [...taxonomy.groups];
+    const groups = [...taxonomy.groups].filter((g) => g.productGroup !== 'Unknown');
     return sortAZ
       ? groups.sort((a, b) => a.productGroup.localeCompare(b.productGroup))
       : groups.sort((a, b) => b.productGroup.localeCompare(a.productGroup));
@@ -277,252 +279,264 @@ function ProductSelection() {
   return (
     <Page
       style={{
-        height: 'calc(100vh - 44px)',
-        paddingBottom: '80px',
+        minHeight: 'calc(100vh - 44px)',
+        paddingBottom: '140px',
+        background: 'var(--sapBackgroundColor)',
+        maxWidth: '100vw',
+        boxSizing: 'border-box',
       }}
     >
       {/* Breadcrumbs */}
       <div style={{ padding: '12px 16px 0 16px' }}>
-          <Breadcrumbs
-            onItemClick={(e: any) => {
-              const text = e.detail.item.textContent?.trim();
-              if (text === 'Home') {
-                navigate('/');
-              }
-            }}
-          >
-            <BreadcrumbsItem>Home</BreadcrumbsItem>
-            <BreadcrumbsItem>Product Selection</BreadcrumbsItem>
-          </Breadcrumbs>
-        </div>
-
-        {/* Header with Title and Row Count */}
-        <div style={{ padding: '16px 16px 0 16px' }}>
-          <div
-            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}
-          >
-            <div style={{ flex: 1, marginRight: '24px' }}>
-              <Title level="H2" style={{ marginBottom: '8px', fontSize: '30px' }}>
-                Select Product Scope
-              </Title>
-              <Text
-                style={{
-                  color: 'var(--sapContent_LabelColor)',
-                  fontSize: '15px',
-                  marginBottom: '12px',
-                }}
-              >
-                Choose product groups and types for the upcoming analysis cycle.
-              </Text>
-              <div style={{ maxWidth: '400px' }}>
-                <Text
-                  style={{
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    marginBottom: '4px',
-                    display: 'block',
-                  }}
-                >
-                  Project Name
-                </Text>
-                <Input
-                  placeholder="Enter a descriptive name for this project..."
-                  value={projectName}
-                  onInput={(e: any) => setProjectName(e.target.value)}
-                  style={{ width: '100%' }}
-                />
-              </div>
-            </div>
-            <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
-              {countLoading ? (
-                <ObjectStatus state="Information">Loading...</ObjectStatus>
-              ) : rowCount !== null ? (
-                <>
-                  <ObjectStatus state="Information">
-                    {rowCount.toLocaleString()} transaction rows
-                  </ObjectStatus>
-                  {articleCount !== null && (
-                    <ObjectStatus state="Information">
-                      {articleCount.toLocaleString()} unique articles
-                    </ObjectStatus>
-                  )}
-                </>
-              ) : (
-                <ObjectStatus state="None">Select types</ObjectStatus>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Search and Actions Bar */}
-        <div
-          style={{
-            paddingLeft: '16px',
-            paddingRight: '16px',
-            paddingBottom: '16px',
-            paddingTop: 0,
+        <Breadcrumbs
+          onItemClick={(e: any) => {
+            const text = e.detail.item.textContent?.trim();
+            if (text === 'Home') {
+              navigate('/');
+            }
           }}
         >
-          <Card
+          <BreadcrumbsItem>Home</BreadcrumbsItem>
+          <BreadcrumbsItem>Product Selection</BreadcrumbsItem>
+        </Breadcrumbs>
+      </div>
+
+      {/* Header with Title and Row Count */}
+      <div style={{ padding: '16px 16px 0 16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ flex: 1, marginRight: '24px' }}>
+            <Title level="H2" style={{ marginBottom: '8px', fontSize: '30px' }}>
+              Select Product Scope
+            </Title>
+            <Text
+              style={{
+                color: 'var(--sapContent_LabelColor)',
+                fontSize: '15px',
+                marginBottom: '12px',
+              }}
+            >
+              Choose product groups and types for the upcoming product generation.
+            </Text>
+            <div style={{ maxWidth: '400px' }}>
+              <Text
+                style={{
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  marginBottom: '4px',
+                  display: 'block',
+                }}
+              >
+                Project Name
+              </Text>
+              <Input
+                placeholder="Enter a descriptive name for this project..."
+                value={projectName}
+                onInput={(e: any) => setProjectName(e.target.value)}
+                style={{ width: '100%' }}
+              />
+            </div>
+          </div>
+          <div
             style={{
-              width: '100%',
-              minHeight: '72px',
+              marginTop: '4px',
               display: 'flex',
-              alignItems: 'center',
-              borderRadius: '12px',
+              flexDirection: 'column',
+              gap: '4px',
+              alignItems: 'flex-end',
             }}
           >
+            {countLoading ? (
+              <ObjectStatus state="Information">Loading...</ObjectStatus>
+            ) : rowCount !== null ? (
+              <>
+                <ObjectStatus state="Information">
+                  {rowCount.toLocaleString()} transaction rows
+                </ObjectStatus>
+                {articleCount !== null && (
+                  <ObjectStatus state="Information">
+                    {articleCount.toLocaleString()} unique articles
+                  </ObjectStatus>
+                )}
+              </>
+            ) : (
+              <ObjectStatus state="None">Select types</ObjectStatus>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Search and Actions Bar */}
+      <div
+        style={{
+          paddingLeft: '16px',
+          paddingRight: '16px',
+          paddingBottom: '16px',
+          paddingTop: 0,
+        }}
+      >
+        <Card
+          style={{
+            width: '100%',
+            minHeight: '72px',
+            display: 'flex',
+            alignItems: 'center',
+            borderRadius: '12px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              width: '100%',
+            }}
+          >
+            {/* Pill-style filter input */}
             <div
               style={{
                 display: 'flex',
-                justifyContent: 'space-between',
                 alignItems: 'center',
+                gap: '8px',
                 width: '100%',
+                maxWidth: '760px',
+                backgroundColor: 'var(--sapUiBaseBG)',
+                borderRadius: '12px',
+                padding: '8px 12px',
               }}
             >
-              {/* Pill-style filter input */}
-              <div
+              <Icon name="filter" style={{ color: 'var(--sapContent_IconColor)' }} />
+              <Input
+                placeholder="Filter product types by name..."
+                value={searchQuery}
+                onInput={(e: any) => setSearchQuery(e.target.value)}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  width: '100%',
-                  maxWidth: '760px',
-                  backgroundColor: 'var(--sapUiBaseBG)',
-                  borderRadius: '12px',
-                  padding: '8px 12px',
+                  flex: 1,
+                  backgroundColor: 'var(--sapBackgroundColor)',
+                  border: 'none',
                 }}
-              >
-                <Icon name="filter" style={{ color: 'var(--sapContent_IconColor)' }} />
-                <Input
-                  placeholder="Filter product types by name..."
-                  value={searchQuery}
-                  onInput={(e: any) => setSearchQuery(e.target.value)}
-                  style={{
-                    flex: 1,
-                    backgroundColor: 'var(--sapBackgroundColor)',
-                    border: 'none',
-                  }}
-                />
-              </div>
-
-              {/* Actions */}
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <Button
-                  icon={sortAZ ? 'sort-ascending' : 'sort-ascending'}
-                  design="Transparent"
-                  onClick={() => setSortAZ(!sortAZ)}
-                >
-                  Sort {sortAZ ? 'A-Z' : 'Z-A'}
-                </Button>
-                <Button design="Transparent" onClick={handleExpandAll}>
-                  {expandedGroups.size === sortedGroups.length ? 'Collapse All' : 'Expand All'}
-                </Button>
-              </div>
+              />
             </div>
-          </Card>
-        </div>
 
-        <div
-          style={{
-            columnCount: 3,
-            columnGap: '16px',
-            padding: '16px',
-          }}
-        >
-          {sortedGroups.map((group) => {
-            const filteredTypes = filterTypes(group.productTypes);
-            const isExpanded = expandedGroups.has(group.productGroup);
-
-            if (filteredTypes.length === 0 && searchQuery) {
-              return null;
-            }
-
-            return (
-              <Card
-                key={group.productGroup}
-                style={{
-                  breakInside: 'avoid',
-                  marginBottom: '16px',
-                  width: '100%',
-                }}
-                header={
-                  <CardHeader
-                    titleText={group.productGroup}
-                    subtitleText={`${filteredTypes.length} items`}
-                    interactive
-                    onClick={() => toggleGroup(group.productGroup)}
-                  />
-                }
-              >
-                {isExpanded && (
-                  <List style={{ maxHeight: '220px', overflowY: 'auto' }}>
-                    {filteredTypes.map((type) => {
-                      const key = `${group.productGroup}::${type}`;
-                      const isSelected = selectedTypes.has(key);
-
-                      return (
-                        <ListItemStandard
-                          key={type}
-                          type="Active"
-                          onClick={() => toggleType(group.productGroup, type)}
-                        >
-                          <CheckBox
-                            checked={isSelected}
-                            style={{ pointerEvents: 'none' }}
-                            text={type}
-                          />
-                        </ListItemStandard>
-                      );
-                    })}
-                  </List>
-                )}
-              </Card>
-            );
-          })}
-        </div>
-
-        {/* Selection Footer Bar */}
-        <Bar
-          design="FloatingFooter"
-          style={{
-            position: 'fixed',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            zIndex: 1000,
-            boxShadow: '0 -2px 8px rgba(0,0,0,0.1)',
-          }}
-          startContent={
-            <Text>
-              <strong>{selectedTypes.size} items selected</strong>
-              {selectedTypes.size > 0 && (
-                <span style={{ marginLeft: '1rem', color: 'var(--sapContent_LabelColor)' }}>
-                  from {new Set(Array.from(selectedTypes).map((s) => s.split('::')[0])).size}{' '}
-                  categories
-                </span>
-              )}
-            </Text>
-          }
-          endContent={
-            <>
-              <Button design="Transparent" onClick={handleClearAll}>
-                Clear all
-              </Button>
-              <Button design="Transparent" onClick={() => navigate('/')}>
-                Cancel
-              </Button>
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '8px' }}>
               <Button
-                design="Emphasized"
-                onClick={handleProceed}
-                disabled={selectedTypes.size === 0 || !projectName.trim() || projectCreating}
+                icon={sortAZ ? 'sort-ascending' : 'sort-ascending'}
+                design="Transparent"
+                onClick={() => setSortAZ(!sortAZ)}
               >
-                {projectCreating ? 'Creating Project...' : 'Proceed to Analysis'}
+                Sort {sortAZ ? 'A-Z' : 'Z-A'}
               </Button>
-            </>
+              <Button design="Transparent" onClick={handleExpandAll}>
+                {expandedGroups.size === sortedGroups.length ? 'Collapse All' : 'Expand All'}
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <div
+        style={{
+          columnCount: 3,
+          columnGap: '16px',
+          padding: '16px',
+          marginBottom: '80px',
+        }}
+      >
+        {sortedGroups.map((group) => {
+          const filteredTypes = filterTypes(group.productTypes);
+          const isExpanded = expandedGroups.has(group.productGroup);
+
+          if (filteredTypes.length === 0 && searchQuery) {
+            return null;
           }
-        />
-      </Page>
+
+          return (
+            <Card
+              key={group.productGroup}
+              style={{
+                breakInside: 'avoid',
+                marginBottom: '16px',
+                width: '100%',
+              }}
+              header={
+                <CardHeader
+                  titleText={group.productGroup}
+                  subtitleText={`${filteredTypes.length} items`}
+                  avatar={<Icon name="product" />}
+                  interactive
+                  onClick={() => toggleGroup(group.productGroup)}
+                />
+              }
+            >
+              {isExpanded && (
+                <List style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                  {filteredTypes.map((type) => {
+                    const key = `${group.productGroup}::${type}`;
+                    const isSelected = selectedTypes.has(key);
+
+                    return (
+                      <ListItemStandard
+                        key={type}
+                        type="Active"
+                        onClick={() => toggleType(group.productGroup, type)}
+                      >
+                        <CheckBox
+                          checked={isSelected}
+                          style={{ pointerEvents: 'none' }}
+                          text={type}
+                        />
+                      </ListItemStandard>
+                    );
+                  })}
+                </List>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Selection Footer Bar */}
+      <Bar
+        design="FloatingFooter"
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 1000,
+          boxShadow: '0 -2px 8px rgba(0,0,0,0.1)',
+          width: '100%',
+        }}
+        startContent={
+          <Text>
+            <strong>{selectedTypes.size} items selected</strong>
+            {selectedTypes.size > 0 && (
+              <span style={{ marginLeft: '1rem', color: 'var(--sapContent_LabelColor)' }}>
+                from {new Set(Array.from(selectedTypes).map((s) => s.split('::')[0])).size}{' '}
+                categories
+              </span>
+            )}
+          </Text>
+        }
+        endContent={
+          <>
+            <Button design="Transparent" onClick={handleClearAll}>
+              Clear all
+            </Button>
+            <Button design="Transparent" onClick={() => navigate('/')}>
+              Cancel
+            </Button>
+            <Button
+              design="Emphasized"
+              onClick={handleProceed}
+              disabled={selectedTypes.size === 0 || !projectName.trim() || projectCreating}
+            >
+              {projectCreating ? 'Creating Project...' : 'Proceed to Analysis'}
+            </Button>
+          </>
+        }
+      />
+    </Page>
   );
 }
 
