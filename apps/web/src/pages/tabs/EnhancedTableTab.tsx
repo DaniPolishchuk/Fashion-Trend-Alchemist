@@ -541,7 +541,7 @@ function EnhancedTableTab({
           </Select>
 
           <Button
-            icon={sortDesc ? 'slim-arrow-down' : 'slim-arrow-up'}
+            icon={sortDesc ? 'sort-descending' : 'sort-ascending'}
             design="Transparent"
             onClick={() => setSortDesc(!sortDesc)}
             tooltip={sortDesc ? 'Descending' : 'Ascending'}
