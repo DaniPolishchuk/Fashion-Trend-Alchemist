@@ -555,7 +555,6 @@ function EnhancedTableTab({
 
           <Input
             placeholder="Search..."
-            icon={<Icon name="search" />}
             value={searchQuery}
             onInput={(e: any) => setSearchQuery(e.target.value)}
             style={{ width: '200px' }}
