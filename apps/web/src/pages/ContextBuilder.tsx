@@ -42,7 +42,7 @@ const HIDDEN_COLUMNS = ['product_group', 'transactionCount', 'lastSaleDate', 'ar
 
 type Season = 'spring' | 'summer' | 'autumn' | 'winter' | null;
 
-function Analysis() {
+function ContextBuilder() {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -778,13 +778,13 @@ function Analysis() {
         >
           <BreadcrumbsItem>Home</BreadcrumbsItem>
           <BreadcrumbsItem>Product Selection</BreadcrumbsItem>
-          <BreadcrumbsItem>Analysis</BreadcrumbsItem>
+          <BreadcrumbsItem>Context Builder</BreadcrumbsItem>
         </Breadcrumbs>
       </div>
 
       <div style={{ padding: '1rem 2rem 0' }}>
         <Title level="H2" style={{ marginBottom: '0.5rem' }}>
-          Context Analysis: {getPopularityLabel()}
+          Context Builder: {getPopularityLabel()}
         </Title>
       </div>
 
@@ -799,8 +799,8 @@ function Analysis() {
                 padding: '1rem',
                 borderRight: '1px solid var(--sapList_BorderColor)',
                 display: 'flex',
-                flexDirection: 'column',
-                gap: '0.75rem',
+                flexDirection: 'row',
+                gap: '0.3rem',
                 flexShrink: 0,
                 justifyContent: 'center',
                 alignItems: 'center',
@@ -890,23 +890,64 @@ function Analysis() {
               </div>
 
               <div
-                style={{ display: 'flex', gap: '0.25rem', width: '100%', justifyContent: 'center' }}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.5rem',
+                  width: '100%',
+                  justifyContent: 'center',
+                }}
               >
-                {(['spring', 'summer', 'autumn', 'winter'] as const).map((season) => (
+                {/* Row 1: Spring & Summer */}
+                <div style={{ display: 'flex', gap: '0.3rem' }}>
                   <Button
-                    key={season}
-                    design={selectedSeason === season ? 'Emphasized' : 'Default'}
-                    onClick={() => handleSeasonClick(season)}
+                    design={selectedSeason === 'spring' ? 'Emphasized' : 'Default'}
+                    onClick={() => handleSeasonClick('spring')}
                     style={{
                       flex: 1,
-                      textTransform: 'capitalize',
                       fontSize: '0.75rem',
-                      height: '20px',
+                      height: '25px',
                     }}
                   >
-                    {season}
+                    Spring
                   </Button>
-                ))}
+                  <Button
+                    design={selectedSeason === 'summer' ? 'Emphasized' : 'Default'}
+                    onClick={() => handleSeasonClick('summer')}
+                    style={{
+                      flex: 1,
+                      fontSize: '0.75rem',
+                      height: '25px',
+                    }}
+                  >
+                    Summer
+                  </Button>
+                </div>
+                {/* Row 2: Autumn & Winter */}
+                <div style={{ display: 'flex', gap: '0.3rem' }}>
+                  <Button
+                    design={selectedSeason === 'autumn' ? 'Emphasized' : 'Default'}
+                    onClick={() => handleSeasonClick('autumn')}
+                    style={{
+                      flex: 1,
+                      fontSize: '0.75rem',
+                      height: '25px',
+                    }}
+                  >
+                    Autumn
+                  </Button>
+                  <Button
+                    design={selectedSeason === 'winter' ? 'Emphasized' : 'Default'}
+                    onClick={() => handleSeasonClick('winter')}
+                    style={{
+                      flex: 1,
+                      fontSize: '0.75rem',
+                      height: '25px',
+                    }}
+                  >
+                    Winter
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -1069,7 +1110,7 @@ function Analysis() {
             >
               <Icon name="lightbulb" style={{ color: 'var(--sapInformativeColor)' }} />
               <Text style={{ color: 'var(--sapInformativeColor)' }}>
-                Please generate attributes before confirming cohort
+                Please generate attributes before confirming and saving the project
               </Text>
             </div>
           )}
@@ -1337,4 +1378,4 @@ function Analysis() {
   );
 }
 
-export default Analysis;
+export default ContextBuilder;

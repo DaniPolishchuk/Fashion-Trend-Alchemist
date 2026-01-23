@@ -44,20 +44,25 @@ function AppShell({ children }: AppShellProps) {
   // Apply saved theme immediately on mount
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme');
-    // Default to light theme if nothing is saved
     const theme = savedTheme === 'dark' ? 'sap_horizon_dark' : 'sap_horizon';
+
+    // Apply theme using UI5 API
     setTheme(theme);
+
+    // Also set on HTML element for immediate visual effect
+    document.documentElement.setAttribute('data-sap-theme', theme);
 
     // If no theme preference is saved yet, save the default (light)
     if (savedTheme === null) {
       localStorage.setItem('theme', 'light');
     }
-  }, []); // Run once on mount
+  }, []);
 
   // Apply theme when it changes
   useEffect(() => {
     const theme = isDarkTheme ? 'sap_horizon_dark' : 'sap_horizon';
     setTheme(theme);
+    document.documentElement.setAttribute('data-sap-theme', theme);
   }, [isDarkTheme]);
 
   // Theme toggle handler - keeps popup open
@@ -66,10 +71,11 @@ function AppShell({ children }: AppShellProps) {
 
     const newTheme = !isDarkTheme;
     const theme = newTheme ? 'sap_horizon_dark' : 'sap_horizon';
+    const themeValue = newTheme ? 'dark' : 'light';
 
     // Update state and localStorage
     setIsDarkTheme(newTheme);
-    localStorage.setItem('theme', newTheme ? 'dark' : 'light');
+    localStorage.setItem('theme', themeValue);
 
     // Apply theme using UI5 web components API
     await setTheme(theme);

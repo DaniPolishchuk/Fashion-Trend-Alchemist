@@ -215,8 +215,8 @@ function ProductSelection() {
       // Clear localStorage since we're proceeding
       localStorage.removeItem(STORAGE_KEY);
 
-      // Navigate to analysis page with project data (no project creation yet)
-      navigate('/analysis', {
+      // Navigate to context builder page with project data (no project creation yet)
+      navigate('/context-builder', {
         state: {
           projectData: {
             name: projectName.trim(),
