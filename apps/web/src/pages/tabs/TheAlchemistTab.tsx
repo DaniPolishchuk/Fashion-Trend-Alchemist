@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Card,
   Title,
@@ -89,6 +89,19 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [successScore, setSuccessScore] = useState(100); // Default to 100% (maximum success)
 
+  // Memoize productTypes as a stable string to prevent unnecessary refetches
+  // when the array reference changes but values remain the same
+  const productTypesKey = useMemo(
+    () => (project.scopeConfig?.productTypes ?? []).slice().sort().join(','),
+    [project.scopeConfig?.productTypes]
+  );
+
+  // Memoize ontologySchema as a stable string to prevent unnecessary effect runs
+  const ontologySchemaKey = useMemo(
+    () => JSON.stringify(project.ontologySchema ?? {}),
+    [project.ontologySchema]
+  );
+
   // Format attribute name: convert snake_case to Title Case
   const formatAttributeName = (name: string): string => {
     return name
@@ -98,18 +111,24 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
   };
 
   // Fetch article-level attribute options based on product types
+  // Uses cancellation flag to prevent stale fetches from updating state (React Strict Mode safety)
   useEffect(() => {
+    let isCancelled = false;
+
     const fetchArticleAttributes = async () => {
       const productTypes = project.scopeConfig?.productTypes;
       if (!productTypes || productTypes.length === 0) {
         // No product types - set empty options so initialization can proceed
-        setArticleAttributeOptions({});
+        if (!isCancelled) setArticleAttributeOptions({});
         return;
       }
 
       try {
         const typesParam = productTypes.join(',');
         const response = await fetch(`/api/filters/attributes?types=${encodeURIComponent(typesParam)}`);
+
+        // Don't update state if the effect was cleaned up (component unmounted or deps changed)
+        if (isCancelled) return;
 
         if (response.ok) {
           const data = await response.json();
@@ -132,22 +151,57 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
           setArticleAttributeOptions({});
         }
       } catch (error) {
-        console.error('Failed to fetch article attributes:', error);
-        // On error, set empty options so initialization can proceed
-        setArticleAttributeOptions({});
+        if (!isCancelled) {
+          console.error('Failed to fetch article attributes:', error);
+          // On error, set empty options so initialization can proceed
+          setArticleAttributeOptions({});
+        }
       }
     };
 
     fetchArticleAttributes();
-  }, [project.scopeConfig?.productTypes]);
+
+    // Cleanup: cancel stale fetch updates when deps change or component unmounts
+    return () => {
+      isCancelled = true;
+    };
+  }, [productTypesKey, project.scopeConfig?.productTypes]); // productTypesKey for stable comparison, productTypes for ESLint
 
   // Initialize attributes ONCE when article options are loaded
   // Uses attributesInitialized flag to prevent re-initialization on subsequent renders
+  // BUT allows re-initialization if ontologySchema changes from null to a value (after lock-context)
   useEffect(() => {
     // Wait until article attributes have been fetched (null = not yet fetched)
     if (articleAttributeOptions === null) return;
-    // Only initialize once
-    if (attributesInitialized) return;
+
+    // Debug: Log current state to diagnose initialization issues
+    console.log('[TheAlchemistTab] Attribute initialization check:', {
+      articleAttributeOptionsLoaded: articleAttributeOptions !== null,
+      articleAttributeCount: Object.keys(articleAttributeOptions || {}).length,
+      ontologySchema: project.ontologySchema,
+      ontologySchemaKey,
+      attributesInitialized,
+      projectStatus: project.scopeConfig ? 'has scopeConfig' : 'no scopeConfig',
+    });
+
+    // Only initialize once, UNLESS ontologySchema was previously null and now has a value
+    // This handles the case where user creates a project (ontologySchema=null) and later
+    // locks context (ontologySchema gets populated)
+    if (attributesInitialized) {
+      // Check if we need to re-initialize because ontologySchema was added
+      const hasOntologyAttributes = attributes.some((attr) => !attr.isArticleLevel);
+      const ontologyNowAvailable = project.ontologySchema && Object.keys(project.ontologySchema).length > 0;
+
+      if (!hasOntologyAttributes && ontologyNowAvailable) {
+        console.log('[TheAlchemistTab] Ontology schema now available, re-initializing attributes');
+        // Reset flag to allow re-initialization with ontology attributes
+        setAttributesInitialized(false);
+        return;
+      }
+
+      // Already initialized and no new ontology data - skip
+      return;
+    }
 
     const initialAttributes: AttributeConfig[] = [];
 
@@ -185,11 +239,23 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
           });
         }
       });
+    } else {
+      console.log('[TheAlchemistTab] WARNING: ontologySchema is null/undefined - ontology attributes will not be loaded');
     }
+
+    // Debug: Log what attributes were initialized
+    const articleCount = initialAttributes.filter((a) => a.isArticleLevel).length;
+    const ontologyCount = initialAttributes.filter((a) => !a.isArticleLevel).length;
+    console.log('[TheAlchemistTab] Initializing attributes:', {
+      totalAttributes: initialAttributes.length,
+      articleAttributes: articleCount,
+      ontologyAttributes: ontologyCount,
+      attributeKeys: initialAttributes.map((a) => a.key),
+    });
 
     setAttributes(initialAttributes);
     setAttributesInitialized(true);
-  }, [project.ontologySchema, articleAttributeOptions, attributesInitialized]);
+  }, [ontologySchemaKey, articleAttributeOptions, attributesInitialized, project.ontologySchema, attributes]);
 
   // Move attribute to locked
   const handleMoveToLocked = (key: string) => {
