@@ -542,7 +542,15 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                     Locked Attributes (Loading...)
                   </Text>
                 </div>
-                <AttributeSkeletonLoader variant="locked" count={3} />
+                <div
+                  style={{
+                    maxHeight: 'calc(5 * 4.25rem)', // ~5 items height + 20px increase (match actual content)
+                    overflowY: 'auto',
+                    paddingRight: '0.5rem', // Space for scrollbar
+                  }}
+                >
+                  <AttributeSkeletonLoader variant="locked" count={3} />
+                </div>
               </div>
 
               {/* Middle Column: AI Variables Skeleton */}
@@ -574,7 +582,15 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                     AI Variables (Loading...)
                   </Text>
                 </div>
-                <AttributeSkeletonLoader variant="ai" count={10} />
+                <div
+                  style={{
+                    maxHeight: 'calc(5 * 4.25rem)', // ~5 items height + 20px increase (match actual content)
+                    overflowY: 'auto',
+                    paddingRight: '0.5rem', // Space for scrollbar
+                  }}
+                >
+                  <AttributeSkeletonLoader variant="ai" count={10} />
+                </div>
               </div>
 
               {/* Right Column: Not Included Skeleton */}
@@ -600,7 +616,15 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                     Not Included (Loading...)
                   </Text>
                 </div>
-                <AttributeSkeletonLoader variant="notIncluded" count={2} />
+                <div
+                  style={{
+                    maxHeight: 'calc(5 * 4.25rem)', // ~5 items height + 20px increase (match actual content)
+                    overflowY: 'auto',
+                    paddingRight: '0.5rem', // Space for scrollbar
+                  }}
+                >
+                  <AttributeSkeletonLoader variant="notIncluded" count={2} />
+                </div>
               </div>
             </div>
 
@@ -620,14 +644,6 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                 </Text>
               </div>
               <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <Button
-                  design="Transparent"
-                  icon="inspection"
-                  disabled
-                  tooltip="Loading attributes..."
-                >
-                  Preview Request
-                </Button>
                 <Button
                   design="Emphasized"
                   icon="ai"
@@ -1132,14 +1148,6 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
             }}
           >
             <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <Button
-                design="Transparent"
-                icon="inspection"
-                onClick={handlePreview}
-                disabled={transmuting}
-              >
-                Preview Request
-              </Button>
               <Button
                 design="Emphasized"
                 icon="ai"
