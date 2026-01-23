@@ -14,6 +14,7 @@ import {
   Toast,
   Slider,
 } from '@ui5/webcomponents-react';
+import AttributeSkeletonLoader from '../../components/AttributeSkeletonLoader';
 import '@ui5/webcomponents-icons/dist/arrow-right.js';
 import '@ui5/webcomponents-icons/dist/arrow-left.js';
 import '@ui5/webcomponents-icons/dist/locked.js';
@@ -38,8 +39,11 @@ const ARTICLE_ATTRIBUTES = [
   'fabric_type_base',
 ] as const;
 
+// Attributes that start in "Locked" by default (first 3 after product_type)
+const DEFAULT_LOCKED = ['product_family', 'pattern_style', 'specific_color'];
+
 // Attributes that start in "Not Included" by default
-const DEFAULT_NOT_INCLUDED = ['product_group'];
+const DEFAULT_NOT_INCLUDED = ['product_group', 'product_type'];
 
 // Maximum AI Variables allowed (RPT-1 Large limit)
 const MAX_AI_VARIABLES = 10;
@@ -80,13 +84,19 @@ interface PreviewData {
 
 function TheAlchemistTab({ project }: TheAlchemistTabProps) {
   const [attributes, setAttributes] = useState<AttributeConfig[]>([]);
-  const [articleAttributeOptions, setArticleAttributeOptions] = useState<Record<string, string[]> | null>(null);
+  const [articleAttributeOptions, setArticleAttributeOptions] = useState<Record<
+    string,
+    string[]
+  > | null>(null);
   const [attributesInitialized, setAttributesInitialized] = useState(false);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [transmuting, setTransmuting] = useState(false);
-  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [toastMessage, setToastMessage] = useState<{
+    text: string;
+    type: 'success' | 'error';
+  } | null>(null);
   const [successScore, setSuccessScore] = useState(100); // Default to 100% (maximum success)
 
   // Memoize productTypes as a stable string to prevent unnecessary refetches
@@ -125,7 +135,9 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
 
       try {
         const typesParam = productTypes.join(',');
-        const response = await fetch(`/api/filters/attributes?types=${encodeURIComponent(typesParam)}`);
+        const response = await fetch(
+          `/api/filters/attributes?types=${encodeURIComponent(typesParam)}`
+        );
 
         // Don't update state if the effect was cleaned up (component unmounted or deps changed)
         if (isCancelled) return;
@@ -190,7 +202,8 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
     if (attributesInitialized) {
       // Check if we need to re-initialize because ontologySchema was added
       const hasOntologyAttributes = attributes.some((attr) => !attr.isArticleLevel);
-      const ontologyNowAvailable = project.ontologySchema && Object.keys(project.ontologySchema).length > 0;
+      const ontologyNowAvailable =
+        project.ontologySchema && Object.keys(project.ontologySchema).length > 0;
 
       if (!hasOntologyAttributes && ontologyNowAvailable) {
         console.log('[TheAlchemistTab] Ontology schema now available, re-initializing attributes');
@@ -209,13 +222,27 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
     ARTICLE_ATTRIBUTES.forEach((attrKey) => {
       const variants = articleAttributeOptions[attrKey] || [];
       if (variants.length > 0) {
+        const isLocked = DEFAULT_LOCKED.includes(attrKey);
         const isNotIncluded = DEFAULT_NOT_INCLUDED.includes(attrKey);
+
+        let category: AttributeCategory;
+        let selectedValue: string | null = null;
+
+        if (isLocked) {
+          category = 'locked';
+          selectedValue = variants[0] || null; // Set first variant as default
+        } else if (isNotIncluded) {
+          category = 'notIncluded';
+        } else {
+          category = 'ai';
+        }
+
         initialAttributes.push({
           key: `article_${attrKey}`,
           displayName: formatAttributeName(attrKey),
           variants,
-          category: isNotIncluded ? 'notIncluded' : 'ai',
-          selectedValue: null,
+          category,
+          selectedValue,
           isArticleLevel: true,
         });
       }
@@ -240,7 +267,9 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
         }
       });
     } else {
-      console.log('[TheAlchemistTab] WARNING: ontologySchema is null/undefined - ontology attributes will not be loaded');
+      console.log(
+        '[TheAlchemistTab] WARNING: ontologySchema is null/undefined - ontology attributes will not be loaded'
+      );
     }
 
     // Debug: Log what attributes were initialized
@@ -255,7 +284,13 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
 
     setAttributes(initialAttributes);
     setAttributesInitialized(true);
-  }, [ontologySchemaKey, articleAttributeOptions, attributesInitialized, project.ontologySchema, attributes]);
+  }, [
+    ontologySchemaKey,
+    articleAttributeOptions,
+    attributesInitialized,
+    project.ontologySchema,
+    attributes,
+  ]);
 
   // Move attribute to locked
   const handleMoveToLocked = (key: string) => {
@@ -334,10 +369,7 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
         lockedAttributes: lockedAttrs,
         aiVariables: aiVars,
         samplePayload: {
-          rows: [
-            { '...': '(context rows from enriched articles)' },
-            queryRow,
-          ],
+          rows: [{ '...': '(context rows from enriched articles)' }, queryRow],
         },
       });
     } catch (error) {
@@ -385,14 +417,15 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
     try {
       const lockedAttrs = attributes
         .filter((attr) => attr.category === 'locked')
-        .reduce((acc, attr) => {
-          acc[attr.key] = attr.selectedValue || '';
-          return acc;
-        }, {} as Record<string, string>);
+        .reduce(
+          (acc, attr) => {
+            acc[attr.key] = attr.selectedValue || '';
+            return acc;
+          },
+          {} as Record<string, string>
+        );
 
-      const aiVars = attributes
-        .filter((attr) => attr.category === 'ai')
-        .map((attr) => attr.key);
+      const aiVars = attributes.filter((attr) => attr.category === 'ai').map((attr) => attr.key);
 
       const response = await fetch(`/api/projects/${project.id}/rpt1-predict`, {
         method: 'POST',
@@ -451,10 +484,278 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
 
   if (isLoading) {
     return (
-      <Card style={{ padding: '2rem', textAlign: 'center' }}>
-        <BusyIndicator active size="M" />
-        <Text style={{ marginTop: '1rem' }}>Loading attributes...</Text>
-      </Card>
+      <div>
+        {/* Main Layout: Parameters Card + Success Score Panel with Skeleton Loading */}
+        <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
+          {/* Left: Transmutation Parameters Card with Skeleton */}
+          <Card style={{ flex: 1 }}>
+            {/* Card Header */}
+            <div
+              style={{ padding: '1.5rem', borderBottom: '1px solid var(--sapList_BorderColor)' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <Icon name="ai" style={{ fontSize: '1.25rem', color: '#0070F2' }} />
+                <div>
+                  <Title level="H4" style={{ marginBottom: '0.25rem' }}>
+                    Transmutation Parameters
+                  </Title>
+                  <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '0.875rem' }}>
+                    Configure locked attributes and AI targets for RPT-1 prediction
+                  </Text>
+                </div>
+              </div>
+            </div>
+
+            {/* Three Column Layout with Skeleton Loading */}
+            <div
+              style={{ display: 'flex', minHeight: '400px' }}
+              role="status"
+              aria-busy="true"
+              aria-label="Loading attributes"
+            >
+              {/* Left Column: Locked Attributes Skeleton */}
+              <div
+                style={{
+                  flex: 1,
+                  padding: '1.5rem',
+                  borderRight: '1px solid var(--sapList_BorderColor)',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    marginBottom: '1.5rem',
+                  }}
+                >
+                  <Icon name="locked" style={{ color: 'var(--sapContent_LabelColor)' }} />
+                  <Text
+                    style={{
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      fontSize: '0.75rem',
+                      letterSpacing: '0.5px',
+                      color: 'var(--sapContent_LabelColor)',
+                    }}
+                  >
+                    Locked Attributes (Loading...)
+                  </Text>
+                </div>
+                <AttributeSkeletonLoader variant="locked" count={3} />
+              </div>
+
+              {/* Middle Column: AI Variables Skeleton */}
+              <div
+                style={{
+                  flex: 1,
+                  padding: '1.5rem',
+                  borderRight: '1px solid var(--sapList_BorderColor)',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    marginBottom: '1.5rem',
+                  }}
+                >
+                  <Icon name="ai" style={{ color: '#E9730C' }} />
+                  <Text
+                    style={{
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      fontSize: '0.75rem',
+                      letterSpacing: '0.5px',
+                      color: '#E9730C',
+                    }}
+                  >
+                    AI Variables (Loading...)
+                  </Text>
+                </div>
+                <AttributeSkeletonLoader variant="ai" count={10} />
+              </div>
+
+              {/* Right Column: Not Included Skeleton */}
+              <div style={{ flex: 1, padding: '1.5rem' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    marginBottom: '1.5rem',
+                  }}
+                >
+                  <Icon name="hint" style={{ color: 'var(--sapNeutralTextColor)' }} />
+                  <Text
+                    style={{
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      fontSize: '0.75rem',
+                      letterSpacing: '0.5px',
+                      color: 'var(--sapNeutralTextColor)',
+                    }}
+                  >
+                    Not Included (Loading...)
+                  </Text>
+                </div>
+                <AttributeSkeletonLoader variant="notIncluded" count={2} />
+              </div>
+            </div>
+
+            {/* Footer with Disabled Transmute Button */}
+            <div
+              style={{
+                padding: '1rem 1.5rem',
+                borderTop: '1px solid var(--sapList_BorderColor)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '0.875rem' }}>
+                  Loading attributes...
+                </Text>
+              </div>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <Button
+                  design="Transparent"
+                  icon="inspection"
+                  disabled
+                  tooltip="Loading attributes..."
+                >
+                  Preview Request
+                </Button>
+                <Button
+                  design="Emphasized"
+                  icon="ai"
+                  disabled
+                  tooltip="Loading attributes..."
+                  style={{ opacity: 0.5 }}
+                >
+                  Transmute (Run RPT-1)
+                </Button>
+              </div>
+            </div>
+          </Card>
+
+          {/* Right: Success Score Panel (remains visible during loading) */}
+          <Card style={{ width: '280px', flexShrink: 0 }}>
+            <div style={{ padding: '1.5rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  marginBottom: '1.5rem',
+                }}
+              >
+                <Icon name="target-group" style={{ color: '#107E3E' }} />
+                <Text
+                  style={{
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    fontSize: '0.75rem',
+                    letterSpacing: '0.5px',
+                    color: '#107E3E',
+                  }}
+                >
+                  Target Success
+                </Text>
+              </div>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <Text
+                  style={{
+                    fontSize: '0.875rem',
+                    color: 'var(--sapContent_LabelColor)',
+                    marginBottom: '0.75rem',
+                    display: 'block',
+                  }}
+                >
+                  Set the desired performance level for the generated design. Higher values target
+                  top-performing attribute combinations.
+                </Text>
+              </div>
+
+              {/* Success Score Display */}
+              <div
+                style={{
+                  textAlign: 'center',
+                  padding: '1.5rem',
+                  background:
+                    'linear-gradient(135deg, rgba(16, 126, 62, 0.1) 0%, rgba(16, 126, 62, 0.05) 100%)',
+                  borderRadius: '0.75rem',
+                  marginBottom: '1.5rem',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: '3rem',
+                    fontWeight: 700,
+                    color: '#107E3E',
+                    lineHeight: 1,
+                  }}
+                >
+                  {successScore}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: '1rem',
+                    color: '#107E3E',
+                    marginLeft: '0.25rem',
+                  }}
+                >
+                  %
+                </Text>
+                <Text
+                  style={{
+                    display: 'block',
+                    fontSize: '0.75rem',
+                    color: 'var(--sapContent_LabelColor)',
+                    marginTop: '0.5rem',
+                  }}
+                >
+                  {successScore >= 90
+                    ? 'Top Performer'
+                    : successScore >= 70
+                      ? 'Above Average'
+                      : successScore >= 50
+                        ? 'Average'
+                        : 'Below Average'}
+                </Text>
+              </div>
+
+              {/* Slider - disabled during loading */}
+              <div style={{ padding: '0 0.5rem' }}>
+                <Slider
+                  value={successScore}
+                  min={0}
+                  max={100}
+                  step={5}
+                  showTickmarks
+                  labelInterval={4}
+                  onChange={(e: any) => setSuccessScore(e.target.value)}
+                  disabled={isLoading}
+                  style={{ width: '100%', opacity: isLoading ? 0.6 : 1 }}
+                />
+                <div
+                  style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}
+                >
+                  <Text style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)' }}>
+                    Low
+                  </Text>
+                  <Text style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)' }}>
+                    High
+                  </Text>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
     );
   }
 
@@ -470,18 +771,15 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
     <div>
       {/* Toast for success/error messages */}
       {toastMessage && (
-        <Toast
-          open
-          onClose={() => setToastMessage(null)}
-          duration={5000}
-          placement="TopCenter"
-        >
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            color: toastMessage.type === 'error' ? '#BB0000' : '#107E3E'
-          }}>
+        <Toast open onClose={() => setToastMessage(null)} duration={5000} placement="TopCenter">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              color: toastMessage.type === 'error' ? '#BB0000' : '#107E3E',
+            }}
+          >
             <Icon name={toastMessage.type === 'error' ? 'error' : 'message-success'} />
             {toastMessage.text}
           </div>
@@ -492,324 +790,385 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
       <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
         {/* Left: Transmutation Parameters Card */}
         <Card style={{ flex: 1 }}>
-        {/* Card Header */}
-        <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--sapList_BorderColor)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <Icon name="ai" style={{ fontSize: '1.25rem', color: '#0070F2' }} />
-            <div>
-              <Title level="H4" style={{ marginBottom: '0.25rem' }}>
-                Transmutation Parameters
-              </Title>
-              <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '0.875rem' }}>
-                Configure locked attributes and AI targets for RPT-1 prediction
-              </Text>
+          {/* Card Header */}
+          <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--sapList_BorderColor)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <Icon name="ai" style={{ fontSize: '1.25rem', color: '#0070F2' }} />
+                <div>
+                  <Title level="H4" style={{ marginBottom: '0.25rem' }}>
+                    Transmutation Parameters
+                  </Title>
+                  <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '0.875rem' }}>
+                    Configure locked attributes and AI targets for RPT-1 prediction
+                  </Text>
+                </div>
+              </div>
+              {/* Warning message for too many AI Variables - moved from column to header */}
+              {isOverLimit && (
+                <div style={{ maxWidth: '300px' }}>
+                  <MessageStrip design="Negative" hideCloseButton>
+                    Too many AI Variables. Maximum is {MAX_AI_VARIABLES}. Move some to "Not
+                    Included".
+                  </MessageStrip>
+                </div>
+              )}
             </div>
           </div>
-        </div>
 
-        {/* Three Column Layout */}
-        <div style={{ display: 'flex', minHeight: '400px' }}>
-          {/* Left Column: Locked Attributes */}
-          <div
-            style={{
-              flex: 1,
-              padding: '1.5rem',
-              borderRight: '1px solid var(--sapList_BorderColor)',
-            }}
-          >
+          {/* Three Column Layout */}
+          <div style={{ display: 'flex', minHeight: '400px' }}>
+            {/* Left Column: Locked Attributes */}
             <div
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                marginBottom: '1.5rem',
+                flex: 1,
+                padding: '1.5rem',
+                borderRight: '1px solid var(--sapList_BorderColor)',
               }}
             >
-              <Icon name="locked" style={{ color: 'var(--sapContent_LabelColor)' }} />
-              <Text
+              <div
                 style={{
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  fontSize: '0.75rem',
-                  letterSpacing: '0.5px',
-                  color: 'var(--sapContent_LabelColor)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  marginBottom: '1.5rem',
                 }}
               >
-                Locked Attributes ({lockedAttributes.length})
-              </Text>
-            </div>
+                <Icon name="locked" style={{ color: 'var(--sapContent_LabelColor)' }} />
+                <Text
+                  style={{
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    fontSize: '0.75rem',
+                    letterSpacing: '0.5px',
+                    color: 'var(--sapContent_LabelColor)',
+                  }}
+                >
+                  Locked Attributes ({lockedAttributes.length})
+                </Text>
+              </div>
 
-            {lockedAttributes.length === 0 ? (
-              <Text style={{ color: 'var(--sapContent_LabelColor)', fontStyle: 'italic' }}>
-                No locked attributes. Move attributes here to fix their values.
-              </Text>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {lockedAttributes.map((attr) => (
-                  <div key={attr.key}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                      <Text
+              {lockedAttributes.length === 0 ? (
+                <Text style={{ color: 'var(--sapContent_LabelColor)', fontStyle: 'italic' }}>
+                  No locked attributes. Move attributes here to fix their values.
+                </Text>
+              ) : (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '1rem',
+                    maxHeight: 'calc(5 * 4.25rem)', // ~5 items height + 20px increase
+                    overflowY: 'auto',
+                    paddingRight: '0.5rem', // Space for scrollbar
+                  }}
+                >
+                  {lockedAttributes.map((attr) => (
+                    <div key={attr.key}>
+                      <div
                         style={{
-                          fontSize: '0.875rem',
-                          fontWeight: 500,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          marginBottom: '0.5rem',
                         }}
                       >
-                        {attr.displayName}
-                        {attr.isArticleLevel && (
-                          <span style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)', marginLeft: '0.5rem' }}>
-                            (Article)
-                          </span>
-                        )}
-                      </Text>
+                        <Text
+                          style={{
+                            fontSize: '0.875rem',
+                            fontWeight: 500,
+                          }}
+                        >
+                          {attr.displayName}
+                          {attr.isArticleLevel && (
+                            <span
+                              style={{
+                                fontSize: '0.7rem',
+                                color: 'var(--sapContent_LabelColor)',
+                                marginLeft: '0.5rem',
+                              }}
+                            >
+                              (Article)
+                            </span>
+                          )}
+                        </Text>
+                        <Button
+                          icon="decline"
+                          design="Transparent"
+                          tooltip="Move to Not Included"
+                          onClick={() => handleMoveToNotIncluded(attr.key)}
+                          style={{ minWidth: 'auto', padding: '0.25rem' }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Select
+                          style={{ flex: 1 }}
+                          value={attr.selectedValue || ''}
+                          onChange={(e: any) =>
+                            handleValueChange(attr.key, e.detail.selectedOption.value)
+                          }
+                        >
+                          {attr.variants.map((variant) => (
+                            <Option key={variant} value={variant}>
+                              {variant}
+                            </Option>
+                          ))}
+                        </Select>
+                        <Button
+                          icon="arrow-right"
+                          design="Transparent"
+                          tooltip="Move to AI Variables"
+                          onClick={() => handleMoveToAIVariable(attr.key)}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Middle Column: AI Variables */}
+            <div
+              style={{
+                flex: 1,
+                padding: '1.5rem',
+                borderRight: '1px solid var(--sapList_BorderColor)',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  marginBottom: '1.5rem',
+                }}
+              >
+                <Icon name="ai" style={{ color: '#E9730C' }} />
+                <Text
+                  style={{
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    fontSize: '0.75rem',
+                    letterSpacing: '0.5px',
+                    color: isOverLimit ? '#BB0000' : '#E9730C',
+                  }}
+                >
+                  AI Variables ({aiVariableCount}/{MAX_AI_VARIABLES})
+                </Text>
+              </div>
+
+              {aiVariables.length === 0 ? (
+                <Text style={{ color: 'var(--sapContent_LabelColor)', fontStyle: 'italic' }}>
+                  No AI variables. Move attributes here to have RPT-1 predict them.
+                </Text>
+              ) : (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.75rem',
+                    maxHeight: 'calc(5 * 4.25rem)', // ~5 items height + 20px increase (uniform with locked)
+                    overflowY: 'auto',
+                    paddingRight: '0.5rem', // Space for scrollbar
+                  }}
+                >
+                  {aiVariables.map((attr) => (
+                    <div
+                      key={attr.key}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                      }}
+                    >
+                      <Button
+                        icon="arrow-left"
+                        design="Transparent"
+                        tooltip="Move to Locked Attributes"
+                        onClick={() => handleMoveToLocked(attr.key)}
+                      />
+                      <div
+                        style={{
+                          flex: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '0.75rem 1rem',
+                          border: `1px solid ${isOverLimit ? '#BB0000' : '#E9730C'}`,
+                          borderRadius: '0.5rem',
+                          background: isOverLimit
+                            ? 'rgba(187, 0, 0, 0.05)'
+                            : 'rgba(233, 115, 12, 0.05)',
+                        }}
+                      >
+                        <Icon
+                          name="ai"
+                          style={{
+                            color: '#E9730C',
+                            fontSize: '1.25rem',
+                          }}
+                        />
+                        <Text style={{ fontSize: '0.875rem' }}>
+                          {attr.displayName}
+                          {attr.isArticleLevel && (
+                            <span
+                              style={{
+                                fontSize: '0.7rem',
+                                color: 'var(--sapContent_LabelColor)',
+                                marginLeft: '0.5rem',
+                              }}
+                            >
+                              (Article)
+                            </span>
+                          )}
+                        </Text>
+                      </div>
                       <Button
                         icon="decline"
                         design="Transparent"
                         tooltip="Move to Not Included"
                         onClick={() => handleMoveToNotIncluded(attr.key)}
-                        style={{ minWidth: 'auto', padding: '0.25rem' }}
+                        style={{ minWidth: 'auto' }}
                       />
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <Select
-                        style={{ flex: 1 }}
-                        value={attr.selectedValue || ''}
-                        onChange={(e: any) => handleValueChange(attr.key, e.detail.selectedOption.value)}
-                      >
-                        {attr.variants.map((variant) => (
-                          <Option key={variant} value={variant}>
-                            {variant}
-                          </Option>
-                        ))}
-                      </Select>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Right Column: Not Included */}
+            <div style={{ flex: 1, padding: '1.5rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  marginBottom: '1.5rem',
+                }}
+              >
+                <Icon name="hint" style={{ color: 'var(--sapNeutralTextColor)' }} />
+                <Text
+                  style={{
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    fontSize: '0.75rem',
+                    letterSpacing: '0.5px',
+                    color: 'var(--sapNeutralTextColor)',
+                  }}
+                >
+                  Not Included ({notIncludedAttributes.length})
+                </Text>
+              </div>
+
+              {notIncludedAttributes.length === 0 ? (
+                <Text style={{ color: 'var(--sapContent_LabelColor)', fontStyle: 'italic' }}>
+                  No excluded attributes. Use the X button to move attributes here.
+                </Text>
+              ) : (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.75rem',
+                    maxHeight: 'calc(5 * 4.25rem)', // ~5 items height + 20px increase (uniform with locked)
+                    overflowY: 'auto',
+                    paddingRight: '0.5rem', // Space for scrollbar
+                  }}
+                >
+                  {notIncludedAttributes.map((attr) => (
+                    <div
+                      key={attr.key}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                      }}
+                    >
                       <Button
-                        icon="arrow-right"
+                        icon="add"
                         design="Transparent"
                         tooltip="Move to AI Variables"
                         onClick={() => handleMoveToAIVariable(attr.key)}
                       />
+                      <div
+                        style={{
+                          flex: 1,
+                          padding: '0.75rem 1rem',
+                          border: '1px dashed var(--sapNeutralBorderColor)',
+                          borderRadius: '0.5rem',
+                          background: 'var(--sapNeutralBackground)',
+                        }}
+                      >
+                        <Text style={{ color: 'var(--sapNeutralTextColor)', fontSize: '0.875rem' }}>
+                          {attr.displayName}
+                          {attr.isArticleLevel && (
+                            <span
+                              style={{
+                                fontSize: '0.7rem',
+                                color: 'var(--sapContent_LabelColor)',
+                                marginLeft: '0.5rem',
+                              }}
+                            >
+                              (Article)
+                            </span>
+                          )}
+                        </Text>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Middle Column: AI Variables */}
+          {/* Footer with Transmute Button */}
           <div
             style={{
-              flex: 1,
-              padding: '1.5rem',
-              borderRight: '1px solid var(--sapList_BorderColor)',
+              padding: '1rem 1.5rem',
+              borderTop: '1px solid var(--sapList_BorderColor)',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              alignItems: 'center',
             }}
           >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                marginBottom: '1.5rem',
-              }}
-            >
-              <Icon name="ai" style={{ color: '#E9730C' }} />
-              <Text
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <Button
+                design="Transparent"
+                icon="inspection"
+                onClick={handlePreview}
+                disabled={transmuting}
+              >
+                Preview Request
+              </Button>
+              <Button
+                design="Emphasized"
+                icon="ai"
+                onClick={handlePreview}
+                disabled={!canTransmute}
                 style={{
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  fontSize: '0.75rem',
-                  letterSpacing: '0.5px',
-                  color: isOverLimit ? '#BB0000' : '#E9730C',
+                  background: canTransmute
+                    ? 'linear-gradient(90deg, #0070F2 0%, #0050C8 100%)'
+                    : undefined,
+                  opacity: canTransmute ? 1 : 0.5,
                 }}
               >
-                AI Variables ({aiVariableCount}/{MAX_AI_VARIABLES})
-              </Text>
+                {transmuting ? 'Transmuting...' : 'Transmute (Run RPT-1)'}
+              </Button>
             </div>
-
-            {isOverLimit && (
-              <MessageStrip
-                design="Negative"
-                hideCloseButton
-                style={{ marginBottom: '1rem' }}
-              >
-                Too many AI Variables. Maximum is {MAX_AI_VARIABLES}. Move some to "Not Included".
-              </MessageStrip>
-            )}
-
-            {aiVariables.length === 0 ? (
-              <Text style={{ color: 'var(--sapContent_LabelColor)', fontStyle: 'italic' }}>
-                No AI variables. Move attributes here to have RPT-1 predict them.
-              </Text>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {aiVariables.map((attr) => (
-                  <div
-                    key={attr.key}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                    }}
-                  >
-                    <Button
-                      icon="arrow-left"
-                      design="Transparent"
-                      tooltip="Move to Locked Attributes"
-                      onClick={() => handleMoveToLocked(attr.key)}
-                    />
-                    <div
-                      style={{
-                        flex: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '0.75rem 1rem',
-                        border: `1px solid ${isOverLimit ? '#BB0000' : '#E9730C'}`,
-                        borderRadius: '0.5rem',
-                        background: isOverLimit ? 'rgba(187, 0, 0, 0.05)' : 'rgba(233, 115, 12, 0.05)',
-                      }}
-                    >
-                      <Text style={{ color: isOverLimit ? '#BB0000' : '#E9730C', fontWeight: 500 }}>
-                        [PREDICT]
-                      </Text>
-                      <Text style={{ fontSize: '0.875rem' }}>
-                        {attr.displayName}
-                        {attr.isArticleLevel && (
-                          <span style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)', marginLeft: '0.5rem' }}>
-                            (Article)
-                          </span>
-                        )}
-                      </Text>
-                    </div>
-                    <Button
-                      icon="decline"
-                      design="Transparent"
-                      tooltip="Move to Not Included"
-                      onClick={() => handleMoveToNotIncluded(attr.key)}
-                      style={{ minWidth: 'auto' }}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
-
-          {/* Right Column: Not Included */}
-          <div style={{ flex: 1, padding: '1.5rem' }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                marginBottom: '1.5rem',
-              }}
-            >
-              <Icon name="hint" style={{ color: 'var(--sapNeutralTextColor)' }} />
-              <Text
-                style={{
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  fontSize: '0.75rem',
-                  letterSpacing: '0.5px',
-                  color: 'var(--sapNeutralTextColor)',
-                }}
-              >
-                Not Included ({notIncludedAttributes.length})
-              </Text>
-            </div>
-
-            {notIncludedAttributes.length === 0 ? (
-              <Text style={{ color: 'var(--sapContent_LabelColor)', fontStyle: 'italic' }}>
-                No excluded attributes. Use the X button to move attributes here.
-              </Text>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {notIncludedAttributes.map((attr) => (
-                  <div
-                    key={attr.key}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                    }}
-                  >
-                    <Button
-                      icon="add"
-                      design="Transparent"
-                      tooltip="Move to AI Variables"
-                      onClick={() => handleMoveToAIVariable(attr.key)}
-                    />
-                    <div
-                      style={{
-                        flex: 1,
-                        padding: '0.75rem 1rem',
-                        border: '1px dashed var(--sapNeutralBorderColor)',
-                        borderRadius: '0.5rem',
-                        background: 'var(--sapNeutralBackground)',
-                      }}
-                    >
-                      <Text style={{ color: 'var(--sapNeutralTextColor)', fontSize: '0.875rem' }}>
-                        {attr.displayName}
-                        {attr.isArticleLevel && (
-                          <span style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)', marginLeft: '0.5rem' }}>
-                            (Article)
-                          </span>
-                        )}
-                      </Text>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Footer with Transmute Button */}
-        <div
-          style={{
-            padding: '1rem 1.5rem',
-            borderTop: '1px solid var(--sapList_BorderColor)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            {isOverLimit && (
-              <Text style={{ color: '#BB0000', fontSize: '0.875rem' }}>
-                ⚠️ Reduce AI Variables to {MAX_AI_VARIABLES} or fewer to enable transmutation
-              </Text>
-            )}
-          </div>
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <Button
-              design="Transparent"
-              icon="inspection"
-              onClick={handlePreview}
-              disabled={transmuting}
-            >
-              Preview Request
-            </Button>
-            <Button
-              design="Emphasized"
-              icon="ai"
-              onClick={handlePreview}
-              disabled={!canTransmute}
-              style={{
-                background: canTransmute
-                  ? 'linear-gradient(90deg, #0070F2 0%, #0050C8 100%)'
-                  : undefined,
-                opacity: canTransmute ? 1 : 0.5,
-              }}
-            >
-              {transmuting ? 'Transmuting...' : 'Transmute (Run RPT-1)'}
-            </Button>
-          </div>
-        </div>
-      </Card>
+        </Card>
 
         {/* Right: Success Score Panel */}
         <Card style={{ width: '280px', flexShrink: 0 }}>
           <div style={{ padding: '1.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                marginBottom: '1.5rem',
+              }}
+            >
               <Icon name="target-group" style={{ color: '#107E3E' }} />
               <Text
                 style={{
@@ -825,8 +1184,16 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
             </div>
 
             <div style={{ marginBottom: '1.5rem' }}>
-              <Text style={{ fontSize: '0.875rem', color: 'var(--sapContent_LabelColor)', marginBottom: '0.75rem', display: 'block' }}>
-                Set the desired performance level for the generated design. Higher values target top-performing attribute combinations.
+              <Text
+                style={{
+                  fontSize: '0.875rem',
+                  color: 'var(--sapContent_LabelColor)',
+                  marginBottom: '0.75rem',
+                  display: 'block',
+                }}
+              >
+                Set the desired performance level for the generated design. Higher values target
+                top-performing attribute combinations.
               </Text>
             </div>
 
@@ -835,7 +1202,8 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
               style={{
                 textAlign: 'center',
                 padding: '1.5rem',
-                background: 'linear-gradient(135deg, rgba(16, 126, 62, 0.1) 0%, rgba(16, 126, 62, 0.05) 100%)',
+                background:
+                  'linear-gradient(135deg, rgba(16, 126, 62, 0.1) 0%, rgba(16, 126, 62, 0.05) 100%)',
                 borderRadius: '0.75rem',
                 marginBottom: '1.5rem',
               }}
@@ -867,7 +1235,13 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                   marginTop: '0.5rem',
                 }}
               >
-                {successScore >= 90 ? 'Top Performer' : successScore >= 70 ? 'Above Average' : successScore >= 50 ? 'Average' : 'Below Average'}
+                {successScore >= 90
+                  ? 'Top Performer'
+                  : successScore >= 70
+                    ? 'Above Average'
+                    : successScore >= 50
+                      ? 'Average'
+                      : 'Below Average'}
               </Text>
             </div>
 
@@ -883,9 +1257,15 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                 onChange={(e: any) => setSuccessScore(e.target.value)}
                 style={{ width: '100%' }}
               />
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
-                <Text style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)' }}>Low</Text>
-                <Text style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)' }}>High</Text>
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}
+              >
+                <Text style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)' }}>
+                  Low
+                </Text>
+                <Text style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)' }}>
+                  High
+                </Text>
               </div>
             </div>
           </div>
@@ -908,7 +1288,7 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                 <Button
                   design="Emphasized"
                   onClick={handleTransmute}
-                  disabled={!canTransmute || previewLoading || (previewData?.contextRowCount === 0)}
+                  disabled={!canTransmute || previewLoading || previewData?.contextRowCount === 0}
                 >
                   Transmute
                 </Button>
@@ -926,7 +1306,9 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
           <div style={{ padding: '1rem' }}>
             {/* Context Summary */}
             <div style={{ marginBottom: '1.5rem' }}>
-              <Title level="H5" style={{ marginBottom: '0.75rem' }}>Context Summary</Title>
+              <Title level="H5" style={{ marginBottom: '0.75rem' }}>
+                Context Summary
+              </Title>
               <div
                 style={{
                   padding: '1rem',
@@ -936,23 +1318,17 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                 }}
               >
                 <Text style={{ display: 'block', marginBottom: '0.5rem' }}>
-                  <strong>Context Rows:</strong> {previewData.contextRowCount} of {previewData.totalContextItems} articles
+                  <strong>Context Rows:</strong> {previewData.contextRowCount} of{' '}
+                  {previewData.totalContextItems} articles
                 </Text>
                 {previewData.missingEnrichmentCount > 0 && (
-                  <MessageStrip
-                    design="Critical"
-                    hideCloseButton
-                    style={{ marginTop: '0.5rem' }}
-                  >
-                    {previewData.missingEnrichmentCount} articles missing enriched attributes (will be excluded)
+                  <MessageStrip design="Critical" hideCloseButton style={{ marginTop: '0.5rem' }}>
+                    {previewData.missingEnrichmentCount} articles missing enriched attributes (will
+                    be excluded)
                   </MessageStrip>
                 )}
                 {previewData.contextRowCount === 0 && (
-                  <MessageStrip
-                    design="Negative"
-                    hideCloseButton
-                    style={{ marginTop: '0.5rem' }}
-                  >
+                  <MessageStrip design="Negative" hideCloseButton style={{ marginTop: '0.5rem' }}>
                     No context rows available. Run image enrichment first.
                   </MessageStrip>
                 )}
@@ -961,17 +1337,37 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
 
             {/* Query Structure */}
             <div style={{ marginBottom: '1.5rem' }}>
-              <Title level="H5" style={{ marginBottom: '0.75rem' }}>Query Structure</Title>
+              <Title level="H5" style={{ marginBottom: '0.75rem' }}>
+                Query Structure
+              </Title>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
-                    <th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid var(--sapList_BorderColor)' }}>
+                    <th
+                      style={{
+                        textAlign: 'left',
+                        padding: '0.5rem',
+                        borderBottom: '1px solid var(--sapList_BorderColor)',
+                      }}
+                    >
                       Attribute
                     </th>
-                    <th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid var(--sapList_BorderColor)' }}>
+                    <th
+                      style={{
+                        textAlign: 'left',
+                        padding: '0.5rem',
+                        borderBottom: '1px solid var(--sapList_BorderColor)',
+                      }}
+                    >
                       Type
                     </th>
-                    <th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid var(--sapList_BorderColor)' }}>
+                    <th
+                      style={{
+                        textAlign: 'left',
+                        padding: '0.5rem',
+                        borderBottom: '1px solid var(--sapList_BorderColor)',
+                      }}
+                    >
                       Value
                     </th>
                   </tr>
@@ -979,26 +1375,56 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                 <tbody>
                   {previewData.lockedAttributes.map((attr) => (
                     <tr key={attr.key}>
-                      <td style={{ padding: '0.5rem', borderBottom: '1px solid var(--sapList_BorderColor)' }}>
+                      <td
+                        style={{
+                          padding: '0.5rem',
+                          borderBottom: '1px solid var(--sapList_BorderColor)',
+                        }}
+                      >
                         {attr.displayName}
                       </td>
-                      <td style={{ padding: '0.5rem', borderBottom: '1px solid var(--sapList_BorderColor)' }}>
+                      <td
+                        style={{
+                          padding: '0.5rem',
+                          borderBottom: '1px solid var(--sapList_BorderColor)',
+                        }}
+                      >
                         <span style={{ color: 'var(--sapContent_LabelColor)' }}>Locked</span>
                       </td>
-                      <td style={{ padding: '0.5rem', borderBottom: '1px solid var(--sapList_BorderColor)' }}>
+                      <td
+                        style={{
+                          padding: '0.5rem',
+                          borderBottom: '1px solid var(--sapList_BorderColor)',
+                        }}
+                      >
                         {attr.value}
                       </td>
                     </tr>
                   ))}
                   {previewData.aiVariables.map((attr) => (
                     <tr key={attr.key}>
-                      <td style={{ padding: '0.5rem', borderBottom: '1px solid var(--sapList_BorderColor)' }}>
+                      <td
+                        style={{
+                          padding: '0.5rem',
+                          borderBottom: '1px solid var(--sapList_BorderColor)',
+                        }}
+                      >
                         {attr.displayName}
                       </td>
-                      <td style={{ padding: '0.5rem', borderBottom: '1px solid var(--sapList_BorderColor)' }}>
+                      <td
+                        style={{
+                          padding: '0.5rem',
+                          borderBottom: '1px solid var(--sapList_BorderColor)',
+                        }}
+                      >
                         <span style={{ color: '#E9730C' }}>AI Variable</span>
                       </td>
-                      <td style={{ padding: '0.5rem', borderBottom: '1px solid var(--sapList_BorderColor)' }}>
+                      <td
+                        style={{
+                          padding: '0.5rem',
+                          borderBottom: '1px solid var(--sapList_BorderColor)',
+                        }}
+                      >
                         <code style={{ color: '#E9730C' }}>[PREDICT]</code>
                       </td>
                     </tr>
@@ -1009,7 +1435,13 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
 
             {/* Raw JSON (collapsible) */}
             <details>
-              <summary style={{ cursor: 'pointer', color: 'var(--sapContent_LabelColor)', marginBottom: '0.5rem' }}>
+              <summary
+                style={{
+                  cursor: 'pointer',
+                  color: 'var(--sapContent_LabelColor)',
+                  marginBottom: '0.5rem',
+                }}
+              >
                 View Raw JSON Payload
               </summary>
               <pre
