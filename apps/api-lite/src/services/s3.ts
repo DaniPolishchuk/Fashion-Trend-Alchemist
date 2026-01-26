@@ -103,3 +103,78 @@ export async function uploadGeneratedImageWithRetry(
 
   throw lastError || new Error('Upload failed after all retry attempts');
 }
+
+/**
+ * Deletes a generated image from SeaweedFS
+ * @param designId - The UUID of the generated design
+ * @returns True if deletion was successful, false otherwise
+ */
+export async function deleteGeneratedImage(designId: string): Promise<boolean> {
+  const filename = `${designId}.png`;
+  const url = `${filerConfig.baseUrl}/${filerConfig.generatedBucket}/${filename}`;
+
+  console.log(`[ImageCleanup] Deleting image from filer: ${url}`);
+
+  try {
+    const response = await fetch(url, {
+      method: 'DELETE',
+    });
+
+    if (response.ok) {
+      console.log(`[ImageCleanup] Image deleted successfully: ${designId}`);
+      return true;
+    } else if (response.status === 404) {
+      console.warn(`[ImageCleanup] Image not found (already deleted?): ${designId}`);
+      return true; // Consider 404 as success - image doesn't exist anyway
+    } else {
+      const errorText = await response.text();
+      console.error(`[ImageCleanup] Failed to delete image:`, {
+        designId,
+        status: response.status,
+        statusText: response.statusText,
+        errorBody: errorText,
+      });
+      return false;
+    }
+  } catch (error) {
+    console.error(`[ImageCleanup] Error deleting image:`, {
+      designId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
+/**
+ * Deletes a generated image with retry logic
+ * @param designId - The UUID of the generated design
+ * @param maxRetries - Maximum number of retry attempts (default: 2)
+ * @returns True if deletion was successful, false if all attempts failed
+ */
+export async function deleteGeneratedImageWithRetry(
+  designId: string,
+  maxRetries: number = 2
+): Promise<boolean> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt > 0) {
+        console.log(`[ImageCleanup] Delete retry attempt ${attempt}/${maxRetries} for ${designId}`);
+        // Wait before retrying
+        await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)));
+      }
+
+      const success = await deleteGeneratedImage(designId);
+      if (success) {
+        return true;
+      }
+    } catch (error) {
+      console.error(
+        `[ImageCleanup] Delete attempt ${attempt + 1} failed:`,
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  }
+
+  console.error(`[ImageCleanup] All delete attempts failed for ${designId}`);
+  return false;
+}
