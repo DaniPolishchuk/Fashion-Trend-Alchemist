@@ -10,8 +10,6 @@ import {
   Breadcrumbs,
   BreadcrumbsItem,
   Dialog,
-  Select,
-  Option,
   Input,
   Panel,
   ObjectStatus,
@@ -32,6 +30,8 @@ import '@ui5/webcomponents-icons/dist/synchronize.js';
 import '@ui5/webcomponents-icons/dist/customize.js';
 import '@ui5/webcomponents-icons/dist/ai.js';
 import '@ui5/webcomponents-icons/dist/camera.js';
+
+import SaveToCollectionPopover from '../components/SaveToCollectionPopover';
 
 // Types for multi-image support
 type ImageViewStatus = 'pending' | 'generating' | 'completed' | 'failed';
@@ -59,11 +59,6 @@ interface GeneratedDesign {
   createdAt?: string;
 }
 
-interface Collection {
-  id: string;
-  name: string;
-}
-
 type ImageView = 'front' | 'back' | 'model';
 
 function DesignDetail() {
@@ -76,10 +71,7 @@ function DesignDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedView, setSelectedView] = useState<ImageView>('front');
-  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
-  const [collections, setCollections] = useState<Collection[]>([]);
-  const [selectedCollectionId, setSelectedCollectionId] = useState<string>('');
-  const [saving, setSaving] = useState(false);
+  const [savePopoverOpen, setSavePopoverOpen] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [savingName, setSavingName] = useState(false);
@@ -243,45 +235,10 @@ function DesignDetail() {
     };
   }, [projectId, designId, generatedImages]);
 
-  // Fetch collections for save dialog
-  useEffect(() => {
-    const fetchCollections = async () => {
-      try {
-        const response = await fetch('/api/collections');
-        if (response.ok) {
-          const data = await response.json();
-          setCollections(data);
-        }
-      } catch (err) {
-        console.error('Failed to fetch collections:', err);
-      }
-    };
-
-    fetchCollections();
-  }, []);
-
-  // Handle save to collection
-  const handleSaveToCollection = async () => {
-    if (!selectedCollectionId || !designId) return;
-
-    try {
-      setSaving(true);
-      const response = await fetch(`/api/collections/${selectedCollectionId}/items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ generatedDesignId: designId }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to save to collection');
-      }
-
-      setSaveDialogOpen(false);
-    } catch (err) {
-      console.error('Failed to save to collection:', err);
-    } finally {
-      setSaving(false);
-    }
+  // Handle save success
+  const handleSaveSuccess = (collectionName: string) => {
+    console.log(`Successfully saved to collection: ${collectionName}`);
+    // TODO: Show toast notification
   };
 
   // Handle name editing
@@ -1119,48 +1076,26 @@ function DesignDetail() {
           <Button icon="synchronize" design="Default" onClick={handleRefineDesign}>
             Refine Design
           </Button>
-          <Button design="Emphasized" onClick={() => setSaveDialogOpen(true)}>
+          <Button
+            id="save-to-collection-btn"
+            design="Emphasized"
+            onClick={() => setSavePopoverOpen(true)}
+          >
             Save to Collection
           </Button>
         </div>
       </div>
 
-      {/* Save to Collection Dialog */}
-      <Dialog
-        open={saveDialogOpen}
-        headerText="Save to Collection"
-        footer={
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <Button onClick={() => setSaveDialogOpen(false)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button
-              design="Emphasized"
-              onClick={handleSaveToCollection}
-              disabled={!selectedCollectionId || saving}
-            >
-              {saving ? 'Saving...' : 'Save'}
-            </Button>
-          </div>
-        }
-      >
-        <div style={{ padding: '1rem 0' }}>
-          <Text style={{ display: 'block', marginBottom: '0.5rem' }}>Select a collection:</Text>
-          <Select
-            style={{ width: '100%' }}
-            onChange={(e: any) =>
-              setSelectedCollectionId(e.detail.selectedOption?.dataset?.id || '')
-            }
-          >
-            <Option>Select a collection...</Option>
-            {collections.map((collection) => (
-              <Option key={collection.id} data-id={collection.id}>
-                {collection.name}
-              </Option>
-            ))}
-          </Select>
-        </div>
-      </Dialog>
+      {/* Save to Collection Popover */}
+      {designId && (
+        <SaveToCollectionPopover
+          open={savePopoverOpen}
+          opener="save-to-collection-btn"
+          designId={designId}
+          onClose={() => setSavePopoverOpen(false)}
+          onSaved={handleSaveSuccess}
+        />
+      )}
 
       {/* Image Zoom Modal */}
       <Dialog
