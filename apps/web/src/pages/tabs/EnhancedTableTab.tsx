@@ -10,7 +10,6 @@ import {
   Bar,
   BusyIndicator,
   ObjectStatus,
-  CheckBox,
   Select,
   Option,
   Dialog,
