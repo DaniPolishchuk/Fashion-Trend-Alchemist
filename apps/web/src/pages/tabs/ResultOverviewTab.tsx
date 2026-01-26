@@ -18,12 +18,21 @@ import '@ui5/webcomponents-icons/dist/slim-arrow-right.js';
 import '@ui5/webcomponents-icons/dist/accept.js';
 import '@ui5/webcomponents-icons/dist/delete.js';
 
+// Types for multi-image support
+interface GeneratedImages {
+  front: { url: string | null; status: string };
+  back: { url: string | null; status: string };
+  model: { url: string | null; status: string };
+}
+
 interface GeneratedDesign {
   id: string;
   name: string;
   predictedAttributes: Record<string, string> | null;
   inputConstraints: Record<string, string> | null;
   generatedImageUrl: string | null;
+  generatedImages?: GeneratedImages | null;
+  createdAt?: string;
 }
 
 interface ResultOverviewTabProps {
@@ -265,9 +274,10 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
                       flexShrink: 0,
                     }}
                   >
-                    {design.generatedImageUrl ? (
+                    {/* Use generatedImages.front if available, fall back to generatedImageUrl */}
+                    {(design.generatedImages?.front?.url || design.generatedImageUrl) ? (
                       <img
-                        src={design.generatedImageUrl}
+                        src={design.generatedImages?.front?.url || design.generatedImageUrl || ''}
                         alt={design.name}
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       />

@@ -11,7 +11,6 @@ import {
   Bar,
   MessageStrip,
   BusyIndicator,
-  Toast,
   Slider,
 } from '@ui5/webcomponents-react';
 import AttributeSkeletonLoader from '../../components/AttributeSkeletonLoader';
@@ -99,10 +98,6 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
   const [transmutingDialogOpen, setTransmutingDialogOpen] = useState(false);
   const [designName, setDesignName] = useState<string>('');
   const [transmutingError, setTransmutingError] = useState<string | null>(null);
-  const [toastMessage, setToastMessage] = useState<{
-    text: string;
-    type: 'success' | 'error';
-  } | null>(null);
   const [successScore, setSuccessScore] = useState(100); // Default to 100% (maximum success)
 
   // Memoize productTypes as a stable string to prevent unnecessary refetches

@@ -103,7 +103,12 @@ The application connects to a cloud-hosted PostgreSQL database. Typical workflow
 - **customers** - Customer demographics (customer_id, age)
 - **projects** - User projects with scope and status (draft/active)
 - **project_context_items** - Context articles per project: top 25 and worst 25 articles (by velocity score) when >50 total results, otherwise all matching articles (up to 50)
-- **generated_designs** - AI-generated design outputs (project_id, name, input_constraints, predicted_attributes, generated_image_url)
+- **generated_designs** - AI-generated design outputs with multi-image support:
+  - `project_id`, `name`, `input_constraints`, `predicted_attributes`
+  - `generated_images` (JSONB) - Multi-view images: `{ front: { url, status }, back: { url, status }, model: { url, status } }`
+  - `generated_image_url` (legacy) - Single image URL for backward compatibility
+  - `image_generation_status` - Overall status: pending/generating/completed/failed/partial
+  - `created_at` - Timestamp for sorting
 - **collections** - User-created collections grouping generated designs (id, user_id, name, created_at)
 - **collection_items** - Junction table linking collections to generated designs (collection_id, generated_design_id)
 
@@ -136,9 +141,11 @@ The API server (`apps/api-lite/src/main.ts`) uses Fastify with the following end
 - `/api/projects/:id/lock-context` - Lock project context and save articles
 - `/api/collections` - List user collections with item counts and preview images (see `routes/collections.ts`)
 - `/api/projects/:id/rpt1-preview` - Get context row counts for RPT-1 preview
-- `/api/projects/:id/rpt1-predict` - Execute RPT-1 prediction via SAP AI Core
+- `/api/projects/:id/rpt1-predict` - Execute RPT-1 prediction via SAP AI Core (generates 3 images: front/back/model)
 - `/api/projects/:id/context-items` - Get all context items with enrichment status for Enhanced Table (see `routes/context-items.ts`)
 - `/api/projects/:id/retry-enrichment` - Retry failed enrichment items (POST with optional articleIds array)
+- `/api/projects/:id/generated-designs/:designId/image-status` - Get per-view image generation status
+- `/api/generate-design-name` - LLM-based creative name generation for designs (POST)
 
 ### Frontend Structure
 
@@ -158,7 +165,14 @@ Key pages:
 - `ProductSelection.tsx` - Product type taxonomy browser
 - `Analysis.tsx` - Filtering and analysis dashboard
 - `ProjectHub.tsx` - Project workspace hub with tabbed navigation (see below)
-- `DesignDetail.tsx` - Individual design detail view
+- `DesignDetail.tsx` - Individual design detail view with:
+  - Multi-image support (front/back/model views) with thumbnail strip
+  - Collapsible attribute panels (Predicted Attributes expanded, Given Attributes collapsed by default)
+  - Magic name generation via LLM (sparkle button)
+  - Image download functionality per view
+  - Full-size image modal with zoom
+  - "Refine Design" button that navigates to TheAlchemistTab with pre-populated attributes
+  - Real-time polling for image generation status
 
 #### ProjectHub Page (`/project/:projectId`)
 The ProjectHub is the main workspace for working with a project after it's created. It features:
@@ -175,10 +189,11 @@ The ProjectHub is the main workspace for working with a project after it's creat
    - Success Score slider (0-100%) on the right panel to set target performance
    - "Preview Request" button shows context summary and query structure
    - "Transmute (Run RPT-1)" button calls SAP AI Core to generate predictions
+   - **Refine Design Flow**: Supports `?refineFrom=<designId>` URL parameter to pre-populate attributes from an existing design (locked attributes stay locked, predicted become AI variables)
 2. **ResultOverviewTab** - Generated designs display
    - Paginated list of generated designs with search
-   - Shows design name, category, confidence score, thumbnail
-   - Uses mock data (ready for API integration)
+   - Shows design name, given/predicted attributes preview, front image thumbnail
+   - Supports multi-image format (uses `generatedImages.front` with fallback to legacy `generatedImageUrl`)
 3. **EnhancedTableTab** - Context items table with enrichment monitoring
    - Displays all project context items joined with article data
    - Shows enrichment status (successful/pending/failed) per item
@@ -361,6 +376,12 @@ The system is being built in phases (see docs/PRD.md):
   - Success score targeting (0-100%)
   - SAP AI Core integration with OAuth2 authentication
   - Velocity-based context with normalized scores
-- **Phase 4**: AI image generation for design visualization
+- **Phase 4 (IN PROGRESS)**: AI image generation for design visualization
+  - Multi-image generation: front, back, and model views (sequential generation)
+  - Per-view status tracking with real-time polling
+  - Design detail page with collapsible attribute panels
+  - Magic name generation via LLM
+  - Image download functionality
+  - Refine Design flow (pre-populate TheAlchemistTab from existing design)
 
-Current focus is on results display and image generation (Phase 4).
+Current focus is on UI polish and additional image generation features.
