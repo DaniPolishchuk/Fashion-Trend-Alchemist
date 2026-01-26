@@ -25,6 +25,7 @@ import {
   type PreviewContextQuery,
   type LockContextInput,
 } from '@fashion/types';
+import { API_LIMITS } from '../constants.js';
 
 const HARDCODED_USER_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -209,14 +210,16 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
       const allResults = await allArticlesQuery;
 
-      // If we have more than 50 results, return top 25 and worst 25
+      // Performance optimization: If we have more than MAX_PREVIEW_RESULTS,
+      // return top PREVIEW_TOP_COUNT and worst PREVIEW_WORST_COUNT
+      // This maintains the same business logic but uses named constants
       let results;
-      if (allResults.length > 50) {
-        const top25 = allResults.slice(0, 25);
-        const worst25 = allResults.slice(-25);
+      if (allResults.length > API_LIMITS.MAX_PREVIEW_RESULTS) {
+        const top25 = allResults.slice(0, API_LIMITS.PREVIEW_TOP_COUNT);
+        const worst25 = allResults.slice(-API_LIMITS.PREVIEW_WORST_COUNT);
         results = [...top25, ...worst25];
       } else {
-        // If 50 or fewer, return all
+        // If MAX_PREVIEW_RESULTS or fewer, return all
         results = allResults;
       }
 
@@ -401,11 +404,11 @@ export default async function projectRoutes(fastify: FastifyInstance) {
         'Deleting project with generated designs'
       );
 
-      // Clean up images from SeaweedFS (async, non-blocking)
+      // Clean up images from SeaweedFS - wait for completion to avoid orphaned files
       if (designs.length > 0) {
         const { deleteGeneratedImageWithRetry } = await import('../services/s3.js');
 
-        // Delete images in parallel (don't block DB transaction)
+        // Delete images in parallel and wait for all to complete
         const imageDeletions = designs
           .filter((design) => design.generatedImageUrl) // Only delete if image exists
           .map(async (design) => {
@@ -416,25 +419,37 @@ export default async function projectRoutes(fastify: FastifyInstance) {
               } else {
                 fastify.log.warn({ designId: design.id }, 'Failed to delete image from SeaweedFS');
               }
+              return success;
             } catch (error) {
               fastify.log.error(
                 { designId: design.id, error },
                 'Error during image deletion from SeaweedFS'
               );
+              return false;
             }
           });
 
-        // Run image deletions without blocking DB transaction
-        Promise.allSettled(imageDeletions).then((results) => {
-          const successCount = results.filter((r) => r.status === 'fulfilled').length;
-          fastify.log.info(
-            { projectId, totalImages: designs.length, deletedImages: successCount },
-            'Image cleanup completed'
+        // Wait for all image deletions to complete
+        const results = await Promise.allSettled(imageDeletions);
+        const successCount = results.filter(
+          (r) => r.status === 'fulfilled' && r.value === true
+        ).length;
+        const failedCount = results.length - successCount;
+
+        fastify.log.info(
+          { projectId, totalImages: designs.length, deleted: successCount, failed: failedCount },
+          'Image cleanup completed'
+        );
+
+        if (failedCount > 0) {
+          fastify.log.warn(
+            { failedCount },
+            'Some images failed to delete - orphaned files may exist in SeaweedFS'
           );
-        });
+        }
       }
 
-      // Delete in transaction for atomicity (don't wait for image cleanup)
+      // Delete in transaction for atomicity (images deleted first)
       await db.transaction(async (tx) => {
         // 1. Delete all generated designs for this project
         await tx.delete(generatedDesigns).where(eq(generatedDesigns.projectId, projectId));
@@ -484,9 +499,9 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
           const pinnedCount = pinnedCountResult[0]?.count || 0;
 
-          if (pinnedCount >= 3) {
+          if (pinnedCount >= API_LIMITS.MAX_PINNED_PROJECTS) {
             return reply.status(400).send({
-              error: 'Maximum 3 projects can be pinned',
+              error: `Maximum ${API_LIMITS.MAX_PINNED_PROJECTS} projects can be pinned`,
               code: 'MAX_PINS_REACHED',
             });
           }
@@ -711,8 +726,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
             model: { url: null, status: 'pending' },
           },
           // Legacy single image URL (for backward compatibility)
-          imageUrl:
-            (design.generatedImages as any)?.front?.url || design.generatedImageUrl || null,
+          imageUrl: (design.generatedImages as any)?.front?.url || design.generatedImageUrl || null,
         });
       } catch (error: any) {
         fastify.log.error({ error }, 'Failed to fetch image status');

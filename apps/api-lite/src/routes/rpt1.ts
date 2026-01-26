@@ -4,6 +4,7 @@
  */
 
 import { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import {
   db,
   projects,
@@ -17,8 +18,13 @@ import {
 } from '@fashion/db';
 import type { GeneratedImages } from '@fashion/db';
 import { rpt1Config } from '@fashion/config';
-import { buildImagePromptForView, generateImageWithRetry, type ImageView } from '../services/imageGeneration.js';
+import {
+  buildImagePromptForView,
+  generateImageWithRetry,
+  type ImageView,
+} from '../services/imageGeneration.js';
 import { uploadGeneratedImageForViewWithRetry } from '../services/s3.js';
+import { API_LIMITS, CACHE_TTL_MS } from '../constants.js';
 
 interface PredictRequestBody {
   lockedAttributes: Record<string, string>;
@@ -48,9 +54,49 @@ interface OAuthTokenResponse {
 }
 
 /**
+ * Zod validation schema for RPT-1 prediction request
+ */
+const PredictRequestSchema = z.object({
+  lockedAttributes: z.record(z.string(), z.string()),
+  aiVariables: z
+    .array(z.string())
+    .min(1, 'At least one AI variable required')
+    .max(
+      API_LIMITS.MAX_AI_VARIABLES,
+      `Maximum ${API_LIMITS.MAX_AI_VARIABLES} AI variables allowed`
+    ),
+  successScore: z.number().min(0).max(100).default(100),
+});
+
+/**
+ * Token cache - stores OAuth token for 11 hours
+ */
+const tokenCache = {
+  token: null as string | null,
+  expiresAt: 0,
+};
+
+/**
+ * Deployment URL cache - stores RPT-1 deployment URL for 11 hours
+ */
+const deploymentCache = {
+  url: null as string | null,
+  fetchedAt: 0,
+};
+
+/**
  * Get OAuth2 access token from SAP AI Core
+ * Uses 11-hour cache to avoid redundant auth requests
  */
 async function getAccessToken(fastify: FastifyInstance): Promise<string> {
+  // Check cache first
+  const now = Date.now();
+  if (tokenCache.token && now < tokenCache.expiresAt) {
+    fastify.log.info('✅ Using cached OAuth token');
+    return tokenCache.token;
+  }
+
+  fastify.log.info('🔄 Fetching new OAuth token...');
   const tokenUrl = `${rpt1Config.authUrl}/oauth/token`;
 
   // Create Basic Auth header
@@ -94,16 +140,31 @@ async function getAccessToken(fastify: FastifyInstance): Promise<string> {
   }
 
   const tokenData = (await response.json()) as OAuthTokenResponse;
+
+  // Cache token for 11 hours
+  tokenCache.token = tokenData.access_token;
+  tokenCache.expiresAt = now + CACHE_TTL_MS.TOKEN_AND_DEPLOYMENT;
+
+  fastify.log.info({ expiresIn: '11 hours' }, '✅ OAuth token cached');
   return tokenData.access_token;
 }
 
 /**
  * Discover the RPT-1 deployment URL from SAP AI Core
+ * Uses 11-hour cache to avoid redundant discovery requests
  */
 async function getRpt1DeploymentUrl(
   fastify: FastifyInstance,
   accessToken: string
 ): Promise<string> {
+  // Check cache first
+  const now = Date.now();
+  if (deploymentCache.url && now - deploymentCache.fetchedAt < CACHE_TTL_MS.TOKEN_AND_DEPLOYMENT) {
+    fastify.log.info({ url: deploymentCache.url }, '✅ Using cached deployment URL');
+    return deploymentCache.url;
+  }
+
+  fastify.log.info('🔄 Discovering RPT-1 deployment...');
   const deploymentsUrl = `${rpt1Config.aiApiUrl}/v2/lm/deployments`;
 
   const response = await fetch(deploymentsUrl, {
@@ -148,15 +209,22 @@ async function getRpt1DeploymentUrl(
     throw new Error('No running RPT-1 deployment found in AI Core');
   }
 
+  const url = rpt1Deployment.deploymentUrl;
+
+  // Cache deployment URL for 11 hours
+  deploymentCache.url = url;
+  deploymentCache.fetchedAt = now;
+
   fastify.log.info(
     {
       configurationName: rpt1Deployment.configurationName,
-      deploymentUrl: rpt1Deployment.deploymentUrl,
+      deploymentUrl: url,
+      expiresIn: '11 hours',
     },
-    'Found RPT-1 deployment'
+    '✅ RPT-1 deployment URL cached'
   );
 
-  return rpt1Deployment.deploymentUrl;
+  return url;
 }
 
 export default async function rpt1Routes(fastify: FastifyInstance) {
@@ -208,26 +276,10 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
   }>('/projects/:id/rpt1-predict', async (request, reply) => {
     try {
       const { id: projectId } = request.params;
-      const { lockedAttributes, aiVariables, successScore } = request.body;
 
-      // Validate input
-      if (!aiVariables || aiVariables.length === 0) {
-        return reply.status(400).send({
-          error: 'At least one AI variable is required',
-          details: 'aiVariables array cannot be empty',
-        });
-      }
-
-      if (aiVariables.length > 10) {
-        return reply.status(400).send({
-          error: 'Too many AI variables',
-          details: 'Maximum 10 AI variables allowed for RPT-1 Large',
-        });
-      }
-
-      // Validate success score
-      const targetSuccessScore =
-        typeof successScore === 'number' ? Math.max(0, Math.min(100, successScore)) : 100;
+      // Validate input with Zod schema
+      const validated = PredictRequestSchema.parse(request.body);
+      const { lockedAttributes, aiVariables, successScore: targetSuccessScore } = validated;
 
       // Verify project exists and is active
       const project = await db.query.projects.findFirst({
@@ -513,7 +565,12 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
 
             if (imageBuffer) {
               // Upload to S3/SeaweedFS with retry logic
-              const imageUrl = await uploadGeneratedImageForViewWithRetry(designId, imageBuffer, view, 2);
+              const imageUrl = await uploadGeneratedImageForViewWithRetry(
+                designId,
+                imageBuffer,
+                view,
+                2
+              );
               generatedImages[view] = { url: imageUrl, status: 'completed' };
               fastify.log.info({ designId, view, imageUrl }, `${view} image completed`);
             } else {

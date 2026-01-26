@@ -1,3 +1,8 @@
+/**
+ * Attribute Generation Dialog Component
+ * Refactored with constants, CSS modules, and custom hooks
+ */
+
 import { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -18,6 +23,20 @@ import '@ui5/webcomponents-icons/dist/decline.js';
 import '@ui5/webcomponents-icons/dist/hint.js';
 import '@ui5/webcomponents-icons/dist/product.js';
 import '@ui5/webcomponents-icons/dist/question-mark.js';
+import '@ui5/webcomponents-icons/dist/history.js';
+import '@ui5/webcomponents-icons/dist/ai.js';
+import '@ui5/webcomponents-icons/dist/da.js';
+
+import { useAttributeEditor } from '../hooks/useAttributeEditor';
+import { useOptionsManager } from '../hooks/useOptionsManager';
+import {
+  formatAttributeName,
+  getSeasonalLens,
+  flattenAttributes,
+  parseAttributeKey,
+} from '../utils/attributeFormatting';
+import { DIALOG, TEXT, ICONS, SIZES } from '../constants/attributeDialog';
+import styles from '../styles/components/AttributeGenerationDialog.module.css';
 
 interface AttributeGenerationDialogProps {
   open: boolean;
@@ -50,21 +69,12 @@ export function AttributeGenerationDialog({
 }: AttributeGenerationDialogProps) {
   // Local state for managing attributes
   const [attributes, setAttributes] = useState<any>({});
-  const [editingAttribute, setEditingAttribute] = useState<string | null>(null);
-  const [editingAttributeValue, setEditingAttributeValue] = useState('');
-  const [addingNewAttribute, setAddingNewAttribute] = useState(false);
-  const [newAttributeName, setNewAttributeName] = useState('');
-
-  // Options popup state
-  const [optionsPopupOpen, setOptionsPopupOpen] = useState(false);
-  const [selectedAttributeKey, setSelectedAttributeKey] = useState<string | null>(null);
-  const [editingOption, setEditingOption] = useState<number | null>(null);
-  const [editingOptionValue, setEditingOptionValue] = useState('');
-  const [addingNewOption, setAddingNewOption] = useState(false);
-  const [newOptionValue, setNewOptionValue] = useState('');
-
-  // Info popup state
   const [infoPopupOpen, setInfoPopupOpen] = useState(false);
+
+  // Custom hooks
+  const defaultCategory = selectedTypes[0] || 'General';
+  const attributeEditor = useAttributeEditor(attributes, setAttributes, defaultCategory);
+  const optionsManager = useOptionsManager(attributes, setAttributes);
 
   // Sync generated attributes to local state
   useEffect(() => {
@@ -73,185 +83,17 @@ export function AttributeGenerationDialog({
     }
   }, [generatedAttributes]);
 
-  // Format attribute name: remove product type prefix and convert to Title Case
-  const formatAttributeName = (name: string): string => {
-    // Remove product type prefixes
-    let cleanName = name;
-    selectedTypes.forEach((type) => {
-      const prefix = type.toLowerCase() + '_';
-      if (cleanName.toLowerCase().startsWith(prefix)) {
-        cleanName = cleanName.substring(prefix.length);
-      }
-    });
-
-    // Convert snake_case to Title Case
-    return cleanName
-      .split('_')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  };
-
-  // Format seasonal lens display
-  const getSeasonalLens = () => {
-    if (selectedSeason) {
-      return `${selectedSeason.charAt(0).toUpperCase() + selectedSeason.slice(1)}`;
-    }
-    if (dateRange) {
-      return `${dateRange.from} to ${dateRange.to}`;
-    }
-    return 'All time';
-  };
-
-  // Get all attributes as flat list
-  const getAttributesList = () => {
-    const list: Array<{ category: string; key: string; name: string; values: string[] }> = [];
-    Object.entries(attributes).forEach(([category, attrs]: [string, any]) => {
-      Object.entries(attrs).forEach(([key, values]: [string, any]) => {
-        list.push({
-          category,
-          key,
-          name: formatAttributeName(key),
-          values: Array.isArray(values) ? values : [values],
-        });
-      });
-    });
-    return list;
-  };
-
-  // Handlers: Attribute actions
-  const handleEditAttribute = (category: string, key: string, currentName: string) => {
-    setEditingAttribute(`${category}::${key}`);
-    setEditingAttributeValue(currentName);
-  };
-
-  const handleSaveAttributeEdit = (category: string, oldKey: string) => {
-    if (editingAttributeValue.trim()) {
-      const newKey = editingAttributeValue.toLowerCase().replace(/\s+/g, '_');
-      const updatedAttrs = { ...attributes };
-
-      if (updatedAttrs[category]) {
-        const values = updatedAttrs[category][oldKey];
-        delete updatedAttrs[category][oldKey];
-        updatedAttrs[category][newKey] = values;
-      }
-
-      setAttributes(updatedAttrs);
-    }
-    setEditingAttribute(null);
-    setEditingAttributeValue('');
-  };
-
-  const handleCancelAttributeEdit = () => {
-    setEditingAttribute(null);
-    setEditingAttributeValue('');
-  };
-
-  const handleDeleteAttribute = (category: string, key: string) => {
-    const updatedAttrs = { ...attributes };
-    if (updatedAttrs[category]) {
-      delete updatedAttrs[category][key];
-      if (Object.keys(updatedAttrs[category]).length === 0) {
-        delete updatedAttrs[category];
-      }
-    }
-    setAttributes(updatedAttrs);
-  };
-
-  const handleAddNewAttribute = () => {
-    if (newAttributeName.trim()) {
-      const key = newAttributeName.toLowerCase().replace(/\s+/g, '_');
-      const category = selectedTypes[0] || 'General'; // Use first product type as category
-
-      const updatedAttrs = { ...attributes };
-      if (!updatedAttrs[category]) {
-        updatedAttrs[category] = {};
-      }
-      updatedAttrs[category][key] = [];
-
-      setAttributes(updatedAttrs);
-      setNewAttributeName('');
-      setAddingNewAttribute(false);
-    }
-  };
-
-  // Handlers: Options popup
-  const handleOpenOptionsPopup = (category: string, key: string) => {
-    setSelectedAttributeKey(`${category}::${key}`);
-    setOptionsPopupOpen(true);
-  };
-
-  const handleCloseOptionsPopup = () => {
-    setOptionsPopupOpen(false);
-    setSelectedAttributeKey(null);
-    setEditingOption(null);
-    setAddingNewOption(false);
-  };
-
-  const getCurrentOptions = (): string[] => {
-    if (!selectedAttributeKey) return [];
-    const [category, key] = selectedAttributeKey.split('::');
-    return attributes[category]?.[key] || [];
-  };
-
-  const handleEditOption = (index: number, currentValue: string) => {
-    setEditingOption(index);
-    setEditingOptionValue(currentValue);
-  };
-
-  const handleSaveOptionEdit = (index: number) => {
-    if (editingOptionValue.trim() && selectedAttributeKey) {
-      const [category, key] = selectedAttributeKey.split('::');
-      const updatedAttrs = { ...attributes };
-      if (updatedAttrs[category]?.[key]) {
-        updatedAttrs[category][key][index] = editingOptionValue.trim();
-        setAttributes(updatedAttrs);
-      }
-    }
-    setEditingOption(null);
-    setEditingOptionValue('');
-  };
-
-  const handleCancelOptionEdit = () => {
-    setEditingOption(null);
-    setEditingOptionValue('');
-  };
-
-  const handleDeleteOption = (index: number) => {
-    if (selectedAttributeKey) {
-      const [category, key] = selectedAttributeKey.split('::');
-      const updatedAttrs = { ...attributes };
-      if (updatedAttrs[category]?.[key]) {
-        updatedAttrs[category][key] = updatedAttrs[category][key].filter(
-          (_: any, i: number) => i !== index
-        );
-        setAttributes(updatedAttrs);
-      }
-    }
-  };
-
-  const handleAddNewOption = () => {
-    if (newOptionValue.trim() && selectedAttributeKey) {
-      const [category, key] = selectedAttributeKey.split('::');
-      const updatedAttrs = { ...attributes };
-      if (updatedAttrs[category]?.[key]) {
-        updatedAttrs[category][key].push(newOptionValue.trim());
-        setAttributes(updatedAttrs);
-      }
-      setNewOptionValue('');
-      setAddingNewOption(false);
-    }
-  };
+  // Get formatted attribute list
+  const attributesList = flattenAttributes(attributes);
+  const currentOptions = optionsManager.getCurrentOptions();
+  const selectedAttributeName = optionsManager.selectedAttributeKey
+    ? formatAttributeName(parseAttributeKey(optionsManager.selectedAttributeKey)[1], selectedTypes)
+    : '';
 
   const handleSaveConfiguration = () => {
     onSave(attributes);
     onClose();
   };
-
-  const attributesList = getAttributesList();
-  const currentOptions = getCurrentOptions();
-  const selectedAttributeName = selectedAttributeKey
-    ? formatAttributeName(selectedAttributeKey.split('::')[1])
-    : '';
 
   return (
     <>
@@ -259,19 +101,19 @@ export function AttributeGenerationDialog({
       <Dialog
         open={open}
         style={{
-          width: '90vw',
-          height: '90vh',
-          maxWidth: '1400px',
-          maxHeight: '900px',
+          width: DIALOG.MAIN.WIDTH,
+          height: DIALOG.MAIN.HEIGHT,
+          maxWidth: DIALOG.MAIN.MAX_WIDTH,
+          maxHeight: DIALOG.MAIN.MAX_HEIGHT,
         }}
         headerText=""
         footer={
           <Bar
             design="Footer"
             endContent={
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div className={styles.footerActions}>
                 <Button design="Default" onClick={onClose}>
-                  Close
+                  {TEXT.BUTTON_CLOSE}
                 </Button>
                 <Button
                   design="Emphasized"
@@ -282,132 +124,73 @@ export function AttributeGenerationDialog({
                     Object.keys(generatedAttributes).length === 0
                   }
                 >
-                  Proceed with the Data Enrichment
+                  {TEXT.BUTTON_PROCEED}
                 </Button>
               </div>
             }
           />
         }
       >
-        <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-          {/* Left Panel - Configuration Scope (30%) */}
-          <div
-            style={{
-              width: '30%',
-              borderRight: '1px solid var(--sapList_BorderColor)',
-              padding: '1.5rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '1.5rem',
-              background: 'var(--sapBackgroundColor)',
-            }}
-          >
-            <div
-              style={{
-                paddingBottom: '1.5rem',
-                borderBottom: '1px solid var(--sapList_BorderColor)',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '1rem',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Title level="H5" style={{ fontSize: '1.25rem' }}>
-                    Refine Attribute Generation
+        <div className={styles.dialogContainer}>
+          {/* Left Panel - Configuration Scope */}
+          <div className={styles.leftPanel}>
+            <div className={styles.refineSection}>
+              <div className={styles.refineHeader}>
+                <div className={styles.refineTitle}>
+                  <Title level="H5" className={styles.refineTitleText}>
+                    {TEXT.TITLE_REFINE}
                   </Title>
                   <Button
                     design="Transparent"
-                    icon="question-mark"
+                    icon={ICONS.QUESTION_MARK}
                     onClick={() => setInfoPopupOpen(true)}
-                    style={{
-                      width: '24px',
-                      height: '24px',
-                      minWidth: '24px',
-                      padding: 0,
-                    }}
+                    className={styles.helpButton}
                   />
                 </div>
               </div>
-              <div
-                style={{
-                  display: 'flex',
-                  gap: '1rem',
-                  alignItems: 'flex-start',
-                  flexDirection: 'column',
-                }}
-              >
-                <div style={{ flex: 1, width: '100%' }}>
+              <div className={styles.feedbackContainer}>
+                <div className={styles.feedbackTextArea}>
                   <TextArea
                     value={feedbackText}
                     onInput={(e: any) => onFeedbackChange(e.target.value)}
-                    placeholder="Provide additional feedback to enhance attribute generation..."
-                    rows={3}
+                    placeholder={TEXT.PLACEHOLDER_FEEDBACK}
+                    rows={SIZES.FEEDBACK_ROWS}
                     style={{ width: '100%' }}
                   />
                 </div>
                 <Button
                   design="Attention"
-                  icon="da"
-                  onClick={() => onRegenerate()}
+                  icon={ICONS.DA}
+                  onClick={onRegenerate}
                   disabled={attributesLoading}
                 >
-                  Regenerate
+                  {TEXT.BUTTON_REGENERATE}
                 </Button>
               </div>
             </div>
+
             <div>
-              <Title
-                level="H5"
-                style={{
-                  marginBottom: '0.5rem',
-                  color: 'var(--sapContent_LabelColor)',
-                  fontSize: '1rem',
-                  textTransform: 'uppercase',
-                }}
-              >
-                Configuration Scope
+              <Title level="H5" className={styles.configSectionTitle}>
+                {TEXT.SECTION_CONFIG_SCOPE}
               </Title>
             </div>
 
             {/* Product Group */}
-            <div>
-              <Label
-                style={{
-                  fontSize: '0.875rem',
-                  fontWeight: '600',
-                  marginBottom: '0.5rem',
-                  display: 'block',
-                }}
-              >
-                Product Group
-              </Label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Icon name="product" style={{ color: 'var(--sapContent_IconColor)' }} />
+            <div className={styles.configItem}>
+              <Label className={styles.configLabel}>{TEXT.LABEL_PRODUCT_GROUP}</Label>
+              <div className={styles.configValue}>
+                <Icon name={ICONS.PRODUCT} className={styles.configIcon} />
                 <Text>{productGroup}</Text>
               </div>
             </div>
 
             {/* Product Types */}
-            <div>
-              <Label
-                style={{
-                  fontSize: '0.875rem',
-                  fontWeight: '600',
-                  marginBottom: '0.5rem',
-                  display: 'block',
-                }}
-              >
-                Product Types
-              </Label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div className={styles.configItem}>
+              <Label className={styles.configLabel}>{TEXT.LABEL_PRODUCT_TYPES}</Label>
+              <div className={styles.configTypesList}>
                 {selectedTypes.map((type) => (
-                  <div key={type} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Icon name="product" style={{ color: 'var(--sapContent_IconColor)' }} />
+                  <div key={type} className={styles.configValue}>
+                    <Icon name={ICONS.PRODUCT} className={styles.configIcon} />
                     <Text>{type}</Text>
                   </div>
                 ))}
@@ -415,242 +198,139 @@ export function AttributeGenerationDialog({
             </div>
 
             {/* Seasonal Lens */}
-            <div>
-              <Label
-                style={{
-                  fontSize: '0.875rem',
-                  fontWeight: '600',
-                  marginBottom: '0.5rem',
-                  display: 'block',
-                }}
-              >
-                Seasonal Lens
-              </Label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Icon name="history" style={{ color: 'var(--sapContent_IconColor)' }} />
-                <Text>{getSeasonalLens()}</Text>
+            <div className={styles.configItem}>
+              <Label className={styles.configLabel}>{TEXT.LABEL_SEASONAL_LENS}</Label>
+              <div className={styles.configValue}>
+                <Icon name={ICONS.HISTORY} className={styles.configIcon} />
+                <Text>{getSeasonalLens(selectedSeason, dateRange)}</Text>
               </div>
             </div>
 
             {/* Info Box */}
-            <div
-              style={{
-                padding: '1rem',
-                background: 'var(--sapInformationBackground)',
-                border: '1px solid var(--sapInformationBorderColor)',
-                borderRadius: '0.5rem',
-              }}
-            >
-              <Icon
-                name="hint"
-                style={{ color: 'var(--sapInformativeColor)', marginBottom: '0.5rem' }}
-              />
-              <Text style={{ fontSize: '0.875rem', color: 'var(--sapContent_LabelColor)' }}>
-                Attributes are generated based on the selected product types.
-              </Text>
+            <div className={styles.infoBox}>
+              <Icon name={ICONS.HINT} className={styles.infoBoxIcon} />
+              <Text className={styles.infoBoxText}>{TEXT.MESSAGE_INFO_BOX}</Text>
             </div>
           </div>
 
-          {/* Right Panel - Attribute Generation (70%) */}
-          <div
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            {/* Generated Attributes List */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '1rem',
-                }}
-              >
-                <Title level="H5">Generated Attributes</Title>
+          {/* Right Panel - Attribute Generation */}
+          <div className={styles.rightPanel}>
+            <div className={styles.attributesContainer}>
+              <div className={styles.attributesHeader}>
+                <Title level="H5">{TEXT.TITLE_GENERATED}</Title>
                 <Button
                   design="Transparent"
-                  icon="add"
-                  onClick={() => setAddingNewAttribute(true)}
+                  icon={ICONS.ADD}
+                  onClick={attributeEditor.startAddNew}
                   disabled={attributesLoading}
                 >
-                  Add Attribute
+                  {TEXT.BUTTON_ADD_ATTRIBUTE}
                 </Button>
               </div>
 
               {attributesLoading ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    height: '300px',
-                  }}
-                >
+                <div className={styles.loadingContainer}>
                   <BusyIndicator active size="L" />
                 </div>
-              ) : attributesList.length === 0 && !addingNewAttribute ? (
-                <div
-                  style={{
-                    textAlign: 'center',
-                    padding: '3rem',
-                    color: 'var(--sapContent_LabelColor)',
-                  }}
-                >
-                  <Text>No attributes generated yet</Text>
+              ) : attributesList.length === 0 && !attributeEditor.addingNewAttribute ? (
+                <div className={styles.emptyState}>
+                  <Text>{TEXT.MESSAGE_NO_ATTRIBUTES}</Text>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div className={styles.attributesList}>
                   {/* Add New Attribute Row */}
-                  {addingNewAttribute && (
-                    <div
-                      style={{
-                        border: '2px dashed var(--sapList_BorderColor)',
-                        borderRadius: '0.25rem',
-                        padding: '0.75rem 1rem',
-                        background: 'var(--sapList_Background)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '1rem',
-                      }}
-                    >
+                  {attributeEditor.addingNewAttribute && (
+                    <div className={styles.addNewRow}>
                       <Input
-                        value={newAttributeName}
-                        onInput={(e: any) => setNewAttributeName(e.target.value)}
-                        placeholder="Enter attribute name..."
-                        style={{ flex: 1 }}
+                        value={attributeEditor.newAttributeName}
+                        onInput={(e: any) => attributeEditor.setNewAttributeName(e.target.value)}
+                        placeholder={TEXT.PLACEHOLDER_ATTRIBUTE_NAME}
+                        className={styles.addNewInput}
                         onKeyDown={(e: any) => {
-                          if (e.key === 'Enter') handleAddNewAttribute();
-                          if (e.key === 'Escape') {
-                            setAddingNewAttribute(false);
-                            setNewAttributeName('');
-                          }
+                          if (e.key === 'Enter') attributeEditor.addNew();
+                          if (e.key === 'Escape') attributeEditor.cancelAddNew();
                         }}
                       />
-                      <Button design="Emphasized" onClick={handleAddNewAttribute}>
-                        Add
+                      <Button design="Emphasized" onClick={attributeEditor.addNew}>
+                        {TEXT.ACTION_ADD}
                       </Button>
-                      <Button
-                        design="Transparent"
-                        onClick={() => {
-                          setAddingNewAttribute(false);
-                          setNewAttributeName('');
-                        }}
-                      >
-                        Cancel
+                      <Button design="Transparent" onClick={attributeEditor.cancelAddNew}>
+                        {TEXT.ACTION_CANCEL}
                       </Button>
                     </div>
                   )}
 
                   {/* Attribute List */}
                   {attributesList.map((attr, index) => {
-                    const isEditing = editingAttribute === `${attr.category}::${attr.key}`;
+                    const attributeKey = `${attr.category}::${attr.key}`;
+                    const isEditing = attributeEditor.editingAttribute === attributeKey;
+                    const formattedName = formatAttributeName(attr.key, selectedTypes);
 
                     return (
                       <div
                         key={`${attr.category}-${attr.key}-${index}`}
-                        style={{
-                          border: '1px solid var(--sapList_BorderColor)',
-                          borderRadius: '0.25rem',
-                          padding: '0.75rem 1rem',
-                          background: 'var(--sapList_Background)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s',
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!isEditing)
-                            e.currentTarget.style.background = 'var(--sapList_Hover_Background)';
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!isEditing)
-                            e.currentTarget.style.background = 'var(--sapList_Background)';
-                        }}
+                        className={styles.attributeItem}
                       >
-                        {/* Attribute Name - Clickable or Editable */}
                         {isEditing ? (
-                          <Input
-                            value={editingAttributeValue}
-                            onInput={(e: any) => setEditingAttributeValue(e.target.value)}
-                            style={{ flex: 1, marginRight: '1rem' }}
-                            onKeyDown={(e: any) => {
-                              if (e.key === 'Enter')
-                                handleSaveAttributeEdit(attr.category, attr.key);
-                              if (e.key === 'Escape') handleCancelAttributeEdit();
-                            }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              flex: 1,
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '0.5rem',
-                            }}
-                            onClick={() => handleOpenOptionsPopup(attr.category, attr.key)}
-                          >
-                            <Icon
-                              name="ai"
-                              style={{ color: 'var(--sapContent_IconColor)', fontSize: '1rem' }}
+                          <>
+                            <Input
+                              value={attributeEditor.editingAttributeValue}
+                              onInput={(e: any) =>
+                                attributeEditor.setEditingAttributeValue(e.target.value)
+                              }
+                              className={styles.attributeEditInput}
+                              onKeyDown={(e: any) => {
+                                if (e.key === 'Enter')
+                                  attributeEditor.saveEdit(attr.category, attr.key);
+                                if (e.key === 'Escape') attributeEditor.cancelEdit();
+                              }}
                             />
-                            <div
-                              style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}
-                            >
-                              <Text style={{ fontWeight: '600', fontSize: '0.875rem' }}>
-                                {attr.name}
-                              </Text>
-                              <Text
-                                style={{
-                                  fontSize: '0.75rem',
-                                  color: 'var(--sapContent_LabelColor)',
-                                }}
-                              >
-                                {attr.values.length} option{attr.values.length !== 1 ? 's' : ''}
-                              </Text>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Action Buttons */}
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                          {isEditing ? (
-                            <>
+                            <div className={styles.attributeActions}>
                               <Button
                                 design="Emphasized"
-                                onClick={() => handleSaveAttributeEdit(attr.category, attr.key)}
+                                onClick={() => attributeEditor.saveEdit(attr.category, attr.key)}
                               >
-                                Save
+                                {TEXT.ACTION_SAVE}
                               </Button>
-                              <Button design="Transparent" onClick={handleCancelAttributeEdit}>
-                                Cancel
+                              <Button design="Transparent" onClick={attributeEditor.cancelEdit}>
+                                {TEXT.ACTION_CANCEL}
                               </Button>
-                            </>
-                          ) : (
-                            <>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div
+                              className={styles.attributeContent}
+                              onClick={() => optionsManager.openPopup(attr.category, attr.key)}
+                            >
+                              <Icon name={ICONS.AI} className={styles.attributeIcon} />
+                              <div className={styles.attributeInfo}>
+                                <Text className={styles.attributeName}>{formattedName}</Text>
+                                <Text className={styles.attributeCount}>
+                                  {attr.values.length} option{attr.values.length !== 1 ? 's' : ''}
+                                </Text>
+                              </div>
+                            </div>
+                            <div className={styles.attributeActions}>
                               <Button
                                 design="Transparent"
-                                icon="edit"
+                                icon={ICONS.EDIT}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleEditAttribute(attr.category, attr.key, attr.name);
+                                  attributeEditor.startEdit(attr.category, attr.key, formattedName);
                                 }}
                               />
                               <Button
                                 design="Transparent"
-                                icon="delete"
+                                icon={ICONS.DELETE}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleDeleteAttribute(attr.category, attr.key);
+                                  attributeEditor.deleteAttribute(attr.category, attr.key);
                                 }}
                               />
-                            </>
-                          )}
-                        </div>
+                            </div>
+                          </>
+                        )}
                       </div>
                     );
                   })}
@@ -661,244 +341,161 @@ export function AttributeGenerationDialog({
         </div>
       </Dialog>
 
-      {/* Info Popup Dialog */}
+      {/* Info Dialog */}
       <Dialog
         open={infoPopupOpen}
-        headerText="Refine Attribute Generation - Help"
-        style={{ width: '550px', maxHeight: '600px' }}
+        headerText={TEXT.INFO_TITLE}
+        style={{ width: DIALOG.INFO.WIDTH, maxHeight: DIALOG.INFO.MAX_HEIGHT }}
         footer={
           <Bar
             design="Footer"
             endContent={
               <Button design="Emphasized" onClick={() => setInfoPopupOpen(false)}>
-                Got it
+                {TEXT.BUTTON_GOT_IT}
               </Button>
             }
           />
         }
       >
-        <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div>
-            <Title level="H6" style={{ marginBottom: '0.75rem', fontWeight: '600' }}>
-              What is Attribute Refinement?
+        <div className={styles.infoDialogContent}>
+          <div className={styles.infoSection}>
+            <Title level="H6" className={styles.infoSectionTitle}>
+              {TEXT.INFO_WHAT_TITLE}
             </Title>
-            <Text>
-              Our system uses AI to automatically suggest the best categories and details
-              (attributes) for your products. You can easily tweak these suggestions until they are
-              perfect. Getting these details right is important because they act as a guide for the
-              next step. Without them, product descriptions can end up sounding too generic.
-              Instead, the AI uses your specific list of attributes to 'look' at each product image
-              and write a detailed, accurate description that fits your brand perfectly.
-            </Text>
+            <Text>{TEXT.INFO_WHAT_TEXT}</Text>
           </div>
 
-          <div>
-            <Title level="H6" style={{ marginBottom: '0.75rem', fontWeight: '600' }}>
-              How to Use Feedback
+          <div className={styles.infoSection}>
+            <Title level="H6" className={styles.infoSectionTitle}>
+              {TEXT.INFO_HOW_TITLE}
             </Title>
-            <Text style={{ display: 'block', marginBottom: '0.5rem' }}>
-              Provide specific feedback in the text area to improve the generated attributes. For
-              example:
-            </Text>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.25rem',
-                marginLeft: '1rem',
-              }}
-            >
-              <Text>• "Add more color-related attributes"</Text>
-              <Text>• "Focus on sustainable materials"</Text>
-              <Text>• "Include size and fit details"</Text>
-              <Text>• "Remove overly technical attributes"</Text>
+            <Text className={styles.infoText}>{TEXT.INFO_HOW_TEXT}</Text>
+            <div className={styles.infoList}>
+              {TEXT.INFO_HOW_EXAMPLES.map((example, idx) => (
+                <Text key={idx}>• {example}</Text>
+              ))}
             </div>
           </div>
 
-          <div>
-            <Title level="H6" style={{ marginBottom: '0.75rem', fontWeight: '600' }}>
-              Managing Attributes
+          <div className={styles.infoSection}>
+            <Title level="H6" className={styles.infoSectionTitle}>
+              {TEXT.INFO_MANAGING_TITLE}
             </Title>
-            <Text style={{ display: 'block', marginBottom: '0.5rem' }}>
-              You can manually manage the generated attributes:
-            </Text>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.25rem',
-                marginLeft: '1rem',
-              }}
-            >
-              <Text>
-                • <Text style={{ fontWeight: '600' }}>Add:</Text> Create new attributes manually
-              </Text>
-              <Text>
-                • <Text style={{ fontWeight: '600' }}>Edit:</Text> Rename existing attributes
-              </Text>
-              <Text>
-                • <Text style={{ fontWeight: '600' }}>Delete:</Text> Remove unwanted attributes
-              </Text>
-              <Text>
-                • <Text style={{ fontWeight: '600' }}>Click:</Text> View and modify attribute
-                options
-              </Text>
+            <Text className={styles.infoText}>{TEXT.INFO_MANAGING_TEXT}</Text>
+            <div className={styles.infoList}>
+              {TEXT.INFO_MANAGING_ITEMS.map((item, idx) => (
+                <div key={idx} className={styles.infoListItem}>
+                  <Text className={styles.infoListLabel}>{item.label}</Text>
+                  <Text>{item.text}</Text>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div
-            style={{
-              padding: '1rem',
-              background: 'var(--sapInformationBackground)',
-              border: '1px solid var(--sapInformationBorderColor)',
-              borderRadius: '0.5rem',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
-              <Icon
-                name="hint"
-                style={{ color: 'var(--sapInformativeColor)', marginTop: '0.25rem' }}
-              />
+          <div className={styles.infoTipBox}>
+            <div className={styles.infoTipContent}>
+              <Icon name={ICONS.HINT} className={styles.infoTipIcon} />
               <Text>
-                <Text style={{ fontWeight: '600' }}>Tip:</Text> The more specific your feedback, the
-                better the AI can refine the attributes to match your needs.
+                <Text style={{ fontWeight: '600' }}>{TEXT.INFO_TIP_LABEL}</Text>{' '}
+                {TEXT.INFO_TIP_TEXT}
               </Text>
             </div>
           </div>
         </div>
       </Dialog>
 
-      {/* Options Popup Dialog */}
+      {/* Options Dialog */}
       <Dialog
-        open={optionsPopupOpen}
+        open={optionsManager.optionsPopupOpen}
         headerText={selectedAttributeName}
-        style={{ width: '500px', height: '450px' }}
+        style={{ width: DIALOG.OPTIONS.WIDTH, height: DIALOG.OPTIONS.HEIGHT }}
         footer={
           <Bar
             design="Footer"
             endContent={
-              <Button design="Transparent" onClick={handleCloseOptionsPopup}>
-                Close
+              <Button design="Transparent" onClick={optionsManager.closePopup}>
+                {TEXT.BUTTON_CLOSE}
               </Button>
             }
           />
         }
       >
-        <div
-          style={{
-            padding: '1rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1rem',
-            height: '100%',
-          }}
-        >
-          {/* Add New Option Button */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Button design="Transparent" icon="add" onClick={() => setAddingNewOption(true)}>
-              Add Option
+        <div className={styles.optionsDialogContent}>
+          <div className={styles.optionsHeader}>
+            <Button
+              design="Transparent"
+              icon={ICONS.ADD}
+              onClick={optionsManager.startAddNewOption}
+            >
+              {TEXT.ACTION_ADD_OPTION}
             </Button>
           </div>
 
-          {/* Options List (Scrollable, shows 5 initially) */}
-          <div
-            style={{
-              flex: 1,
-              overflowY: 'auto',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.5rem',
-            }}
-          >
+          <div className={styles.optionsList}>
             {/* Add New Option Row */}
-            {addingNewOption && (
-              <div
-                style={{
-                  border: '2px dashed var(--sapList_BorderColor)',
-                  borderRadius: '0.25rem',
-                  padding: '0.75rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                }}
-              >
+            {optionsManager.addingNewOption && (
+              <div className={styles.addNewRow}>
                 <Input
-                  value={newOptionValue}
-                  onInput={(e: any) => setNewOptionValue(e.target.value)}
-                  placeholder="Enter option value..."
-                  style={{ flex: 1 }}
+                  value={optionsManager.newOptionValue}
+                  onInput={(e: any) => optionsManager.setNewOptionValue(e.target.value)}
+                  placeholder={TEXT.PLACEHOLDER_OPTION_VALUE}
+                  className={styles.addNewInput}
                   onKeyDown={(e: any) => {
-                    if (e.key === 'Enter') handleAddNewOption();
-                    if (e.key === 'Escape') {
-                      setAddingNewOption(false);
-                      setNewOptionValue('');
-                    }
+                    if (e.key === 'Enter') optionsManager.addNewOption();
+                    if (e.key === 'Escape') optionsManager.cancelAddNewOption();
                   }}
                 />
-                <Button design="Emphasized" onClick={handleAddNewOption}>
-                  Add
+                <Button design="Emphasized" onClick={optionsManager.addNewOption}>
+                  {TEXT.ACTION_ADD}
                 </Button>
-                <Button
-                  design="Transparent"
-                  onClick={() => {
-                    setAddingNewOption(false);
-                    setNewOptionValue('');
-                  }}
-                >
-                  Cancel
+                <Button design="Transparent" onClick={optionsManager.cancelAddNewOption}>
+                  {TEXT.ACTION_CANCEL}
                 </Button>
               </div>
             )}
 
             {/* Option Rows */}
             {currentOptions.map((option, index) => {
-              const isEditing = editingOption === index;
+              const isEditing = optionsManager.editingOption === index;
 
               return (
-                <div
-                  key={index}
-                  style={{
-                    border: '1px solid var(--sapList_BorderColor)',
-                    borderRadius: '0.25rem',
-                    padding: '0.75rem',
-                    background: 'var(--sapList_Background)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    minHeight: '48px',
-                  }}
-                >
+                <div key={index} className={styles.optionItem}>
                   {isEditing ? (
                     <>
                       <Input
-                        value={editingOptionValue}
-                        onInput={(e: any) => setEditingOptionValue(e.target.value)}
-                        style={{ flex: 1, marginRight: '0.5rem' }}
+                        value={optionsManager.editingOptionValue}
+                        onInput={(e: any) => optionsManager.setEditingOptionValue(e.target.value)}
+                        className={styles.optionEditInput}
                         onKeyDown={(e: any) => {
-                          if (e.key === 'Enter') handleSaveOptionEdit(index);
-                          if (e.key === 'Escape') handleCancelOptionEdit();
+                          if (e.key === 'Enter') optionsManager.saveOptionEdit(index);
+                          if (e.key === 'Escape') optionsManager.cancelOptionEdit();
                         }}
                       />
-                      <Button design="Emphasized" onClick={() => handleSaveOptionEdit(index)}>
-                        Save
-                      </Button>
-                      <Button design="Transparent" onClick={handleCancelOptionEdit}>
-                        Cancel
-                      </Button>
+                      <div className={styles.optionActions}>
+                        <Button
+                          design="Emphasized"
+                          onClick={() => optionsManager.saveOptionEdit(index)}
+                        >
+                          {TEXT.ACTION_SAVE}
+                        </Button>
+                        <Button design="Transparent" onClick={optionsManager.cancelOptionEdit}>
+                          {TEXT.ACTION_CANCEL}
+                        </Button>
+                      </div>
                     </>
                   ) : (
                     <>
-                      <Text style={{ flex: 1, fontSize: '0.875rem' }}>{option}</Text>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <Text className={styles.optionText}>{option}</Text>
+                      <div className={styles.optionActions}>
                         <Button
                           design="Transparent"
-                          icon="edit"
-                          onClick={() => handleEditOption(index, option)}
+                          icon={ICONS.EDIT}
+                          onClick={() => optionsManager.startEditOption(index, option)}
                         />
                         <Button
                           design="Transparent"
-                          icon="delete"
-                          onClick={() => handleDeleteOption(index)}
+                          icon={ICONS.DELETE}
+                          onClick={() => optionsManager.deleteOption(index)}
                         />
                       </div>
                     </>

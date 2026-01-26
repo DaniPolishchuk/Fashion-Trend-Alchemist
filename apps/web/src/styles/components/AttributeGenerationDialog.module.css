@@ -1,0 +1,352 @@
+/**
+ * Attribute Generation Dialog Styles
+ * Clean, maintainable styles for the attribute generation interface
+ */
+
+/* ==================== MAIN DIALOG ==================== */
+
+.dialogContainer {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ==================== LEFT PANEL - CONFIGURATION ==================== */
+
+.leftPanel {
+  width: 30%;
+  border-right: 1px solid var(--sapList_BorderColor);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  background: var(--sapBackgroundColor);
+}
+
+.refineSection {
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--sapList_BorderColor);
+}
+
+.refineHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.refineTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.refineTitleText {
+  font-size: 1.25rem;
+}
+
+.helpButton {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0;
+}
+
+.feedbackContainer {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.feedbackTextArea {
+  flex: 1;
+  width: 100%;
+}
+
+.configSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.configSectionTitle {
+  margin-bottom: 0.5rem;
+  color: var(--sapContent_LabelColor);
+  font-size: 1rem;
+  text-transform: uppercase;
+}
+
+.configItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.configLabel {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+.configValue {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.configIcon {
+  color: var(--sapContent_IconColor);
+}
+
+.configTypesList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.infoBox {
+  padding: 1rem;
+  background: var(--sapInformationBackground);
+  border: 1px solid var(--sapInformationBorderColor);
+  border-radius: 0.5rem;
+}
+
+.infoBoxIcon {
+  color: var(--sapInformativeColor);
+  margin-bottom: 0.5rem;
+}
+
+.infoBoxText {
+  font-size: 0.875rem;
+  color: var(--sapContent_LabelColor);
+}
+
+/* ==================== RIGHT PANEL - ATTRIBUTES ==================== */
+
+.rightPanel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.attributesContainer {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+
+.attributesHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.loadingContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 300px;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 3rem;
+  color: var(--sapContent_LabelColor);
+}
+
+.attributesList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* ==================== ATTRIBUTE ITEM ==================== */
+
+.attributeItem {
+  border: 1px solid var(--sapList_BorderColor);
+  border-radius: 0.25rem;
+  padding: 0.75rem 1rem;
+  background: var(--sapList_Background);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.attributeItem:hover {
+  background: var(--sapList_Hover_Background);
+}
+
+.attributeContent {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.attributeIcon {
+  color: var(--sapContent_IconColor);
+  font-size: 1rem;
+}
+
+.attributeInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.attributeName {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.attributeCount {
+  font-size: 0.75rem;
+  color: var(--sapContent_LabelColor);
+}
+
+.attributeActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.attributeEditInput {
+  flex: 1;
+  margin-right: 1rem;
+}
+
+/* ==================== ADD NEW ATTRIBUTE ==================== */
+
+.addNewRow {
+  border: 2px dashed var(--sapList_BorderColor);
+  border-radius: 0.25rem;
+  padding: 0.75rem 1rem;
+  background: var(--sapList_Background);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.addNewInput {
+  flex: 1;
+}
+
+/* ==================== OPTIONS DIALOG ==================== */
+
+.optionsDialogContent {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100%;
+}
+
+.optionsHeader {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.optionsList {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.optionItem {
+  border: 1px solid var(--sapList_BorderColor);
+  border-radius: 0.25rem;
+  padding: 0.75rem;
+  background: var(--sapList_Background);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+}
+
+.optionText {
+  flex: 1;
+  font-size: 0.875rem;
+}
+
+.optionEditInput {
+  flex: 1;
+  margin-right: 0.5rem;
+}
+
+.optionActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* ==================== INFO DIALOG ==================== */
+
+.infoDialogContent {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.infoSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.infoSectionTitle {
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+}
+
+.infoText {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.infoList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-left: 1rem;
+}
+
+.infoListItem {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.infoListLabel {
+  font-weight: 600;
+}
+
+.infoTipBox {
+  padding: 1rem;
+  background: var(--sapInformationBackground);
+  border: 1px solid var(--sapInformationBorderColor);
+  border-radius: 0.5rem;
+}
+
+.infoTipContent {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.infoTipIcon {
+  color: var(--sapInformativeColor);
+  margin-top: 0.25rem;
+}
+
+/* ==================== FOOTER ==================== */
+
+.footerActions {
+  display: flex;
+  gap: 0.5rem;
+}

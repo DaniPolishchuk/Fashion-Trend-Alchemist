@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Page,
@@ -29,23 +29,12 @@ import '@ui5/webcomponents-icons/dist/slim-arrow-right.js';
 import '@ui5/webcomponents-fiori/dist/illustrations/NoData.js';
 
 import type { ProjectListItem, CollectionListItem } from '@fashion/types';
-
-interface ProjectFromAPI {
-  id: string;
-  userId: string;
-  name: string;
-  status: 'draft' | 'active';
-  seasonConfig: Record<string, unknown> | null;
-  scopeConfig: Record<string, unknown> | null;
-  ontologySchema: Record<string, unknown> | null;
-  createdAt: string;
-  deletedAt: string | null;
-  generatedProductsCount: number;
-  isPinned?: boolean;
-  pinnedAt?: string | null;
-}
-
-const ITEMS_PER_PAGE = 5;
+import { api } from '../services/api';
+import { transformProjects } from '../utils/projectTransformers';
+import { useDebounce } from '../hooks/useDebounce';
+import { PAGINATION, COLLECTIONS, NOTIFICATION, SEARCH } from '../constants/home';
+import type { ProjectFromAPI } from '../types/api';
+import styles from '../styles/pages/Home.module.css';
 
 function Home() {
   const navigate = useNavigate();
@@ -54,8 +43,12 @@ function Home() {
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
   const [collections, setCollections] = useState<CollectionListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+
+  // Image error tracking (React way - no DOM manipulation!)
+  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
   // Delete dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -64,237 +57,218 @@ function Home() {
 
   // Pin notification state
   const [pinMessage, setPinMessage] = useState<string | null>(null);
+  const [pinningId, setPinningId] = useState<string | null>(null);
 
-  // Fetch projects and collections
-  const fetchData = async () => {
+  // Debounced search for performance
+  const debouncedSearchQuery = useDebounce(searchQuery, SEARCH.DEBOUNCE_MS);
+
+  // Fetch projects and collections with proper error handling
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [projectsRes, collectionsRes] = await Promise.all([
-        fetch('/api/projects'),
-        fetch('/api/collections'),
+      setError(null);
+
+      const [projectsResult, collectionsResult] = await Promise.all([
+        api.projects.list(),
+        api.collections.list(),
       ]);
 
-      if (projectsRes.ok) {
-        const projectsData: ProjectFromAPI[] = await projectsRes.json();
-        // Transform projects to ProjectListItem format
-        const transformedProjects: ProjectListItem[] = projectsData.map((p) => ({
-          id: p.id,
-          name: p.name,
-          status: p.status,
-          timePeriod: deriveTimePeriod(p.seasonConfig),
-          productGroup: deriveProductGroup(p.scopeConfig),
-          generatedProductsCount: p.generatedProductsCount,
-          createdAt: p.createdAt,
-          isPinned: p.isPinned,
-          pinnedAt: p.pinnedAt,
-        }));
+      if (projectsResult.error) {
+        throw new Error(projectsResult.error);
+      }
+
+      if (collectionsResult.error) {
+        console.warn('Failed to load collections:', collectionsResult.error);
+        // Don't fail entirely if collections fail - they're optional
+      }
+
+      if (projectsResult.data) {
+        const transformedProjects = transformProjects(projectsResult.data as ProjectFromAPI[]);
         setProjects(transformedProjects);
       }
 
-      if (collectionsRes.ok) {
-        const collectionsData: CollectionListItem[] = await collectionsRes.json();
-        setCollections(collectionsData);
+      if (collectionsResult.data) {
+        setCollections(collectionsResult.data as CollectionListItem[]);
       }
-    } catch (error) {
-      console.error('Failed to fetch data:', error);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load data';
+      setError(errorMessage);
+      console.error('Failed to fetch data:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
-  // Derive time period from seasonConfig
-  const deriveTimePeriod = (seasonConfig: Record<string, unknown> | null): string | null => {
-    if (!seasonConfig) return null;
-    const season = seasonConfig.season as string | undefined;
-    if (season) {
-      return season.charAt(0).toUpperCase() + season.slice(1);
-    }
-    const startDate = seasonConfig.startDate as string | undefined;
-    const endDate = seasonConfig.endDate as string | undefined;
-    if (startDate && endDate) {
-      return `${startDate} - ${endDate}`;
-    }
-    return null;
-  };
-
-  // Derive product group from scopeConfig
-  const deriveProductGroup = (scopeConfig: Record<string, unknown> | null): string | null => {
-    if (!scopeConfig) return null;
-    const productGroups = scopeConfig.productGroups as string[] | undefined;
-    if (productGroups && productGroups.length > 0) {
-      if (productGroups.length === 1) return productGroups[0];
-      return `${productGroups[0]} +${productGroups.length - 1}`;
-    }
-    const productTypes = scopeConfig.productTypes as string[] | undefined;
-    if (productTypes && productTypes.length > 0) {
-      if (productTypes.length === 1) return productTypes[0];
-      return `${productTypes[0]} +${productTypes.length - 1}`;
-    }
-    return null;
-  };
-
-  // Filter projects by search query
+  // Filter projects by debounced search query
   const filteredProjects = useMemo(() => {
-    if (!searchQuery.trim()) return projects;
-    const query = searchQuery.toLowerCase();
+    if (!debouncedSearchQuery.trim()) return projects;
+    const query = debouncedSearchQuery.toLowerCase();
     return projects.filter(
       (p) =>
         p.name.toLowerCase().includes(query) ||
         (p.productGroup && p.productGroup.toLowerCase().includes(query)) ||
         (p.timePeriod && p.timePeriod.toLowerCase().includes(query))
     );
-  }, [projects, searchQuery]);
+  }, [projects, debouncedSearchQuery]);
 
   // Pagination
-  const totalPages = Math.ceil(filteredProjects.length / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(filteredProjects.length / PAGINATION.ITEMS_PER_PAGE);
   const paginatedProjects = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredProjects.slice(start, start + ITEMS_PER_PAGE);
+    const start = (currentPage - 1) * PAGINATION.ITEMS_PER_PAGE;
+    return filteredProjects.slice(start, start + PAGINATION.ITEMS_PER_PAGE);
   }, [filteredProjects, currentPage]);
 
   // Handlers
-  const handleCreateProject = () => {
+  const handleCreateProject = useCallback(() => {
     navigate('/product-selection');
-  };
+  }, [navigate]);
 
-  const handleProjectClick = (projectId: string) => {
-    navigate(`/project/${projectId}`);
-  };
+  const handleProjectClick = useCallback(
+    (projectId: string) => {
+      navigate(`/project/${projectId}`);
+    },
+    [navigate]
+  );
 
-  const handlePreviousPage = () => {
+  const handlePreviousPage = useCallback(() => {
     if (currentPage > 1) setCurrentPage((prev) => prev - 1);
-  };
+  }, [currentPage]);
 
-  const handleNextPage = () => {
+  const handleNextPage = useCallback(() => {
     if (currentPage < totalPages) setCurrentPage((prev) => prev + 1);
-  };
+  }, [currentPage, totalPages]);
 
   // Pin toggle handler with optimistic UI update
-  const handlePinToggle = async (e: any, project: ProjectListItem) => {
-    e.stopPropagation(); // Don't navigate to project
+  const handlePinToggle = useCallback(
+    async (e: React.MouseEvent<HTMLButtonElement>, project: ProjectListItem) => {
+      e.stopPropagation();
 
-    try {
-      const newPinState = !project.isPinned;
+      if (pinningId) return; // Prevent concurrent pin operations
 
-      const response = await fetch(`/api/projects/${project.id}/pin`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isPinned: newPinState }),
-      });
+      try {
+        setPinningId(project.id);
+        const newPinState = !project.isPinned;
 
-      if (!response.ok) {
-        const error = await response.json();
-        if (error.code === 'MAX_PINS_REACHED') {
-          setPinMessage('Maximum 3 projects can be pinned');
-          setTimeout(() => setPinMessage(null), 5000);
-          return;
-        }
-        throw new Error('Failed to pin project');
-      }
+        const result = await api.projects.pin(project.id, newPinState);
 
-      // Optimistic UI update - update local state without refetching
-      setProjects((prev) => {
-        const updated = prev.map((p) =>
-          p.id === project.id
-            ? {
-                ...p,
-                isPinned: newPinState,
-                pinnedAt: newPinState ? new Date().toISOString() : null,
-              }
-            : p
-        );
-
-        // Sort: pinned first, then by pinnedAt, then by createdAt
-        return updated.sort((a, b) => {
-          if (a.isPinned && !b.isPinned) return -1;
-          if (!a.isPinned && b.isPinned) return 1;
-          if (a.isPinned && b.isPinned) {
-            return (b.pinnedAt || '').localeCompare(a.pinnedAt || '');
+        if (result.error) {
+          if (result.error.includes('Maximum')) {
+            setPinMessage('Maximum 3 projects can be pinned');
+            setTimeout(() => setPinMessage(null), NOTIFICATION.DURATION_MS);
+            return;
           }
-          return b.createdAt.localeCompare(a.createdAt);
+          throw new Error(result.error);
+        }
+
+        // Optimistic UI update
+        setProjects((prev) => {
+          const updated = prev.map((p) =>
+            p.id === project.id
+              ? {
+                  ...p,
+                  isPinned: newPinState,
+                  pinnedAt: newPinState ? new Date().toISOString() : null,
+                }
+              : p
+          );
+
+          // Sort: pinned first, then by pinnedAt, then by createdAt
+          return updated.sort((a, b) => {
+            if (a.isPinned && !b.isPinned) return -1;
+            if (!a.isPinned && b.isPinned) return 1;
+            if (a.isPinned && b.isPinned) {
+              return (b.pinnedAt || '').localeCompare(a.pinnedAt || '');
+            }
+            return b.createdAt.localeCompare(a.createdAt);
+          });
         });
-      });
-    } catch (error) {
-      console.error('Pin toggle failed:', error);
-      setPinMessage('Failed to update pin status');
-      setTimeout(() => setPinMessage(null), 5000);
-    }
-  };
+      } catch (err) {
+        console.error('Pin toggle failed:', err);
+        setPinMessage('Failed to update pin status');
+        setTimeout(() => setPinMessage(null), NOTIFICATION.DURATION_MS);
+      } finally {
+        setPinningId(null);
+      }
+    },
+    [pinningId]
+  );
 
   // Delete handlers
-  const handleDeleteClick = (e: any, project: ProjectListItem) => {
-    e.stopPropagation(); // Don't navigate to project
-    setProjectToDelete(project);
-    setDeleteDialogOpen(true);
-  };
+  const handleDeleteClick = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>, project: ProjectListItem) => {
+      e.stopPropagation();
+      setProjectToDelete(project);
+      setDeleteDialogOpen(true);
+    },
+    []
+  );
 
-  const handleDeleteConfirm = async () => {
+  const handleDeleteConfirm = useCallback(async () => {
     if (!projectToDelete) return;
 
     try {
       setDeleting(true);
-      const response = await fetch(`/api/projects/${projectToDelete.id}`, {
-        method: 'DELETE',
-      });
+      const result = await api.projects.delete(projectToDelete.id);
 
-      if (!response.ok) {
-        throw new Error('Failed to delete project');
+      if (result.error) {
+        throw new Error(result.error);
       }
 
       // Remove from local state
       setProjects((prev) => prev.filter((p) => p.id !== projectToDelete.id));
       setDeleteDialogOpen(false);
       setProjectToDelete(null);
-    } catch (error) {
-      console.error('Delete failed:', error);
+    } catch (err) {
+      console.error('Delete failed:', err);
+      setError('Failed to delete project. Please try again.');
+      setTimeout(() => setError(null), NOTIFICATION.DURATION_MS);
     } finally {
       setDeleting(false);
     }
-  };
+  }, [projectToDelete]);
 
-  const handleDeleteCancel = () => {
+  const handleDeleteCancel = useCallback(() => {
     setDeleteDialogOpen(false);
     setProjectToDelete(null);
-  };
+  }, []);
+
+  // Image error handler (React way!)
+  const handleImageError = useCallback((collectionId: string, index: number) => {
+    setImageErrors((prev) => new Set(prev).add(`${collectionId}-${index}`));
+  }, []);
 
   // Reset to page 1 when search changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
+  }, [debouncedSearchQuery]);
 
   if (loading) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          height: 'calc(100vh - 44px)',
-        }}
-      >
+      <div className={styles.loadingContainer}>
         <BusyIndicator active size="L" />
       </div>
     );
   }
 
   return (
-    <Page
-      style={{
-        minHeight: 'calc(100vh - 44px)',
-        padding: '1.5rem 0',
-        background: 'var(--sapBackgroundColor)',
-        maxWidth: '100vw',
-        boxSizing: 'border-box',
-      }}
-    >
-      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 2rem' }}>
+    <Page className={styles.pageContainer}>
+      <div className={styles.contentWrapper}>
+        {/* Error message */}
+        {error && (
+          <div className={styles.messageStripContainer}>
+            <MessageStrip design="Negative" hideCloseButton>
+              {error}
+            </MessageStrip>
+          </div>
+        )}
+
         {/* Pin notification message */}
         {pinMessage && (
-          <div style={{ marginBottom: '1rem' }}>
+          <div className={styles.messageStripContainer}>
             <MessageStrip design="Information" hideCloseButton>
               {pinMessage}
             </MessageStrip>
@@ -302,8 +276,7 @@ function Home() {
         )}
 
         {/* Projects Section */}
-        <Card style={{ marginBottom: '1.5rem', maxWidth: '100%' }}>
-          {/* Header Bar with same styling as footer */}
+        <Card className={styles.card}>
           <Bar
             design="Header"
             startContent={
@@ -312,19 +285,14 @@ function Home() {
               </Title>
             }
             endContent={
-              <FlexBox alignItems="Center" style={{ gap: '0.5rem' }}>
+              <FlexBox alignItems="Center" className={styles.searchAndButtonGroup}>
                 <Input
                   placeholder="Search projects..."
                   showClearIcon
                   value={searchQuery}
                   onInput={(e: CustomEvent) => setSearchQuery((e.target as HTMLInputElement).value)}
-                  style={{
-                    width: '200px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    backgroundColor: 'var(--sapBackgroundColor)',
-                  }}
-                ></Input>
+                  className={styles.searchInput}
+                />
                 <Button icon="add" design="Emphasized" onClick={handleCreateProject}>
                   Create New Project
                 </Button>
@@ -332,7 +300,7 @@ function Home() {
             }
           />
           {paginatedProjects.length === 0 ? (
-            <div style={{ padding: '3rem', display: 'flex', justifyContent: 'center' }}>
+            <div className={styles.illustratedMessageContainer}>
               <IllustratedMessage
                 name="NoData"
                 titleText={searchQuery ? 'No Projects Found' : 'No Projects Yet'}
@@ -353,28 +321,18 @@ function Home() {
             <>
               {/* Table */}
               <div>
-                <table
-                  style={{
-                    width: '100%',
-                    borderCollapse: 'collapse',
-                    fontSize: '0.875rem',
-                  }}
-                >
-                  <thead style={{ background: 'var(--sapList_HeaderBackground)' }}>
+                <table className={styles.table}>
+                  <thead className={styles.tableHeader}>
                     <tr>
-                      <th
-                        style={{ padding: '0.75rem 1rem', textAlign: 'left', width: '40px' }}
-                      ></th>
-                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', width: '100px' }}>
+                      <th className={styles.tableHeaderCell} style={{ width: '40px' }}></th>
+                      <th className={styles.tableHeaderCell} style={{ width: '100px' }}>
                         Status
                       </th>
-                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Project Name</th>
-                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Time Period</th>
-                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Product Group</th>
-                      <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
-                        Generated Products
-                      </th>
-                      <th style={{ padding: '0.75rem 1rem', width: '80px', textAlign: 'center' }}>
+                      <th className={styles.tableHeaderCell}>Project Name</th>
+                      <th className={styles.tableHeaderCell}>Time Period</th>
+                      <th className={styles.tableHeaderCell}>Product Group</th>
+                      <th className={styles.tableHeaderCellRight}>Generated Products</th>
+                      <th className={styles.tableHeaderCellCenter} style={{ width: '80px' }}>
                         Actions
                       </th>
                     </tr>
@@ -384,78 +342,55 @@ function Home() {
                       <tr
                         key={project.id}
                         onClick={() => handleProjectClick(project.id)}
-                        style={{
-                          cursor: 'pointer',
-                          borderBottom: '1px solid var(--sapList_BorderColor)',
-                          backgroundColor: project.isPinned
-                            ? 'var(--sapList_SelectionBackground)'
-                            : 'transparent',
-                          borderLeft: project.isPinned
-                            ? '3px solid var(--sapButton_Emphasized_Background)'
-                            : '3px solid transparent',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = 'var(--sapList_Hover_Background)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = project.isPinned
-                            ? 'var(--sapList_SelectionBackground)'
-                            : 'transparent';
-                        }}
+                        className={`${styles.tableRow} ${project.isPinned ? styles.tableRowPinned : ''}`}
                       >
-                        <td style={{ padding: '0.5rem 0.75rem' }}>
+                        <td className={styles.pinCell}>
                           <Button
                             icon={project.isPinned ? 'pushpin-on' : 'pushpin-off'}
                             design="Transparent"
                             onClick={(e: any) => handlePinToggle(e, project)}
                             tooltip={project.isPinned ? 'Unpin project' : 'Pin project'}
-                            style={{
-                              color: project.isPinned
-                                ? 'var(--sapButton_Emphasized_Background)'
-                                : 'var(--sapContent_IconColor)',
-                            }}
+                            disabled={pinningId === project.id}
+                            className={
+                              project.isPinned ? styles.pinnedButton : styles.unpinnedButton
+                            }
                           />
                         </td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
+                        <td className={styles.statusCell}>
                           <ObjectStatus
                             state={project.status === 'active' ? 'Positive' : 'Information'}
                           >
                             {project.status === 'active' ? 'Ready' : 'Processing'}
                           </ObjectStatus>
                         </td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
+                        <td className={styles.projectNameCell}>
                           <div>
                             <Text style={{ fontWeight: 500 }}>{project.name}</Text>
-                            <Text
-                              style={{
-                                fontSize: '0.75rem',
-                                color: 'var(--sapContent_LabelColor)',
-                                display: 'block',
-                              }}
-                            >
+                            <Text className={styles.projectIdText}>
                               {project.id.slice(0, 8)}...
                             </Text>
                           </div>
                         </td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
+                        <td className={styles.tableHeaderCell}>
                           <Text>{project.timePeriod || '-'}</Text>
                         </td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
+                        <td className={styles.tableHeaderCell}>
                           <Text>{project.productGroup || '-'}</Text>
                         </td>
-                        <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
+                        <td className={styles.tableHeaderCellRight}>
                           <Text>{project.generatedProductsCount}</Text>
                         </td>
-                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>
-                          <FlexBox justifyContent="Center" style={{ gap: '0.25rem' }}>
+                        <td className={styles.actionsCell}>
+                          <FlexBox
+                            justifyContent="Center"
+                            className={styles.actionButtonsContainer}
+                          >
                             <Button
                               icon="delete"
                               design="Transparent"
                               onClick={(e: any) => handleDeleteClick(e, project)}
                               tooltip="Delete project"
-                              style={{
-                                color: 'var(--sapNegativeColor)',
-                              }}
+                              className={styles.deleteButton}
                             />
                           </FlexBox>
                         </td>
@@ -470,21 +405,21 @@ function Home() {
                 <Bar
                   design="Footer"
                   startContent={
-                    <Text style={{ fontSize: '0.875rem', color: 'var(--sapContent_LabelColor)' }}>
-                      Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}-
-                      {Math.min(currentPage * ITEMS_PER_PAGE, filteredProjects.length)} of{' '}
-                      {filteredProjects.length}
+                    <Text className={styles.paginationText}>
+                      Showing {(currentPage - 1) * PAGINATION.ITEMS_PER_PAGE + 1}-
+                      {Math.min(currentPage * PAGINATION.ITEMS_PER_PAGE, filteredProjects.length)}{' '}
+                      of {filteredProjects.length}
                     </Text>
                   }
                   endContent={
-                    <FlexBox alignItems="Center" style={{ gap: '0.5rem' }}>
+                    <FlexBox alignItems="Center" className={styles.paginationControls}>
                       <Button
                         icon="navigation-left-arrow"
                         design="Transparent"
                         disabled={currentPage === 1}
                         onClick={handlePreviousPage}
                       />
-                      <Text style={{ fontSize: '0.875rem', minWidth: '80px', textAlign: 'center' }}>
+                      <Text className={styles.paginationPageText}>
                         Page {currentPage} of {totalPages}
                       </Text>
                       <Button
@@ -507,28 +442,17 @@ function Home() {
             <FlexBox
               justifyContent="SpaceBetween"
               alignItems="Center"
-              style={{ marginBottom: '1rem' }}
+              className={styles.sectionHeader}
             >
               <Title level="H4">Collections</Title>
               <Button design="Transparent">View All</Button>
             </FlexBox>
 
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                gap: '1rem',
-                maxWidth: '100%',
-                marginBottom: '1rem',
-              }}
-            >
-              {collections.slice(0, 8).map((collection) => (
+            <div className={styles.collectionsGrid}>
+              {collections.slice(0, COLLECTIONS.MAX_PREVIEW_COUNT).map((collection) => (
                 <Card
                   key={collection.id}
-                  style={{
-                    cursor: 'pointer',
-                    height: 'fit-content',
-                  }}
+                  className={styles.collectionCard}
                   header={
                     <CardHeader
                       titleText={collection.name}
@@ -538,76 +462,32 @@ function Home() {
                   }
                   onClick={() => console.log('View collection:', collection.id)}
                 >
-                  <div style={{ padding: '0.75rem' }}>
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(2, 1fr)',
-                        gap: '0.5rem',
-                        marginBottom: '0.75rem',
-                      }}
-                    >
-                      {[0, 1, 2, 3].map((index) => {
+                  <div className={styles.collectionCardContent}>
+                    <div className={styles.collectionImagesGrid}>
+                      {Array.from({ length: COLLECTIONS.PREVIEW_IMAGES_COUNT }).map((_, index) => {
                         const imageUrl = collection.imageUrls[index];
+                        const errorKey = `${collection.id}-${index}`;
+                        const hasError = imageErrors.has(errorKey);
+
                         return (
-                          <div
-                            key={index}
-                            style={{
-                              aspectRatio: '1',
-                              borderRadius: '6px',
-                              backgroundColor: 'var(--sapNeutralBackground)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              overflow: 'hidden',
-                              border: '1px solid var(--sapList_BorderColor)',
-                            }}
-                          >
-                            {imageUrl ? (
+                          <div key={index} className={styles.collectionImageBox}>
+                            {imageUrl && !hasError ? (
                               <img
                                 src={imageUrl}
                                 alt=""
-                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                onError={(e) => {
-                                  const target = e.currentTarget;
-                                  target.style.display = 'none';
-                                  const parent = target.parentElement;
-                                  if (parent) {
-                                    const placeholder = document.createElement('div');
-                                    placeholder.innerHTML = '<ui5-icon name="product"></ui5-icon>';
-                                    placeholder.style.display = 'flex';
-                                    placeholder.style.alignItems = 'center';
-                                    placeholder.style.justifyContent = 'center';
-                                    placeholder.style.width = '100%';
-                                    placeholder.style.height = '100%';
-                                    parent.appendChild(placeholder);
-                                  }
-                                }}
+                                className={styles.collectionImage}
+                                onError={() => handleImageError(collection.id, index)}
                               />
                             ) : (
-                              <Icon
-                                name="product"
-                                style={{ color: 'var(--sapContent_IconColor)', fontSize: '1.5rem' }}
-                              />
+                              <Icon name="product" className={styles.collectionIcon} />
                             )}
                           </div>
                         );
                       })}
                     </div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <Text style={{ fontSize: '0.75rem', color: 'var(--sapContent_LabelColor)' }}>
-                        Created 2 days ago
-                      </Text>
-                      <Icon
-                        name="slim-arrow-right"
-                        style={{ color: 'var(--sapContent_IconColor)', fontSize: '0.875rem' }}
-                      />
+                    <div className={styles.collectionFooter}>
+                      <Text className={styles.collectionDateText}>Created 2 days ago</Text>
+                      <Icon name="slim-arrow-right" className={styles.collectionArrowIcon} />
                     </div>
                   </div>
                 </Card>
@@ -621,7 +501,7 @@ function Home() {
           open={deleteDialogOpen}
           headerText="Delete Project?"
           footer={
-            <div style={{ display: 'flex', gap: '0.5rem', padding: '0.5rem 1rem' }}>
+            <div className={styles.dialogFooter}>
               <Button onClick={handleDeleteCancel} disabled={deleting}>
                 Cancel
               </Button>
@@ -631,7 +511,7 @@ function Home() {
             </div>
           }
         >
-          <div style={{ padding: '1rem' }}>
+          <div className={styles.dialogContent}>
             <Text>
               Are you sure you want to delete <strong>"{projectToDelete?.name}"</strong>?
             </Text>
@@ -644,9 +524,7 @@ function Home() {
             </Text>
             <br />
             <br />
-            <Text style={{ color: 'var(--sapNegativeColor)', fontWeight: 600 }}>
-              This action cannot be undone.
-            </Text>
+            <Text className={styles.deleteWarningText}>This action cannot be undone.</Text>
           </div>
         </Dialog>
       </div>

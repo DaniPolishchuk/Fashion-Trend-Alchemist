@@ -1,4 +1,9 @@
-import { useState, useEffect } from 'react';
+/**
+ * AppShell Component
+ * Main navigation shell providing top bar, theme switching, and layout wrapper
+ */
+
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShellBar,
@@ -12,15 +17,26 @@ import {
   Label,
   Title,
 } from '@ui5/webcomponents-react';
-import { setTheme } from '@ui5/webcomponents-base/dist/config/Theme.js';
 import '@ui5/webcomponents-icons/dist/search.js';
 import '@ui5/webcomponents-icons/dist/bell.js';
 import '@ui5/webcomponents-icons/dist/user-settings.js';
 import '@ui5/webcomponents-icons/dist/sys-help.js';
 import '@ui5/webcomponents-icons/dist/log.js';
 import '@ui5/webcomponents-icons/dist/employee.js';
-import '@ui5/webcomponents-icons/dist/weather-proofing.js'; // moon icon
-import '@ui5/webcomponents-icons/dist/lightbulb.js'; // sun icon
+import '@ui5/webcomponents-icons/dist/weather-proofing.js';
+import '@ui5/webcomponents-icons/dist/lightbulb.js';
+
+import { useTheme } from '../hooks/useTheme';
+import {
+  BRANDING,
+  MOCK_USER,
+  SEARCH,
+  MENU_ITEMS,
+  NOTIFICATIONS,
+  POPOVER,
+  AVATAR,
+} from '../constants/appShell';
+import styles from '../styles/components/AppShell.module.css';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -28,119 +44,81 @@ interface AppShellProps {
 
 function AppShell({ children }: AppShellProps) {
   const navigate = useNavigate();
+  const { isDarkTheme, toggleTheme, themeIcon, themeLabel } = useTheme();
+
+  // Popover state management
   const [profilePopoverOpen, setProfilePopoverOpen] = useState(false);
   const [profileButtonRef, setProfileButtonRef] = useState<HTMLElement | null>(null);
   const [notificationPopoverOpen, setNotificationPopoverOpen] = useState(false);
   const [notificationButtonRef, setNotificationButtonRef] = useState<HTMLElement | null>(null);
 
-  // Theme state - initialize from localStorage (defaults to light theme if not set)
-  const [isDarkTheme, setIsDarkTheme] = useState(() => {
-    const savedTheme = localStorage.getItem('theme');
-    // If no theme is saved, default to light theme (false)
-    if (savedTheme === null) return false;
-    return savedTheme === 'dark';
-  });
+  // Navigation handlers
+  const handleLogoClick = useCallback(() => {
+    navigate('/');
+  }, [navigate]);
 
-  // Apply saved theme immediately on mount
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme');
-    const theme = savedTheme === 'dark' ? 'sap_horizon_dark' : 'sap_horizon';
+  const handleProfileClick = useCallback(
+    (e: CustomEvent) => {
+      setProfileButtonRef(e.detail.targetRef);
+      setProfilePopoverOpen((prev) => !prev);
+      if (notificationPopoverOpen) setNotificationPopoverOpen(false);
+    },
+    [notificationPopoverOpen]
+  );
 
-    // Apply theme using UI5 API
-    setTheme(theme);
+  const handleNotificationClick = useCallback(
+    (e: CustomEvent) => {
+      setNotificationButtonRef(e.detail.targetRef);
+      setNotificationPopoverOpen((prev) => !prev);
+      if (profilePopoverOpen) setProfilePopoverOpen(false);
+    },
+    [profilePopoverOpen]
+  );
 
-    // Also set on HTML element for immediate visual effect
-    document.documentElement.setAttribute('data-sap-theme', theme);
-
-    // If no theme preference is saved yet, save the default (light)
-    if (savedTheme === null) {
-      localStorage.setItem('theme', 'light');
-    }
+  const closeProfilePopover = useCallback(() => {
+    setProfilePopoverOpen(false);
   }, []);
 
-  // Apply theme when it changes
-  useEffect(() => {
-    const theme = isDarkTheme ? 'sap_horizon_dark' : 'sap_horizon';
-    setTheme(theme);
-    document.documentElement.setAttribute('data-sap-theme', theme);
-  }, [isDarkTheme]);
+  const closeNotificationPopover = useCallback(() => {
+    setNotificationPopoverOpen(false);
+  }, []);
 
   // Theme toggle handler - keeps popup open
-  const handleThemeToggle = async (e: any) => {
-    e.stopPropagation(); // Prevent event bubbling
-
-    const newTheme = !isDarkTheme;
-    const theme = newTheme ? 'sap_horizon_dark' : 'sap_horizon';
-    const themeValue = newTheme ? 'dark' : 'light';
-
-    // Update state and localStorage
-    setIsDarkTheme(newTheme);
-    localStorage.setItem('theme', themeValue);
-
-    // Apply theme using UI5 web components API
-    await setTheme(theme);
-
-    // Keep popup open - don't call setProfilePopoverOpen(false)
-  };
-
-  const handleLogoClick = () => {
-    navigate('/');
-  };
-
-  const handleProfileClick = (e: CustomEvent) => {
-    setProfileButtonRef(e.detail.targetRef);
-    // Toggle profile popup (close if open, open if closed)
-    setProfilePopoverOpen(!profilePopoverOpen);
-    // Close notification popup if it's open
-    if (notificationPopoverOpen) {
-      setNotificationPopoverOpen(false);
-    }
-  };
-
-  const handleNotificationClick = (e: CustomEvent) => {
-    setNotificationButtonRef(e.detail.targetRef);
-    // Toggle notification popup (close if open, open if closed)
-    setNotificationPopoverOpen(!notificationPopoverOpen);
-    // Close profile popup if it's open
-    if (profilePopoverOpen) {
-      setProfilePopoverOpen(false);
-    }
-  };
+  const handleThemeToggle = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      toggleTheme();
+    },
+    [toggleTheme]
+  );
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div className={styles.container}>
       <ShellBar
-        primaryTitle="Fashion Trend Alchemist"
-        secondaryTitle="AI Design Studio"
+        primaryTitle={BRANDING.PRIMARY_TITLE}
+        secondaryTitle={BRANDING.SECONDARY_TITLE}
         logo={
           <img
             src="/logo.svg"
-            alt="Logo"
-            style={{
-              height: '32px',
-              width: 'auto',
-              cursor: 'pointer',
-            }}
+            alt={BRANDING.LOGO_ALT}
+            className={styles.logo}
             onClick={handleLogoClick}
           />
         }
         searchField={
-          <Input
-            placeholder="Search..."
-            showClearIcon
-            style={{
-              width: '300px',
-              display: 'inline-flex',
-              alignItems: 'center',
-            }}
-          />
+          <Input placeholder={SEARCH.PLACEHOLDER} showClearIcon className={styles.searchField} />
         }
         showNotifications
-        notificationsCount="3"
+        notificationsCount={NOTIFICATIONS.COUNT}
         onNotificationsClick={handleNotificationClick}
         onProfileClick={handleProfileClick}
         profile={
-          <Avatar size="XS" initials="JD" colorScheme="Accent6" style={{ cursor: 'pointer' }} />
+          <Avatar
+            size={AVATAR.SIZE_SMALL}
+            initials={MOCK_USER.INITIALS}
+            colorScheme={MOCK_USER.AVATAR_COLOR}
+            className={styles.avatar}
+          />
         }
       />
 
@@ -148,57 +126,53 @@ function AppShell({ children }: AppShellProps) {
       <Popover
         open={profilePopoverOpen}
         opener={profileButtonRef!}
-        onClose={() => setProfilePopoverOpen(false)}
-        placement="Bottom"
-        horizontalAlign="End"
+        onClose={closeProfilePopover}
+        placement={POPOVER.PLACEMENT}
+        horizontalAlign={POPOVER.HORIZONTAL_ALIGN}
       >
-        <div style={{ padding: '1rem', borderBottom: '1px solid var(--sapList_BorderColor)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <Avatar size="M" initials="JD" colorScheme="Accent6" />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <Text style={{ fontWeight: 600 }}>John Doe</Text>
-              <Label>john.doe@company.com</Label>
+        <div className={styles.profileHeader}>
+          <div className={styles.profileInfo}>
+            <Avatar
+              size={AVATAR.SIZE_MEDIUM}
+              initials={MOCK_USER.INITIALS}
+              colorScheme={MOCK_USER.AVATAR_COLOR}
+            />
+            <div className={styles.profileDetails}>
+              <Text className={styles.profileName}>{MOCK_USER.NAME}</Text>
+              <Label>{MOCK_USER.EMAIL}</Label>
             </div>
           </div>
         </div>
         <List>
-          <ListItemStandard icon="employee">My Profile</ListItemStandard>
-          <ListItemStandard icon="user-settings">Settings</ListItemStandard>
-          <ListItemStandard
-            onClick={handleThemeToggle}
-            style={{
-              transition: 'all 0.3s ease-in-out',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                transition: 'all 0.3s ease-in-out',
-              }}
-            >
+          <ListItemStandard icon={MENU_ITEMS.PROFILE.icon}>
+            {MENU_ITEMS.PROFILE.text}
+          </ListItemStandard>
+          <ListItemStandard icon={MENU_ITEMS.SETTINGS.icon}>
+            {MENU_ITEMS.SETTINGS.text}
+          </ListItemStandard>
+          <ListItemStandard onClick={handleThemeToggle} className={styles.themeToggle}>
+            <div className={styles.themeToggleContent}>
               <Icon
-                name={isDarkTheme ? 'light-mode' : 'dark-mode'}
+                name={themeIcon}
+                className={styles.themeIcon}
                 style={{
-                  transition: 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out',
-                  transform: isDarkTheme ? 'rotate(0deg) scale(1)' : 'rotate(360deg) scale(1)',
-                  opacity: 1,
+                  transform: isDarkTheme ? 'rotate(360deg) scale(1)' : 'rotate(0deg) scale(1)',
                 }}
               />
-              <span>{isDarkTheme ? 'Light Theme' : 'Dark Theme'}</span>
+              <span>{themeLabel}</span>
               <Icon
-                name={isDarkTheme ? 'light-mode' : 'dark-mode'}
+                name={themeIcon}
+                className={styles.themeIcon}
                 style={{
-                  transition: 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out',
-                  transform: isDarkTheme ? 'rotate(0deg) scale(1)' : 'rotate(360deg) scale(1)',
-                  opacity: 1,
+                  transform: isDarkTheme ? 'rotate(360deg) scale(1)' : 'rotate(0deg) scale(1)',
                 }}
               />
             </div>
           </ListItemStandard>
-          <ListItemStandard icon="sys-help">Help</ListItemStandard>
-          <ListItemStandard icon="log">Sign Out</ListItemStandard>
+          <ListItemStandard icon={MENU_ITEMS.HELP.icon}>{MENU_ITEMS.HELP.text}</ListItemStandard>
+          <ListItemStandard icon={MENU_ITEMS.SIGN_OUT.icon}>
+            {MENU_ITEMS.SIGN_OUT.text}
+          </ListItemStandard>
         </List>
       </Popover>
 
@@ -206,28 +180,30 @@ function AppShell({ children }: AppShellProps) {
       <Popover
         open={notificationPopoverOpen}
         opener={notificationButtonRef!}
-        onClose={() => setNotificationPopoverOpen(false)}
-        placement="Bottom"
-        horizontalAlign="End"
+        onClose={closeNotificationPopover}
+        placement={POPOVER.PLACEMENT}
+        horizontalAlign={POPOVER.HORIZONTAL_ALIGN}
       >
-        <div style={{ padding: '1rem', minWidth: '300px' }}>
-          <Title level="H5" style={{ marginBottom: '0.75rem' }}>
-            Notifications
+        <div className={styles.notificationsContainer}>
+          <Title level="H5" className={styles.notificationsTitle}>
+            {NOTIFICATIONS.TITLE}
           </Title>
           <List>
-            <ListItemStandard description="2 hours ago" additionalText="New">
-              Enrichment completed for Project A
-            </ListItemStandard>
-            <ListItemStandard description="Yesterday">3 new designs generated</ListItemStandard>
-            <ListItemStandard description="2 days ago">
-              Welcome to Fashion Trend Alchemist!
-            </ListItemStandard>
+            {NOTIFICATIONS.MOCK_ITEMS.map((notification) => (
+              <ListItemStandard
+                key={notification.id}
+                description={notification.description}
+                additionalText={notification.additionalText}
+              >
+                {notification.text}
+              </ListItemStandard>
+            ))}
           </List>
         </div>
       </Popover>
 
       {/* Main Content */}
-      <div style={{ flex: 1 }}>{children}</div>
+      <div className={styles.content}>{children}</div>
     </div>
   );
 }

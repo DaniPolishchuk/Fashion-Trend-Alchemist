@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Page,
@@ -23,25 +23,29 @@ import '@ui5/webcomponents-icons/dist/filter.js';
 import '@ui5/webcomponents-icons/dist/sort-ascending.js';
 import '@ui5/webcomponents-icons/dist/product.js';
 
-interface ProductGroupTaxonomy {
-  productGroup: string;
-  typeCount: number;
-  productTypes: string[];
-}
-
-interface Taxonomy {
-  groups: ProductGroupTaxonomy[];
-}
-
-const STORAGE_KEY = 'fashion.productSelection.selectedTypes';
+import { api } from '../services/api';
+import { useDebounce } from '../hooks/useDebounce';
+import { usePersistedSelection, clearPersistedSelection } from '../hooks/usePersistedSelection';
+import type { Taxonomy } from '../types/api';
+import {
+  STORAGE_KEY,
+  DEBOUNCE_MS,
+  BREADCRUMBS,
+  LABELS,
+  BUTTONS,
+  ERROR_MESSAGES,
+} from '../constants/productSelection';
+import styles from '../styles/pages/ProductSelection.module.css';
 
 function ProductSelection() {
   const navigate = useNavigate();
+
+  // State
   const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
+  const [selectedTypes, setSelectedTypes] = usePersistedSelection<string>(STORAGE_KEY);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [sortAZ, setSortAZ] = useState(true);
   const [rowCount, setRowCount] = useState<number | null>(null);
@@ -50,109 +54,81 @@ function ProductSelection() {
   const [projectName, setProjectName] = useState('');
   const [projectCreating, setProjectCreating] = useState(false);
 
-  // Load selections from localStorage on mount
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as string[];
-        setSelectedTypes(new Set(parsed));
-      } catch (e) {
-        console.error('Failed to load saved selections', e);
+  // Debounced search
+  const debouncedSearchQuery = useDebounce(searchQuery, DEBOUNCE_MS);
+
+  // Fetch taxonomy on mount
+  const fetchTaxonomy = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const result = await api.taxonomy.get();
+
+      if (result.error) {
+        throw new Error(result.error);
       }
+
+      if (result.data) {
+        setTaxonomy(result.data);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : ERROR_MESSAGES.FETCH_TAXONOMY);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
-  // Save selections to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(selectedTypes)));
-  }, [selectedTypes]);
-
   useEffect(() => {
     fetchTaxonomy();
-  }, []);
+  }, [fetchTaxonomy]);
 
-  // Debounced count fetch (both transactions and articles)
-  useEffect(() => {
-    if (selectedTypes.size === 0) {
+  // Fetch counts with debounce
+  const fetchCounts = useCallback(async (productTypes: string[]) => {
+    if (productTypes.length === 0) {
       setRowCount(0);
       setArticleCount(0);
       return;
     }
 
-    const timer = setTimeout(() => {
-      fetchRowCount();
-      fetchArticleCount();
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [selectedTypes]);
-
-  const fetchTaxonomy = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch('/api/taxonomy');
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch taxonomy');
-      }
-
-      const data: Taxonomy = await response.json();
-      setTaxonomy(data);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchRowCount = async () => {
     try {
       setCountLoading(true);
-      // Extract just the product type names from the keys
-      const types = Array.from(selectedTypes).map((key) => key.split('::')[1]);
-      const typesParam = types.join(',');
 
-      const response = await fetch(
-        `/api/transactions/count?types=${encodeURIComponent(typesParam)}`
-      );
+      const [transactionResult, articleResult] = await Promise.all([
+        api.transactions.getCount(productTypes),
+        api.transactions.getArticleCount(productTypes),
+      ]);
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch row count');
+      if (transactionResult.data) {
+        setRowCount(transactionResult.data.count);
       }
 
-      const data = await response.json();
-      setRowCount(data.count);
+      if (articleResult.data) {
+        setArticleCount(articleResult.data.count);
+      }
     } catch (err) {
-      console.error('Failed to fetch row count:', err);
+      console.error('Failed to fetch counts:', err);
       setRowCount(null);
+      setArticleCount(null);
     } finally {
       setCountLoading(false);
     }
-  };
+  }, []);
 
-  const fetchArticleCount = async () => {
-    try {
-      // Extract just the product type names from the keys
-      const types = Array.from(selectedTypes).map((key) => key.split('::')[1]);
-      const typesParam = types.join(',');
+  // Debounced count fetch when selection changes
+  useEffect(() => {
+    // Extract product type names from selection keys
+    const productTypes = Array.from(selectedTypes).map((key) => key.split('::')[1]);
 
-      const response = await fetch(`/api/articles/count?types=${encodeURIComponent(typesParam)}`);
+    const timer = setTimeout(() => {
+      fetchCounts(productTypes);
+    }, DEBOUNCE_MS);
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch article count');
-      }
+    return () => clearTimeout(timer);
+  }, [selectedTypes, fetchCounts]);
 
-      const data = await response.json();
-      setArticleCount(data.count);
-    } catch (err) {
-      console.error('Failed to fetch article count:', err);
-      setArticleCount(null);
-    }
-  };
-
-  const handleExpandAll = () => {
+  // Handlers
+  const handleExpandAll = useCallback(() => {
     if (taxonomy) {
       if (expandedGroups.size === taxonomy.groups.length) {
         setExpandedGroups(new Set());
@@ -160,41 +136,52 @@ function ProductSelection() {
         setExpandedGroups(new Set(taxonomy.groups.map((g) => g.productGroup)));
       }
     }
-  };
+  }, [taxonomy, expandedGroups.size]);
 
-  const toggleGroup = (groupName: string) => {
-    const newExpanded = new Set(expandedGroups);
-    if (newExpanded.has(groupName)) {
-      newExpanded.delete(groupName);
-    } else {
-      newExpanded.add(groupName);
-    }
-    setExpandedGroups(newExpanded);
-  };
+  const toggleGroup = useCallback((groupName: string) => {
+    setExpandedGroups((prev) => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(groupName)) {
+        newExpanded.delete(groupName);
+      } else {
+        newExpanded.add(groupName);
+      }
+      return newExpanded;
+    });
+  }, []);
 
-  const toggleType = (groupName: string, typeName: string) => {
-    const key = `${groupName}::${typeName}`;
-    const newSelected = new Set(selectedTypes);
-    if (newSelected.has(key)) {
-      newSelected.delete(key);
-    } else {
-      newSelected.add(key);
-    }
-    setSelectedTypes(newSelected);
-  };
+  const toggleType = useCallback(
+    (groupName: string, typeName: string) => {
+      const key = `${groupName}::${typeName}`;
+      setSelectedTypes((prev) => {
+        const newSelected = new Set(prev);
+        if (newSelected.has(key)) {
+          newSelected.delete(key);
+        } else {
+          newSelected.add(key);
+        }
+        return newSelected;
+      });
+    },
+    [setSelectedTypes]
+  );
 
-  const handleClearAll = () => {
+  const handleClearAll = useCallback(() => {
     setSelectedTypes(new Set());
-  };
+  }, [setSelectedTypes]);
 
-  const handleProceed = async () => {
+  const handleCancel = useCallback(() => {
+    navigate('/');
+  }, [navigate]);
+
+  const handleProceed = useCallback(async () => {
     if (!projectName.trim()) {
-      setError('Please enter a project name');
+      setError(ERROR_MESSAGES.PROJECT_NAME_REQUIRED);
       return;
     }
 
     if (selectedTypes.size === 0) {
-      setError('Please select at least one product type');
+      setError(ERROR_MESSAGES.SELECT_TYPES_REQUIRED);
       return;
     }
 
@@ -213,9 +200,9 @@ function ProductSelection() {
       });
 
       // Clear localStorage since we're proceeding
-      localStorage.removeItem(STORAGE_KEY);
+      clearPersistedSelection(STORAGE_KEY);
 
-      // Navigate to context builder page with project data (no project creation yet)
+      // Navigate to context builder with project data
       navigate('/context-builder', {
         state: {
           projectData: {
@@ -229,223 +216,158 @@ function ProductSelection() {
       });
     } catch (err) {
       console.error('Failed to proceed:', err);
-      setError(err instanceof Error ? err.message : 'Failed to proceed');
+      setError(err instanceof Error ? err.message : ERROR_MESSAGES.PROCEED_FAILED);
     } finally {
       setProjectCreating(false);
     }
-  };
+  }, [projectName, selectedTypes, navigate]);
 
-  const filterTypes = (types: string[]) => {
-    if (!searchQuery) return types;
-    return types.filter((type) => type.toLowerCase().includes(searchQuery.toLowerCase()));
-  };
+  const handleBreadcrumbClick = useCallback(
+    (e: CustomEvent) => {
+      const text = e.detail.item.textContent?.trim();
+      if (text === BREADCRUMBS.HOME) {
+        navigate('/');
+      }
+    },
+    [navigate]
+  );
 
-  const getSortedGroups = () => {
+  // Memoized computations
+  const filterTypes = useCallback(
+    (types: string[]) => {
+      if (!debouncedSearchQuery) return types;
+      return types.filter((type) =>
+        type.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
+      );
+    },
+    [debouncedSearchQuery]
+  );
+
+  const sortedGroups = useMemo(() => {
     if (!taxonomy) return [];
     const groups = [...taxonomy.groups].filter((g) => g.productGroup !== 'Unknown');
     return sortAZ
       ? groups.sort((a, b) => a.productGroup.localeCompare(b.productGroup))
       : groups.sort((a, b) => b.productGroup.localeCompare(a.productGroup));
-  };
+  }, [taxonomy, sortAZ]);
 
+  const selectedCategoriesCount = useMemo(() => {
+    return new Set(Array.from(selectedTypes).map((s) => s.split('::')[0])).size;
+  }, [selectedTypes]);
+
+  // Loading state
   if (loading) {
     return (
-      <Page style={{ height: 'calc(100vh - 44px)' }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            height: '100%',
-          }}
-        >
+      <Page className={styles.loadingPage}>
+        <div className={styles.loadingContainer}>
           <BusyIndicator active size="L" />
         </div>
       </Page>
     );
   }
 
-  if (error) {
+  // Error state
+  if (error && !taxonomy) {
     return (
-      <Page style={{ height: 'calc(100vh - 44px)' }}>
-        <MessageStrip design="Negative">Error loading product taxonomy: {error}</MessageStrip>
-        <Button onClick={fetchTaxonomy}>Retry</Button>
+      <Page className={styles.loadingPage}>
+        <MessageStrip design="Negative">
+          {ERROR_MESSAGES.LOAD_TAXONOMY}: {error}
+        </MessageStrip>
+        <Button onClick={fetchTaxonomy}>{BUTTONS.RETRY}</Button>
       </Page>
     );
   }
 
-  const sortedGroups = getSortedGroups();
-
   return (
-    <Page
-      style={{
-        minHeight: 'calc(100vh - 44px)',
-        paddingBottom: '140px',
-        background: 'var(--sapBackgroundColor)',
-        maxWidth: '100vw',
-        boxSizing: 'border-box',
-      }}
-    >
+    <Page className={styles.pageContainer}>
       {/* Breadcrumbs */}
-      <div style={{ padding: '12px 16px 0 16px' }}>
-        <Breadcrumbs
-          onItemClick={(e: any) => {
-            const text = e.detail.item.textContent?.trim();
-            if (text === 'Home') {
-              navigate('/');
-            }
-          }}
-        >
-          <BreadcrumbsItem>Home</BreadcrumbsItem>
-          <BreadcrumbsItem>Product Selection</BreadcrumbsItem>
+      <div className={styles.breadcrumbsContainer}>
+        <Breadcrumbs onItemClick={handleBreadcrumbClick}>
+          <BreadcrumbsItem>{BREADCRUMBS.HOME}</BreadcrumbsItem>
+          <BreadcrumbsItem>{BREADCRUMBS.PRODUCT_SELECTION}</BreadcrumbsItem>
         </Breadcrumbs>
       </div>
 
-      {/* Header with Title and Row Count */}
-      <div style={{ padding: '16px 16px 0 16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div style={{ flex: 1, marginRight: '24px' }}>
-            <Title level="H2" style={{ marginBottom: '8px', fontSize: '30px' }}>
-              Select Product Scope
+      {/* Header with Title and Stats */}
+      <div className={styles.headerContainer}>
+        <div className={styles.headerContent}>
+          <div className={styles.headerLeft}>
+            <Title level="H2" className={styles.pageTitle}>
+              {LABELS.PAGE_TITLE}
             </Title>
-            <Text
-              style={{
-                color: 'var(--sapContent_LabelColor)',
-                fontSize: '15px',
-                marginBottom: '12px',
-              }}
-            >
-              Choose product groups and types for the upcoming product generation.
-            </Text>
-            <div style={{ maxWidth: '400px' }}>
-              <Text
-                style={{
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  marginBottom: '4px',
-                  display: 'block',
-                }}
-              >
-                Project Name
-              </Text>
+            <Text className={styles.pageSubtitle}>{LABELS.PAGE_SUBTITLE}</Text>
+            <div className={styles.projectNameContainer}>
+              <Text className={styles.projectNameLabel}>{LABELS.PROJECT_NAME_LABEL}</Text>
               <Input
-                placeholder="Enter a descriptive name for this project..."
+                placeholder={LABELS.PROJECT_NAME_PLACEHOLDER}
                 value={projectName}
-                onInput={(e: any) => setProjectName(e.target.value)}
-                style={{ width: '100%' }}
+                onInput={(e: CustomEvent) => setProjectName((e.target as HTMLInputElement).value)}
+                className={styles.projectNameInput}
               />
             </div>
           </div>
-          <div
-            style={{
-              marginTop: '4px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '4px',
-              alignItems: 'flex-end',
-            }}
-          >
+          <div className={styles.statsContainer}>
             {countLoading ? (
-              <ObjectStatus state="Information">Loading...</ObjectStatus>
+              <ObjectStatus state="Information">{LABELS.LOADING_TEXT}</ObjectStatus>
             ) : rowCount !== null ? (
               <>
                 <ObjectStatus state="Information">
-                  {rowCount.toLocaleString()} transaction rows
+                  {rowCount.toLocaleString()} {LABELS.TRANSACTION_ROWS}
                 </ObjectStatus>
                 {articleCount !== null && (
                   <ObjectStatus state="Information">
-                    {articleCount.toLocaleString()} unique articles
+                    {articleCount.toLocaleString()} {LABELS.UNIQUE_ARTICLES}
                   </ObjectStatus>
                 )}
               </>
             ) : (
-              <ObjectStatus state="None">Select types</ObjectStatus>
+              <ObjectStatus state="None">{LABELS.SELECT_TYPES_TEXT}</ObjectStatus>
             )}
           </div>
         </div>
       </div>
 
       {/* Search and Actions Bar */}
-      <div
-        style={{
-          paddingLeft: '16px',
-          paddingRight: '16px',
-          paddingBottom: '16px',
-          paddingTop: 0,
-        }}
-      >
-        <Card
-          style={{
-            width: '100%',
-            minHeight: '72px',
-            display: 'flex',
-            alignItems: 'center',
-            borderRadius: '12px',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              width: '100%',
-            }}
-          >
-            {/* Pill-style filter input */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                width: '100%',
-                maxWidth: '760px',
-                backgroundColor: 'var(--sapUiBaseBG)',
-                borderRadius: '12px',
-                padding: '8px 12px',
-              }}
-            >
-              <Icon name="filter" style={{ color: 'var(--sapContent_IconColor)' }} />
+      <div className={styles.searchActionsBar}>
+        <Card className={styles.searchCard}>
+          <div className={styles.searchCardContent}>
+            {/* Filter input */}
+            <div className={styles.filterInputContainer}>
+              <Icon name="filter" className={styles.filterIcon} />
               <Input
-                placeholder="Filter product types by name..."
+                placeholder={LABELS.FILTER_PLACEHOLDER}
                 value={searchQuery}
-                onInput={(e: any) => setSearchQuery(e.target.value)}
-                style={{
-                  flex: 1,
-                  backgroundColor: 'var(--sapBackgroundColor)',
-                  border: 'none',
-                }}
+                onInput={(e: CustomEvent) => setSearchQuery((e.target as HTMLInputElement).value)}
+                className={styles.filterInput}
               />
             </div>
 
             {/* Actions */}
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div className={styles.actionsContainer}>
               <Button
-                icon={sortAZ ? 'sort-ascending' : 'sort-ascending'}
+                icon="sort-ascending"
                 design="Transparent"
-                onClick={() => setSortAZ(!sortAZ)}
+                onClick={() => setSortAZ((prev) => !prev)}
               >
-                Sort {sortAZ ? 'A-Z' : 'Z-A'}
+                {sortAZ ? BUTTONS.SORT_AZ : BUTTONS.SORT_ZA}
               </Button>
               <Button design="Transparent" onClick={handleExpandAll}>
-                {expandedGroups.size === sortedGroups.length ? 'Collapse All' : 'Expand All'}
+                {expandedGroups.size === sortedGroups.length
+                  ? BUTTONS.COLLAPSE_ALL
+                  : BUTTONS.EXPAND_ALL}
               </Button>
             </div>
           </div>
         </Card>
       </div>
 
-      <div
-        style={{
-          columnCount: 3,
-          columnGap: '16px',
-          padding: '16px',
-          marginBottom: '80px',
-        }}
-      >
+      {/* Product Groups Grid */}
+      <div className={styles.cardsGrid}>
         {sortedGroups.map((group) => {
           const filteredTypes = filterTypes(group.productTypes);
           const isExpanded = expandedGroups.has(group.productGroup);
 
+          // Hide groups with no matching types when searching
           if (filteredTypes.length === 0 && searchQuery) {
             return null;
           }
@@ -453,15 +375,11 @@ function ProductSelection() {
           return (
             <Card
               key={group.productGroup}
-              style={{
-                breakInside: 'avoid',
-                marginBottom: '16px',
-                width: '100%',
-              }}
+              className={styles.productCard}
               header={
                 <CardHeader
                   titleText={group.productGroup}
-                  subtitleText={`${filteredTypes.length} items`}
+                  subtitleText={`${filteredTypes.length} ${LABELS.ITEMS}`}
                   avatar={<Icon name="product" />}
                   interactive
                   onClick={() => toggleGroup(group.productGroup)}
@@ -469,7 +387,7 @@ function ProductSelection() {
               }
             >
               {isExpanded && (
-                <List style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                <List className={styles.productList}>
                   {filteredTypes.map((type) => {
                     const key = `${group.productGroup}::${type}`;
                     const isSelected = selectedTypes.has(key);
@@ -498,22 +416,15 @@ function ProductSelection() {
       {/* Selection Footer Bar */}
       <Bar
         design="FloatingFooter"
-        style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: 1000,
-          boxShadow: '0 -2px 8px rgba(0,0,0,0.1)',
-          width: '100%',
-        }}
+        className={styles.footerBar}
         startContent={
           <Text>
-            <strong>{selectedTypes.size} items selected</strong>
+            <span className={styles.footerText}>
+              {selectedTypes.size} {LABELS.ITEMS_SELECTED}
+            </span>
             {selectedTypes.size > 0 && (
-              <span style={{ marginLeft: '1rem', color: 'var(--sapContent_LabelColor)' }}>
-                from {new Set(Array.from(selectedTypes).map((s) => s.split('::')[0])).size}{' '}
-                categories
+              <span className={styles.footerSubtext}>
+                {LABELS.FROM_CATEGORIES} {selectedCategoriesCount} {LABELS.CATEGORIES}
               </span>
             )}
           </Text>
@@ -521,17 +432,17 @@ function ProductSelection() {
         endContent={
           <>
             <Button design="Transparent" onClick={handleClearAll}>
-              Clear all
+              {BUTTONS.CLEAR_ALL}
             </Button>
-            <Button design="Transparent" onClick={() => navigate('/')}>
-              Cancel
+            <Button design="Transparent" onClick={handleCancel}>
+              {BUTTONS.CANCEL}
             </Button>
             <Button
               design="Emphasized"
               onClick={handleProceed}
               disabled={selectedTypes.size === 0 || !projectName.trim() || projectCreating}
             >
-              {projectCreating ? 'Creating Project...' : 'Proceed to Analysis'}
+              {projectCreating ? BUTTONS.PROCEED_CREATING : BUTTONS.PROCEED}
             </Button>
           </>
         }

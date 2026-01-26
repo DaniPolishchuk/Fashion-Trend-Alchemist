@@ -1,0 +1,396 @@
+/**
+ * Context Builder Page Styles
+ * Extracted from 50+ inline style objects for better performance
+ */
+
+/* Page Layout */
+.pageContainer {
+  background: var(--sapBackgroundColor);
+  min-height: calc(100vh - 44px);
+  padding-bottom: 2rem;
+}
+
+.loadingPage {
+  height: calc(100vh - 44px);
+}
+
+.loadingContainer {
+  display: block;
+  margin: auto;
+  margin-top: 20vh;
+}
+
+/* Breadcrumbs */
+.breadcrumbsContainer {
+  padding: 12px 2rem 0;
+}
+
+/* Header */
+.headerContainer {
+  padding: 1rem 2rem 0;
+}
+
+.pageTitle {
+  margin-bottom: 0.5rem;
+}
+
+/* Filter Section */
+.filterSectionContainer {
+  padding: 0 2rem 1rem;
+}
+
+.filterCard {
+  display: flex;
+  height: 130px;
+}
+
+/* Date Section */
+.dateSection {
+  width: 360px;
+  padding: 0.75rem;
+  display: flex;
+  align-items: center;
+}
+
+.dateSectionInner {
+  border-right: 1px solid var(--sapList_BorderColor);
+  height: 100%;
+  padding-right: 1rem;
+  display: flex;
+  flex-direction: row;
+  gap: 0.3rem;
+  justify-content: center;
+  align-items: center;
+  flex: 1;
+}
+
+.dateInputsColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.dateInputRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.dateLabel {
+  font-size: 0.875rem;
+  min-width: 40px;
+}
+
+.dateInput {
+  width: 60px;
+  height: 25px;
+  background: var(--sapBackgroundColor);
+}
+
+.dateSeparator {
+  font-size: 0.875rem;
+  font-weight: bold;
+}
+
+.seasonButtonsColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  justify-content: center;
+}
+
+.seasonButtonRow {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.seasonButton {
+  flex: 1;
+  font-size: 0.75rem;
+  height: 25px;
+}
+
+/* Filters Scroll Section */
+.filtersScrollSection {
+  flex: 1;
+  padding: 0.75rem;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 1rem;
+}
+
+.filtersScrollContainer {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  flex: 1;
+  height: 100%;
+  align-items: center;
+  scrollbar-width: thin;
+}
+
+.resetButtonContainer {
+  border-left: 1px solid var(--sapList_BorderColor);
+  height: 100%;
+  padding-left: 1rem;
+  display: flex;
+  align-items: center;
+}
+
+/* Filter Card Item */
+.filterCardItem {
+  min-width: 140px;
+  height: 70px;
+  border: 1px solid var(--sapList_BorderColor);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  background-color: var(--sapList_Background);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.filterCardItem:hover {
+  border-color: #888;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.filterCardItemSelected {
+  border-color: #0070f2;
+}
+
+.filterCardItemHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.filterCardIcon {
+  color: var(--sapContent_IconColor);
+}
+
+.filterCardIconSelected {
+  color: #0070f2;
+}
+
+.filterCardBadge {
+  background: #0070f2;
+  color: white;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.filterCardTitle {
+  font-size: 0.75rem;
+  color: var(--sapContent_LabelColor);
+  font-weight: 400;
+}
+
+.filterCardTitleSelected {
+  color: #0070f2;
+  font-weight: 600;
+}
+
+/* Stats Section */
+.statsContainer {
+  display: flex;
+  gap: 2rem;
+  padding: 0 2rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.statsLeft {
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+}
+
+.statItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.statIcon {
+  color: var(--sapContent_LabelColor);
+}
+
+.statLabel {
+  font-size: 0.7rem;
+  color: var(--sapContent_LabelColor);
+  text-transform: uppercase;
+}
+
+.statDivider {
+  height: 30px;
+  border-left: 1px solid var(--sapList_BorderColor);
+}
+
+.statsRight {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.contextLockedIndicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.contextLockedIcon {
+  color: var(--sapPositiveColor);
+}
+
+.contextLockedText {
+  color: var(--sapPositiveColor);
+  font-size: 0.875rem;
+}
+
+.infoMessage {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--sapInformationBackground);
+  border: 1px solid var(--sapInformationBorderColor);
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.infoIcon {
+  color: var(--sapInformativeColor);
+}
+
+.infoText {
+  color: var(--sapInformativeColor);
+}
+
+/* Table Section */
+.tableContainer {
+  padding: 0 2rem;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+  max-height: 600px;
+}
+
+.table {
+  min-width: max-content;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.tableEmpty {
+  min-width: 100%;
+}
+
+.tableHeader {
+  background: var(--sapList_HeaderBackground);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.tableHeaderCell {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--sapList_BorderColor);
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.tableRow {
+  border-bottom: 1px solid var(--sapList_BorderColor);
+}
+
+.tableCell {
+  padding: 0.75rem;
+  white-space: nowrap;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tableCellDetailDesc {
+  padding: 0.75rem;
+  white-space: normal;
+  min-width: 400px;
+  max-width: 600px;
+  overflow: hidden;
+  text-overflow: clip;
+  word-wrap: break-word;
+}
+
+.tableCellCentered {
+  text-align: center;
+  padding: 3rem;
+}
+
+.paginationText {
+  font-size: 0.875rem;
+  color: var(--sapContent_LabelColor);
+}
+
+.paginationControls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.paginationPageText {
+  font-size: 0.875rem;
+  min-width: 80px;
+  text-align: center;
+}
+
+/* Dialog */
+.dialogContent {
+  width: 300px;
+  height: 230px;
+  padding: 0.75rem 0.5rem;
+  overflow-y: auto;
+}
+
+.dialogContentLoading {
+  padding: 0.5rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.dialogCheckboxItem {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  background-color: transparent;
+  cursor: pointer;
+}
+
+.dialogCheckboxItem:hover {
+  background-color: var(--sapList_Hover_Background);
+}
+
+/* Error Dialog */
+.errorDialogContent {
+  padding: 1rem;
+  min-width: 400px;
+}
+
+.errorDialogMessage {
+  margin-bottom: 1rem;
+}

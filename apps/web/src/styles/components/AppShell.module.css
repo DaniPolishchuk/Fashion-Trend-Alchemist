@@ -1,0 +1,103 @@
+/**
+ * AppShell Component Styles
+ * Clean, maintainable styles for the main navigation shell
+ */
+
+/* ==================== LAYOUT ==================== */
+
+.container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.content {
+  flex: 1;
+}
+
+/* ==================== LOGO ==================== */
+
+.logo {
+  height: 32px;
+  width: auto;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.logo:hover {
+  opacity: 0.8;
+}
+
+/* ==================== SEARCH ==================== */
+
+.searchField {
+  width: 300px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ==================== AVATAR ==================== */
+
+.avatar {
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.avatar:hover {
+  transform: scale(1.05);
+}
+
+/* ==================== PROFILE POPOVER ==================== */
+
+.profileHeader {
+  padding: 1rem;
+  border-bottom: 1px solid var(--sapList_BorderColor);
+}
+
+.profileInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.profileDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.profileName {
+  font-weight: 600;
+}
+
+/* ==================== THEME TOGGLE ==================== */
+
+.themeToggle {
+  transition: all 0.3s ease-in-out;
+}
+
+.themeToggleContent {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.3s ease-in-out;
+}
+
+.themeIcon {
+  transition:
+    transform 0.3s ease-in-out,
+    opacity 0.3s ease-in-out;
+  transform: rotate(0deg) scale(1);
+  opacity: 1;
+}
+
+/* ==================== NOTIFICATIONS ==================== */
+
+.notificationsContainer {
+  padding: 1rem;
+  min-width: 300px;
+}
+
+.notificationsTitle {
+  margin-bottom: 0.75rem;
+}
