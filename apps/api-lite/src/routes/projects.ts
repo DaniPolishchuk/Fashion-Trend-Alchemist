@@ -563,10 +563,12 @@ export default async function projectRoutes(fastify: FastifyInstance) {
             inputConstraints: generatedDesigns.inputConstraints,
             generatedImageUrl: generatedDesigns.generatedImageUrl,
             imageGenerationStatus: generatedDesigns.imageGenerationStatus,
+            generatedImages: generatedDesigns.generatedImages,
+            createdAt: generatedDesigns.createdAt,
           })
           .from(generatedDesigns)
           .where(eq(generatedDesigns.projectId, projectId))
-          .orderBy(desc(generatedDesigns.id)); // Order by creation (newest first)
+          .orderBy(desc(generatedDesigns.createdAt)); // Order by creation (newest first)
 
         return reply.status(200).send(designs);
       } catch (error: any) {
@@ -679,7 +681,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
   /**
    * GET /api/projects/:projectId/generated-designs/:designId/image-status
-   * Get the image generation status for a specific design
+   * Get the image generation status for a specific design (supports multi-image)
    */
   fastify.get<{ Params: { projectId: string; designId: string } }>(
     '/projects/:projectId/generated-designs/:designId/image-status',
@@ -696,9 +698,21 @@ export default async function projectRoutes(fastify: FastifyInstance) {
           return reply.status(404).send({ error: 'Generated design not found' });
         }
 
+        // Return both new multi-image format and legacy format for backward compatibility
         return reply.status(200).send({
           status: design.imageGenerationStatus || 'pending',
-          imageUrl: design.generatedImageUrl,
+          // New multi-image structure
+          generatedImages: design.generatedImages || {
+            front: {
+              url: design.generatedImageUrl || null,
+              status: design.imageGenerationStatus || 'pending',
+            },
+            back: { url: null, status: 'pending' },
+            model: { url: null, status: 'pending' },
+          },
+          // Legacy single image URL (for backward compatibility)
+          imageUrl:
+            (design.generatedImages as any)?.front?.url || design.generatedImageUrl || null,
         });
       } catch (error: any) {
         fastify.log.error({ error }, 'Failed to fetch image status');
