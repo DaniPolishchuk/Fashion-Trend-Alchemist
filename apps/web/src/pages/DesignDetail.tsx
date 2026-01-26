@@ -9,12 +9,12 @@ import {
   Icon,
   Breadcrumbs,
   BreadcrumbsItem,
-  Card,
   Dialog,
   Select,
   Option,
   Input,
   Panel,
+  ObjectStatus,
 } from '@ui5/webcomponents-react';
 import '@ui5/webcomponents-icons/dist/download.js';
 import '@ui5/webcomponents-icons/dist/zoom-in.js';
@@ -30,6 +30,8 @@ import '@ui5/webcomponents-icons/dist/hint.js';
 import '@ui5/webcomponents-icons/dist/sys-cancel.js';
 import '@ui5/webcomponents-icons/dist/synchronize.js';
 import '@ui5/webcomponents-icons/dist/customize.js';
+import '@ui5/webcomponents-icons/dist/ai.js';
+import '@ui5/webcomponents-icons/dist/camera.js';
 
 // Types for multi-image support
 type ImageViewStatus = 'pending' | 'generating' | 'completed' | 'failed';
@@ -93,6 +95,36 @@ function DesignDetail() {
   // Polling ref
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Handle keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.target && (event.target as HTMLElement).tagName === 'INPUT') {
+        return; // Don't handle arrow keys when focused on input fields
+      }
+
+      const views: ImageView[] = ['front', 'back', 'model'];
+      const currentIndex = views.indexOf(selectedView);
+
+      switch (event.key) {
+        case 'ArrowLeft':
+          event.preventDefault();
+          const prevIndex = currentIndex === 0 ? views.length - 1 : currentIndex - 1;
+          setSelectedView(views[prevIndex]);
+          break;
+        case 'ArrowRight':
+          event.preventDefault();
+          const nextIndex = currentIndex === views.length - 1 ? 0 : currentIndex + 1;
+          setSelectedView(views[nextIndex]);
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedView]);
+
   // Fetch design data
   useEffect(() => {
     const fetchDesign = async () => {
@@ -137,7 +169,9 @@ function DesignDetail() {
           // Map overall status to individual view status (partial maps to completed for legacy single-image)
           const legacyStatus = currentDesign.imageGenerationStatus;
           const viewStatus: ImageViewStatus =
-            legacyStatus === 'partial' ? 'completed' : (legacyStatus || 'pending') as ImageViewStatus;
+            legacyStatus === 'partial'
+              ? 'completed'
+              : ((legacyStatus || 'pending') as ImageViewStatus);
 
           setGeneratedImages({
             front: {
@@ -346,22 +380,6 @@ function DesignDetail() {
     navigate(`/project/${projectId}?tab=alchemist&refineFrom=${design.id}`);
   };
 
-  // Get attribute icon
-  const getAttributeIcon = (key: string): string => {
-    const iconMap: Record<string, string> = {
-      fabric: 'hint',
-      color: 'palette',
-      style: 'settings',
-      pattern: 'hint',
-      fit: 'hint',
-    };
-    const lowerKey = key.toLowerCase();
-    for (const [keyword, icon] of Object.entries(iconMap)) {
-      if (lowerKey.includes(keyword)) return icon;
-    }
-    return 'hint';
-  };
-
   // Format date
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
@@ -446,17 +464,23 @@ function DesignDetail() {
       {/* Page Header */}
       <div
         style={{
-          padding: '1rem 2rem',
+          padding: '1rem 2rem 1.5rem',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'flex-start',
+          borderBottom: '1px solid var(--sapList_BorderColor)',
+          marginBottom: '1.5rem',
         }}
       >
         <div>
-          <Title level="H2" style={{ marginBottom: '0.5rem' }}>
-            Predicted Successful Design
-          </Title>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              marginBottom: '0.5rem',
+            }}
+          >
             {isEditingName ? (
               <>
                 <Input
@@ -482,7 +506,9 @@ function DesignDetail() {
               </>
             ) : (
               <>
-                <Text style={{ fontSize: '1.125rem', fontWeight: 500 }}>{design.name}</Text>
+                <Title level="H2" style={{ margin: 0, fontSize: '30px' }}>
+                  {design.name}
+                </Title>
                 <Button
                   icon="edit"
                   design="Transparent"
@@ -490,55 +516,37 @@ function DesignDetail() {
                   onClick={handleStartEditName}
                 />
                 <Button
+                  icon="ai"
                   design="Transparent"
                   tooltip="Generate creative name with AI"
                   onClick={handleGenerateName}
                   disabled={isGeneratingName}
-                >
-                  {isGeneratingName ? (
-                    <BusyIndicator active size="S" />
-                  ) : (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                      <span style={{ fontSize: '1rem' }}>✨</span>
-                    </span>
-                  )}
-                </Button>
+                />
+                {/* Status Badge */}
+                <div style={{ padding: '0.125rem' }}>
+                  <ObjectStatus
+                    state={
+                      overallStatus === 'completed'
+                        ? 'Positive'
+                        : overallStatus === 'failed'
+                          ? 'Negative'
+                          : overallStatus === 'partial'
+                            ? 'Critical'
+                            : 'Information'
+                    }
+                    inverted
+                  >
+                    {overallStatus === 'partial' ? 'PARTIAL' : overallStatus.toUpperCase()}
+                  </ObjectStatus>
+                </div>
               </>
             )}
           </div>
           {design.createdAt && (
-            <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '0.8125rem' }}>
-              Created: {formatDate(design.createdAt)}
+            <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '0.75rem' }}>
+              Created {formatDate(design.createdAt)}
             </Text>
           )}
-        </div>
-        {/* Status Badge */}
-        <div
-          style={{
-            padding: '0.25rem 0.75rem',
-            borderRadius: '1rem',
-            fontSize: '0.75rem',
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            background:
-              overallStatus === 'completed'
-                ? 'rgba(16, 126, 62, 0.1)'
-                : overallStatus === 'failed'
-                  ? 'rgba(187, 0, 0, 0.1)'
-                  : overallStatus === 'partial'
-                    ? 'rgba(233, 115, 12, 0.1)'
-                    : 'rgba(0, 112, 242, 0.1)',
-            color:
-              overallStatus === 'completed'
-                ? '#107E3E'
-                : overallStatus === 'failed'
-                  ? '#BB0000'
-                  : overallStatus === 'partial'
-                    ? '#E9730C'
-                    : '#0070F2',
-          }}
-        >
-          {overallStatus === 'partial' ? 'Partially Generated' : overallStatus}
         </div>
       </div>
 
@@ -546,56 +554,97 @@ function DesignDetail() {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '340px 1fr',
+          gridTemplateColumns: window.innerWidth < 1024 ? '1fr' : '320px 1fr',
           gap: '1.5rem',
-          padding: '0 2rem',
-          paddingBottom: '5rem',
+          padding: window.innerWidth < 768 ? '0 1rem 5rem' : '0 2rem 5rem',
+          alignItems: 'start',
         }}
       >
         {/* Left Column - Collapsible Attribute Panels */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {/* Predicted Attributes Panel */}
+          {/* Predicted Attributes Panel - Enhanced with AI styling */}
           <Panel
-            headerText={`✨ Predicted Attributes (${filteredPredicted.length})`}
+            header={
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  padding: '0.5rem 0',
+                }}
+              >
+                <Icon
+                  name="ai"
+                  style={{
+                    color: '#E9730C',
+                    fontSize: '1.125rem',
+                  }}
+                />
+                <Text
+                  style={{
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    fontSize: '0.8125rem',
+                    letterSpacing: '0.5px',
+                    color: '#E9730C',
+                  }}
+                >
+                  Predicted Attributes ({filteredPredicted.length})
+                </Text>
+              </div>
+            }
             collapsed={predictedPanelCollapsed}
             onToggle={() => setPredictedPanelCollapsed(!predictedPanelCollapsed)}
-            style={{ background: 'var(--sapTile_Background)' }}
+            style={{
+              background:
+                'linear-gradient(135deg, rgba(233, 115, 12, 0.04) 0%, rgba(233, 115, 12, 0.01) 100%)',
+              border: '1px solid rgba(233, 115, 12, 0.3)',
+              borderRadius: '0.5rem',
+              boxShadow: '0 2px 6px rgba(233, 115, 12, 0.08)',
+              transition: 'all 0.2s',
+              overflow: 'hidden',
+            }}
           >
-            <div style={{ padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ padding: '0.5rem 1rem' }}>
               {filteredPredicted.length > 0 ? (
-                filteredPredicted.map(([key, value]) => (
+                filteredPredicted.map(([key, value], index) => (
                   <div
                     key={key}
                     style={{
-                      border: '1px solid var(--sapList_BorderColor)',
-                      borderRadius: '0.5rem',
-                      padding: '0.75rem 1rem',
-                      background: 'var(--sapList_Background)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '0.75rem 0.75rem',
+                      borderBottom:
+                        index < filteredPredicted.length - 1
+                          ? '1px solid rgba(233, 115, 12, 0.1)'
+                          : 'none',
+                      borderRadius: '0.25rem',
+                      transition: 'background 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(233, 115, 12, 0.05)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
                     }}
                   >
-                    <div
+                    <Text
                       style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        marginBottom: '0.25rem',
+                        fontSize: '0.8125rem',
+                        color: 'var(--sapContent_LabelColor)',
+                        textTransform: 'capitalize',
                       }}
                     >
-                      <Text
-                        style={{
-                          fontSize: '0.75rem',
-                          color: 'var(--sapContent_LabelColor)',
-                          textTransform: 'capitalize',
-                        }}
-                      >
-                        {key.replace(/^(article_|ontology_\w+_)/, '').replace(/_/g, ' ')}
-                      </Text>
-                      <Icon
-                        name={getAttributeIcon(key)}
-                        style={{ color: 'var(--sapContent_IconColor)', fontSize: '0.875rem' }}
-                      />
-                    </div>
-                    <Text style={{ fontSize: '0.9375rem', fontWeight: 600, color: '#0070F2' }}>
+                      {key.replace(/^(article_|ontology_\w+_)/, '').replace(/_/g, ' ')}
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: '0.875rem',
+                        fontWeight: 500,
+                        color: '#E9730C',
+                      }}
+                    >
                       {String(value)}
                     </Text>
                   </div>
@@ -608,48 +657,88 @@ function DesignDetail() {
             </div>
           </Panel>
 
-          {/* Given Attributes Panel */}
+          {/* Given Attributes Panel - Enhanced with subtle styling */}
           <Panel
-            headerText={`🔒 Given Attributes (${filteredConstraints.length})`}
+            header={
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  padding: '0.5rem 0',
+                }}
+              >
+                <Icon
+                  name="locked"
+                  style={{
+                    color: 'var(--sapContent_LabelColor)',
+                    fontSize: '1.125rem',
+                  }}
+                />
+                <Text
+                  style={{
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    fontSize: '0.8125rem',
+                    letterSpacing: '0.5px',
+                    color: 'var(--sapContent_LabelColor)',
+                  }}
+                >
+                  Given Attributes ({filteredConstraints.length})
+                </Text>
+              </div>
+            }
             collapsed={givenPanelCollapsed}
             onToggle={() => setGivenPanelCollapsed(!givenPanelCollapsed)}
-            style={{ background: 'var(--sapTile_Background)' }}
+            style={{
+              background: 'var(--sapTile_Background)',
+              border: '1px solid var(--sapList_BorderColor)',
+              borderRadius: '0.5rem',
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+            }}
           >
-            <div style={{ padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ padding: '0.5rem 1rem' }}>
               {filteredConstraints.length > 0 ? (
-                filteredConstraints.map(([key, value]) => (
+                filteredConstraints.map(([key, value], index) => (
                   <div
                     key={key}
                     style={{
-                      border: '1px solid var(--sapList_BorderColor)',
-                      borderRadius: '0.5rem',
-                      padding: '0.75rem 1rem',
-                      background: 'var(--sapList_Background)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '0.75rem 0.75rem',
+                      borderBottom:
+                        index < filteredConstraints.length - 1
+                          ? '1px solid var(--sapList_BorderColor)'
+                          : 'none',
+                      borderRadius: '0.25rem',
+                      transition: 'background 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'var(--sapList_Hover_Background)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
                     }}
                   >
-                    <div
+                    <Text
                       style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        marginBottom: '0.25rem',
+                        fontSize: '0.8125rem',
+                        color: 'var(--sapContent_LabelColor)',
+                        textTransform: 'capitalize',
                       }}
                     >
-                      <Text
-                        style={{
-                          fontSize: '0.75rem',
-                          color: 'var(--sapContent_LabelColor)',
-                          textTransform: 'capitalize',
-                        }}
-                      >
-                        {key.replace(/^(article_|ontology_\w+_)/, '').replace(/_/g, ' ')}
-                      </Text>
-                      <Icon
-                        name={getAttributeIcon(key)}
-                        style={{ color: 'var(--sapContent_IconColor)', fontSize: '0.875rem' }}
-                      />
-                    </div>
-                    <Text style={{ fontSize: '0.9375rem', fontWeight: 600 }}>{String(value)}</Text>
+                      {key.replace(/^(article_|ontology_\w+_)/, '').replace(/_/g, ' ')}
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: '0.875rem',
+                        fontWeight: 500,
+                        color: 'var(--sapTextColor)',
+                      }}
+                    >
+                      {String(value)}
+                    </Text>
                   </div>
                 ))
               ) : (
@@ -662,183 +751,343 @@ function DesignDetail() {
         </div>
 
         {/* Right Column - Image Gallery */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {/* Main Image Display */}
-          <Card
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Image Gallery Container - Horizontal Layout */}
+          <div
             style={{
-              height: '450px',
+              background: 'var(--sapTile_Background)',
+              borderRadius: '0.5rem',
+              padding: '2rem',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              position: 'relative',
-              overflow: 'hidden',
+              flexDirection: window.innerWidth < 768 ? 'column' : 'row',
+              gap: window.innerWidth < 768 ? '1.5rem' : '1rem',
+              alignItems: window.innerWidth < 768 ? 'center' : 'flex-start',
             }}
           >
-            {/* Download button in top-right */}
-            {currentViewImage?.status === 'completed' && currentViewImage.url && (
-              <Button
-                icon="download"
-                design="Transparent"
-                tooltip={`Download ${selectedView} view`}
-                onClick={() => handleDownloadImage(selectedView)}
-                style={{
-                  position: 'absolute',
-                  top: '0.5rem',
-                  right: '0.5rem',
-                  zIndex: 5,
-                  background: 'rgba(255,255,255,0.9)',
-                  borderRadius: '50%',
-                }}
-              />
-            )}
+            {/* Thumbnail Column (Desktop) / Row (Mobile) */}
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: window.innerWidth < 768 ? 'row' : 'column',
+                gap: '0.75rem',
+                justifyContent: window.innerWidth < 768 ? 'center' : 'flex-start',
+                flexShrink: 0,
+                order: window.innerWidth < 768 ? 2 : 1,
+              }}
+            >
+              {(['front', 'back', 'model'] as const).map((view) => {
+                const img = generatedImages?.[view];
+                const isSelected = selectedView === view;
+                return (
+                  <div
+                    key={view}
+                    onClick={() => setSelectedView(view)}
+                    style={{
+                      width: window.innerWidth < 768 ? '80px' : '100px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      transform: isSelected ? 'scale(1.05)' : 'scale(1)',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.transform = 'scale(1.02)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = isSelected ? 'scale(1.05)' : 'scale(1)';
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: window.innerWidth < 768 ? '80px' : '100px',
+                        height: window.innerWidth < 768 ? '80px' : '100px',
+                        borderRadius: '0.375rem',
+                        border: `2px solid ${
+                          isSelected ? 'var(--sapSelectedColor)' : 'var(--sapList_BorderColor)'
+                        }`,
+                        boxShadow: isSelected
+                          ? '0 0 0 1px var(--sapSelectedColor), 0 2px 8px rgba(0, 0, 0, 0.12)'
+                          : '0 1px 3px rgba(0, 0, 0, 0.08)',
+                        overflow: 'hidden',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: '#f8f8f8',
+                        padding: '0.375rem',
+                      }}
+                    >
+                      {img?.status === 'completed' && img.url ? (
+                        <img
+                          src={img.url}
+                          alt={view}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'contain',
+                            borderRadius: '0.125rem',
+                          }}
+                        />
+                      ) : img?.status === 'generating' ? (
+                        <div
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <BusyIndicator active size="S" />
+                        </div>
+                      ) : img?.status === 'failed' ? (
+                        <div
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Icon
+                            name="sys-cancel"
+                            style={{ color: 'var(--sapNegativeColor)', fontSize: '1.5rem' }}
+                          />
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'var(--sapContent_LabelColor)',
+                            fontSize: '0.75rem',
+                          }}
+                        >
+                          <Icon name="camera" style={{ fontSize: '1.25rem' }} />
+                        </div>
+                      )}
+                    </div>
+                    <Text
+                      style={{
+                        display: 'block',
+                        textAlign: 'center',
+                        marginTop: '0.5rem',
+                        fontSize: window.innerWidth < 768 ? '0.6875rem' : '0.75rem',
+                        fontWeight: isSelected ? 600 : 500,
+                        color: isSelected
+                          ? 'var(--sapSelectedColor)'
+                          : 'var(--sapContent_LabelColor)',
+                      }}
+                    >
+                      {view.charAt(0).toUpperCase() + view.slice(1)}
+                    </Text>
+                  </div>
+                );
+              })}
+            </div>
 
-            {/* Zoom button */}
-            {currentViewImage?.status === 'completed' && currentViewImage.url && (
-              <Button
-                icon="zoom-in"
-                design="Transparent"
-                tooltip="View full size"
-                onClick={() => setImageModalOpen(true)}
-                style={{
-                  position: 'absolute',
-                  top: '0.5rem',
-                  right: '3rem',
-                  zIndex: 5,
-                  background: 'rgba(255,255,255,0.9)',
-                  borderRadius: '50%',
-                }}
-              />
-            )}
-
-            {/* Image or Status */}
-            {currentViewImage?.status === 'completed' && currentViewImage.url ? (
-              <img
-                src={currentViewImage.url}
-                alt={`${design.name} - ${selectedView} view`}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                }}
-              />
-            ) : currentViewImage?.status === 'pending' || currentViewImage?.status === 'generating' ? (
+            {/* Main Image Container */}
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                justifyContent: 'center',
+                order: window.innerWidth < 768 ? 1 : 2,
+              }}
+            >
+              {/* Image Stage Container */}
               <div
                 style={{
+                  position: 'relative',
                   width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%)',
-                  gap: '1rem',
-                }}
-              >
-                <BusyIndicator active size="L" />
-                <Text style={{ color: 'var(--sapContent_LabelColor)' }}>
-                  {currentViewImage?.status === 'pending'
-                    ? `Waiting to generate ${selectedView} view...`
-                    : `Generating ${selectedView} view...`}
-                </Text>
-              </div>
-            ) : currentViewImage?.status === 'failed' ? (
-              <div
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%)',
-                  gap: '0.5rem',
-                }}
-              >
-                <Icon name="sys-cancel" style={{ color: 'var(--sapNegativeColor)', fontSize: '2rem' }} />
-                <Text style={{ color: 'var(--sapNegativeColor)' }}>
-                  {selectedView.charAt(0).toUpperCase() + selectedView.slice(1)} view generation failed
-                </Text>
-              </div>
-            ) : (
-              <div
-                style={{
-                  width: '100%',
-                  height: '100%',
+                  maxWidth:
+                    window.innerWidth < 768
+                      ? '400px'
+                      : window.innerWidth < 1024
+                        ? '480px'
+                        : '520px',
+                  aspectRatio: '1/1',
+                  background: '#f8f8f8',
+                  borderRadius: '0.375rem',
+                  border: '1px solid var(--sapList_BorderColor)',
+                  padding: window.innerWidth < 768 ? '1rem' : '1.5rem',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  background: 'linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%)',
+                  overflow: 'hidden',
                 }}
               >
-                <Text style={{ color: 'var(--sapContent_LabelColor)' }}>No image available</Text>
-              </div>
-            )}
-          </Card>
+                {/* Navigation Arrows */}
+                {generatedImages && (
+                  <>
+                    <Button
+                      icon="navigation-left-arrow"
+                      design="Transparent"
+                      tooltip="Previous view"
+                      onClick={() => {
+                        const views: ImageView[] = ['front', 'back', 'model'];
+                        const currentIndex = views.indexOf(selectedView);
+                        const prevIndex = currentIndex === 0 ? views.length - 1 : currentIndex - 1;
+                        setSelectedView(views[prevIndex]);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: '0.5rem',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        zIndex: 2,
+                        background: 'rgba(255, 255, 255, 0.95)',
+                        borderRadius: '50%',
+                        width: '40px',
+                        height: '40px',
+                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                      }}
+                    />
+                    <Button
+                      icon="navigation-right-arrow"
+                      design="Transparent"
+                      tooltip="Next view"
+                      onClick={() => {
+                        const views: ImageView[] = ['front', 'back', 'model'];
+                        const currentIndex = views.indexOf(selectedView);
+                        const nextIndex = currentIndex === views.length - 1 ? 0 : currentIndex + 1;
+                        setSelectedView(views[nextIndex]);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: '0.5rem',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        zIndex: 2,
+                        background: 'rgba(255, 255, 255, 0.95)',
+                        borderRadius: '50%',
+                        width: '40px',
+                        height: '40px',
+                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                      }}
+                    />
+                  </>
+                )}
 
-          {/* Thumbnail Strip */}
-          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
-            {(['front', 'back', 'model'] as const).map((view) => {
-              const img = generatedImages?.[view];
-              const isSelected = selectedView === view;
-              return (
+                {/* View Badge */}
                 <div
-                  key={view}
-                  onClick={() => setSelectedView(view)}
                   style={{
-                    width: '100px',
-                    cursor: 'pointer',
-                    opacity: isSelected ? 1 : 0.7,
-                    transition: 'all 0.2s',
+                    position: 'absolute',
+                    top: '1rem',
+                    left: '1rem',
+                    zIndex: 3,
+                    padding: '2px', // Adds breathing room
                   }}
                 >
+                  <ObjectStatus state="Information" inverted>
+                    {selectedView.toUpperCase()} VIEW
+                  </ObjectStatus>
+                </div>
+
+                {/* Image action toolbar */}
+                {currentViewImage?.status === 'completed' && currentViewImage.url && (
                   <div
                     style={{
-                      width: '100px',
-                      height: '100px',
-                      borderRadius: '0.5rem',
-                      border: `2px solid ${isSelected ? '#0070F2' : 'var(--sapList_BorderColor)'}`,
-                      overflow: 'hidden',
+                      position: 'absolute',
+                      top: '1rem',
+                      right: '1rem',
+                      zIndex: 3,
+                      display: 'flex',
+                      gap: '0.375rem',
+                      background: 'rgba(255, 255, 255, 0.95)',
+                      borderRadius: '0.375rem',
+                      padding: '0.25rem',
+                      boxShadow: '0 1px 4px rgba(0, 0, 0, 0.1)',
+                    }}
+                  >
+                    <Button
+                      icon="zoom-in"
+                      design="Transparent"
+                      tooltip="View full size"
+                      onClick={() => setImageModalOpen(true)}
+                    />
+                    <Button
+                      icon="download"
+                      design="Transparent"
+                      tooltip={`Download ${selectedView} view`}
+                      onClick={() => handleDownloadImage(selectedView)}
+                    />
+                  </div>
+                )}
+
+                {/* Image or Status */}
+                {currentViewImage?.status === 'completed' && currentViewImage.url ? (
+                  <img
+                    src={currentViewImage.url}
+                    alt={`${design.name} - ${selectedView} view`}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'contain',
+                    }}
+                  />
+                ) : currentViewImage?.status === 'pending' ||
+                  currentViewImage?.status === 'generating' ? (
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '1rem',
+                    }}
+                  >
+                    <BusyIndicator active size="L" />
+                    <Text style={{ color: 'var(--sapContent_LabelColor)', textAlign: 'center' }}>
+                      {currentViewImage?.status === 'pending'
+                        ? `Waiting to generate ${selectedView} view...`
+                        : `Generating ${selectedView} view...`}
+                    </Text>
+                  </div>
+                ) : currentViewImage?.status === 'failed' ? (
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.5rem',
+                    }}
+                  >
+                    <Icon
+                      name="sys-cancel"
+                      style={{ color: 'var(--sapNegativeColor)', fontSize: '2rem' }}
+                    />
+                    <Text style={{ color: 'var(--sapNegativeColor)', textAlign: 'center' }}>
+                      {selectedView.charAt(0).toUpperCase() + selectedView.slice(1)} view generation
+                      failed
+                    </Text>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '100%',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      background: 'var(--sapBackgroundColor)',
                     }}
                   >
-                    {img?.status === 'completed' && img.url ? (
-                      <img
-                        src={img.url}
-                        alt={view}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                    ) : img?.status === 'generating' ? (
-                      <BusyIndicator active size="S" />
-                    ) : img?.status === 'failed' ? (
-                      <Icon name="sys-cancel" style={{ color: 'var(--sapNegativeColor)' }} />
-                    ) : (
-                      <div
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          background: 'linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%)',
-                        }}
-                      />
-                    )}
+                    <Text style={{ color: 'var(--sapContent_LabelColor)' }}>
+                      No image available
+                    </Text>
                   </div>
-                  <Text
-                    style={{
-                      display: 'block',
-                      textAlign: 'center',
-                      marginTop: '0.25rem',
-                      fontSize: '0.75rem',
-                      fontWeight: isSelected ? 600 : 400,
-                      color: isSelected ? '#0070F2' : 'var(--sapContent_LabelColor)',
-                    }}
-                  >
-                    {view.charAt(0).toUpperCase() + view.slice(1)}
-                  </Text>
-                </div>
-              );
-            })}
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -850,12 +1099,14 @@ function DesignDetail() {
           bottom: 0,
           left: 0,
           right: 0,
-          background: 'var(--sapBackgroundColor)',
-          borderTop: '1px solid var(--sapList_BorderColor)',
-          padding: '0.75rem 2rem',
+          background: 'var(--sapPageFooter_Background, var(--sapBackgroundColor))',
+          borderTop: '1px solid var(--sapPageFooter_BorderColor, var(--sapList_BorderColor))',
+          padding: '0.5rem 2rem',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          boxShadow: '0 -2px 4px rgba(0, 0, 0, 0.05)',
+          zIndex: 10,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -936,7 +1187,8 @@ function DesignDetail() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: '#f5f5f5',
+              background: '#f8f8f8',
+              borderRadius: '0.375rem',
             }}
           >
             <img
