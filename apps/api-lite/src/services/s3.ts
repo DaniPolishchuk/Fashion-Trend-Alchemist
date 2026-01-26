@@ -159,7 +159,6 @@ export async function uploadGeneratedImageWithRetry(
 }
 
 /**
-
  * Uploads a generated image for a specific view with retry logic
  * @param designId - The UUID of the generated design
  * @param imageBuffer - The image data as a Buffer
@@ -186,12 +185,17 @@ export async function uploadGeneratedImageForViewWithRetry(
       return await uploadGeneratedImageForView(designId, imageBuffer, view);
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      console.error(`[ImageGen] Upload attempt ${attempt + 1} for ${view} failed:`, lastError.message);
+      console.error(
+        `[ImageGen] Upload attempt ${attempt + 1} for ${view} failed:`,
+        lastError.message
+      );
     }
   }
 
   throw lastError || new Error(`Upload failed for ${view} view after all retry attempts`);
+}
 
+/**
  * Deletes a generated image from SeaweedFS
  * @param designId - The UUID of the generated design
  * @returns True if deletion was successful, false otherwise
