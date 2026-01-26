@@ -24,6 +24,9 @@ import '@ui5/webcomponents-icons/dist/add.js';
 import '@ui5/webcomponents-icons/dist/hint.js';
 import '@ui5/webcomponents-icons/dist/inspection.js';
 import '@ui5/webcomponents-icons/dist/target-group.js';
+import '@ui5/webcomponents-icons/dist/activate.js';
+import '@ui5/webcomponents-icons/dist/message-success.js';
+import '@ui5/webcomponents-icons/dist/message-error.js';
 
 // Article-level attribute keys (from database schema)
 const ARTICLE_ATTRIBUTES = [
@@ -93,6 +96,9 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [transmuting, setTransmuting] = useState(false);
+  const [transmutingDialogOpen, setTransmutingDialogOpen] = useState(false);
+  const [designName, setDesignName] = useState<string>('');
+  const [transmutingError, setTransmutingError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<{
     text: string;
     type: 'success' | 'error';
@@ -411,8 +417,12 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
 
   // Handle Transmute (Run RPT-1) button click
   const handleTransmute = async () => {
+    // Open animated dialog immediately
     setTransmuting(true);
+    setTransmutingDialogOpen(true);
     setPreviewDialogOpen(false);
+    setDesignName('');
+    setTransmutingError(null);
 
     try {
       const lockedAttrs = attributes
@@ -450,23 +460,19 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
           500: 'Internal Server Error - Contact support',
         };
         const errorDesc = errorMessages[errorCode] || 'Unknown error occurred';
-        setToastMessage({
-          text: `Error ${errorCode}: ${errorDesc}${result.details ? ` - ${result.details}` : ''}`,
-          type: 'error',
-        });
+        setTransmutingError(
+          `Error ${errorCode}: ${errorDesc}${result.details ? ` - ${result.details}` : ''}`
+        );
+        setTransmuting(false);
       } else {
-        setToastMessage({
-          text: `Design "${result.designName}" created successfully!`,
-          type: 'success',
-        });
+        setDesignName(result.designName);
+        setTransmuting(false);
       }
     } catch (error) {
       console.error('Transmutation failed:', error);
-      setToastMessage({
-        text: `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        type: 'error',
-      });
-    } finally {
+      setTransmutingError(
+        `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
       setTransmuting(false);
     }
   };
@@ -785,23 +791,6 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
 
   return (
     <div>
-      {/* Toast for success/error messages */}
-      {toastMessage && (
-        <Toast open onClose={() => setToastMessage(null)} duration={5000} placement="TopCenter">
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              color: toastMessage.type === 'error' ? '#BB0000' : '#107E3E',
-            }}
-          >
-            <Icon name={toastMessage.type === 'error' ? 'error' : 'message-success'} />
-            {toastMessage.text}
-          </div>
-        </Toast>
-      )}
-
       {/* Main Layout: Parameters Card + Success Score Panel */}
       <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
         {/* Left: Transmutation Parameters Card */}
@@ -1280,6 +1269,155 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
         </Card>
       </div>
 
+      {/* Transmuting Animation Dialog */}
+      <Dialog
+        open={transmutingDialogOpen}
+        onClose={transmuting ? undefined : () => setTransmutingDialogOpen(false)}
+        headerText=""
+        style={{ width: '400px' }}
+      >
+        <div
+          style={{
+            padding: '3rem 2rem',
+            textAlign: 'center',
+            height: '200px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+          }}
+        >
+          {transmuting ? (
+            /* Animated "Cooking" State */
+            <>
+              <Text
+                style={{
+                  fontSize: '1.5rem',
+                  fontWeight: 600,
+                  color: 'var(--sapContent_LabelColor)',
+                }}
+              >
+                Let the SAP-RPT-1 cook...
+              </Text>
+              <div style={{ display: 'flex', flexDirection: 'row' }}>
+                <Icon
+                  name="activate"
+                  style={{
+                    fontSize: '4rem',
+                    animation:
+                      'pulseSize 1.5s ease-in-out infinite, cycleColors 6s linear infinite',
+                    display: 'block',
+                    margin: '1rem auto',
+                  }}
+                />
+                <Icon
+                  name="activate"
+                  style={{
+                    fontSize: '4rem',
+                    animation:
+                      'pulseSize 1.5s ease-in-out infinite, cycleColors 6s linear infinite',
+                    display: 'block',
+                    margin: '1rem auto',
+                  }}
+                />
+                <Icon
+                  name="activate"
+                  style={{
+                    fontSize: '4rem',
+                    animation:
+                      'pulseSize 1.5s ease-in-out infinite, cycleColors 6s linear infinite',
+                    display: 'block',
+                    margin: '1rem auto',
+                  }}
+                />
+              </div>
+            </>
+          ) : transmutingError ? (
+            /* Error State */
+            <>
+              <Text
+                style={{
+                  fontSize: '1.25rem',
+                  fontWeight: 600,
+                  color: '#BB0000',
+                  display: 'block',
+                  marginBottom: '1rem',
+                }}
+              >
+                Generation Failed
+              </Text>
+              <Text
+                style={{
+                  fontSize: '1rem',
+                  color: 'var(--sapContent_LabelColor)',
+                  display: 'block',
+                  marginBottom: '1rem',
+                }}
+              >
+                {transmutingError}
+              </Text>
+              <Button design="Emphasized" onClick={() => setTransmutingDialogOpen(false)}>
+                Close
+              </Button>
+            </>
+          ) : (
+            /* Success State */
+            <>
+              <Text
+                style={{
+                  fontSize: '1.25rem',
+                  fontWeight: 600,
+                  color: '#107E3E',
+                  display: 'block',
+                  marginBottom: '0.5rem',
+                }}
+              >
+                Design Created Successfully!
+              </Text>
+              <Text
+                style={{
+                  fontSize: '1rem',
+                  color: 'var(--sapContent_LabelColor)',
+                  display: 'block',
+                  marginBottom: '1rem',
+                }}
+              >
+                "{designName}"
+              </Text>
+              <Button design="Emphasized" onClick={() => setTransmutingDialogOpen(false)}>
+                Close
+              </Button>
+            </>
+          )}
+        </div>
+      </Dialog>
+
+      {/* CSS Keyframes for Animations */}
+      <style>{`
+        @keyframes pulseSize {
+          0%, 100% { 
+            transform: scale(1); 
+          }
+          50% { 
+            transform: scale(2); 
+          }
+        }
+
+        @keyframes cycleColors {
+          0% { 
+            color: #0070F2; /* Fiori Blue */
+          }
+          33% { 
+            color: #107E3E; /* Fiori Green */
+          }
+          66% { 
+            color: #BB0000; /* Fiori Red */
+          }
+          100% { 
+            color: #0070F2; /* Back to Blue */
+          }
+        }
+      `}</style>
+
       {/* Preview Dialog */}
       <Dialog
         open={previewDialogOpen}
@@ -1325,10 +1463,12 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                   border: '1px solid var(--sapList_BorderColor)',
                 }}
               >
-                <Text style={{ display: 'block', marginBottom: '0.5rem' }}>
-                  <strong>Context Rows:</strong> {previewData.contextRowCount} of{' '}
-                  {previewData.totalContextItems} articles
-                </Text>
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <Text style={{ fontWeight: 600 }}>Context Rows:</Text>
+                  <Text>
+                    {previewData.contextRowCount} of {previewData.totalContextItems} articles
+                  </Text>
+                </div>
                 {previewData.missingEnrichmentCount > 0 && (
                   <MessageStrip design="Critical" hideCloseButton style={{ marginTop: '0.5rem' }}>
                     {previewData.missingEnrichmentCount} articles missing enriched attributes (will
@@ -1358,7 +1498,7 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                         borderBottom: '1px solid var(--sapList_BorderColor)',
                       }}
                     >
-                      Attribute
+                      <Text>Attribute</Text>
                     </th>
                     <th
                       style={{
@@ -1367,7 +1507,7 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                         borderBottom: '1px solid var(--sapList_BorderColor)',
                       }}
                     >
-                      Type
+                      <Text>Type</Text>
                     </th>
                     <th
                       style={{
@@ -1376,7 +1516,7 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                         borderBottom: '1px solid var(--sapList_BorderColor)',
                       }}
                     >
-                      Value
+                      <Text>Value</Text>
                     </th>
                   </tr>
                 </thead>
@@ -1389,7 +1529,7 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                           borderBottom: '1px solid var(--sapList_BorderColor)',
                         }}
                       >
-                        {attr.displayName}
+                        <Text>{attr.displayName}</Text>
                       </td>
                       <td
                         style={{
@@ -1397,7 +1537,7 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                           borderBottom: '1px solid var(--sapList_BorderColor)',
                         }}
                       >
-                        <span style={{ color: 'var(--sapContent_LabelColor)' }}>Locked</span>
+                        <Text style={{ color: 'var(--sapContent_LabelColor)' }}>Locked</Text>
                       </td>
                       <td
                         style={{
@@ -1405,7 +1545,7 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                           borderBottom: '1px solid var(--sapList_BorderColor)',
                         }}
                       >
-                        {attr.value}
+                        <Text>{attr.value}</Text>
                       </td>
                     </tr>
                   ))}
@@ -1417,7 +1557,7 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                           borderBottom: '1px solid var(--sapList_BorderColor)',
                         }}
                       >
-                        {attr.displayName}
+                        <Text>{attr.displayName}</Text>
                       </td>
                       <td
                         style={{
@@ -1425,7 +1565,7 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                           borderBottom: '1px solid var(--sapList_BorderColor)',
                         }}
                       >
-                        <span style={{ color: '#E9730C' }}>AI Variable</span>
+                        <Text style={{ color: '#E9730C' }}>AI Variable</Text>
                       </td>
                       <td
                         style={{
@@ -1433,7 +1573,7 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                           borderBottom: '1px solid var(--sapList_BorderColor)',
                         }}
                       >
-                        <code style={{ color: '#E9730C' }}>[PREDICT]</code>
+                        <Text style={{ color: '#E9730C', fontFamily: 'monospace' }}>[PREDICT]</Text>
                       </td>
                     </tr>
                   ))}
@@ -1446,11 +1586,10 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
               <summary
                 style={{
                   cursor: 'pointer',
-                  color: 'var(--sapContent_LabelColor)',
                   marginBottom: '0.5rem',
                 }}
               >
-                View Raw JSON Payload
+                <Text style={{ color: 'var(--sapContent_LabelColor)' }}>View Raw JSON Payload</Text>
               </summary>
               <pre
                 style={{
