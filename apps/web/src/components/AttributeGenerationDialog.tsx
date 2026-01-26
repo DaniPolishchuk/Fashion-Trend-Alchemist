@@ -17,6 +17,7 @@ import '@ui5/webcomponents-icons/dist/add.js';
 import '@ui5/webcomponents-icons/dist/decline.js';
 import '@ui5/webcomponents-icons/dist/hint.js';
 import '@ui5/webcomponents-icons/dist/product.js';
+import '@ui5/webcomponents-icons/dist/question-mark.js';
 
 interface AttributeGenerationDialogProps {
   open: boolean;
@@ -61,6 +62,9 @@ export function AttributeGenerationDialog({
   const [editingOptionValue, setEditingOptionValue] = useState('');
   const [addingNewOption, setAddingNewOption] = useState(false);
   const [newOptionValue, setNewOptionValue] = useState('');
+
+  // Info popup state
+  const [infoPopupOpen, setInfoPopupOpen] = useState(false);
 
   // Sync generated attributes to local state
   useEffect(() => {
@@ -265,17 +269,22 @@ export function AttributeGenerationDialog({
           <Bar
             design="Footer"
             endContent={
-              <Button
-                design="Emphasized"
-                onClick={handleSaveConfiguration}
-                disabled={
-                  attributesLoading ||
-                  !generatedAttributes ||
-                  Object.keys(generatedAttributes).length === 0
-                }
-              >
-                Proceed with the Data Enrichment
-              </Button>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <Button design="Default" onClick={onClose}>
+                  Close
+                </Button>
+                <Button
+                  design="Emphasized"
+                  onClick={handleSaveConfiguration}
+                  disabled={
+                    attributesLoading ||
+                    !generatedAttributes ||
+                    Object.keys(generatedAttributes).length === 0
+                  }
+                >
+                  Proceed with the Data Enrichment
+                </Button>
+              </div>
             }
           />
         }
@@ -293,13 +302,71 @@ export function AttributeGenerationDialog({
               background: 'var(--sapBackgroundColor)',
             }}
           >
+            <div
+              style={{
+                paddingBottom: '1.5rem',
+                borderBottom: '1px solid var(--sapList_BorderColor)',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '1rem',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Title level="H5" style={{ fontSize: '1.25rem' }}>
+                    Refine Attribute Generation
+                  </Title>
+                  <Button
+                    design="Transparent"
+                    icon="question-mark"
+                    onClick={() => setInfoPopupOpen(true)}
+                    style={{
+                      width: '24px',
+                      height: '24px',
+                      minWidth: '24px',
+                      padding: 0,
+                    }}
+                  />
+                </div>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '1rem',
+                  alignItems: 'flex-start',
+                  flexDirection: 'column',
+                }}
+              >
+                <div style={{ flex: 1, width: '100%' }}>
+                  <TextArea
+                    value={feedbackText}
+                    onInput={(e: any) => onFeedbackChange(e.target.value)}
+                    placeholder="Provide additional feedback to enhance attribute generation..."
+                    rows={3}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <Button
+                  design="Attention"
+                  icon="da"
+                  onClick={() => onRegenerate()}
+                  disabled={attributesLoading}
+                >
+                  Regenerate
+                </Button>
+              </div>
+            </div>
             <div>
               <Title
                 level="H5"
                 style={{
                   marginBottom: '0.5rem',
                   color: 'var(--sapContent_LabelColor)',
-                  fontSize: '0.75rem',
+                  fontSize: '1rem',
                   textTransform: 'uppercase',
                 }}
               >
@@ -393,42 +460,6 @@ export function AttributeGenerationDialog({
               overflow: 'hidden',
             }}
           >
-            {/* Refine Section */}
-            <div
-              style={{ padding: '1.5rem', borderBottom: '1px solid var(--sapList_BorderColor)' }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '1rem',
-                }}
-              >
-                <Title level="H5">Refine Attribute Generation</Title>
-                <Button design="Transparent" icon="decline" onClick={onClose} />
-              </div>
-              <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
-                <div style={{ flex: 1 }}>
-                  <TextArea
-                    value={feedbackText}
-                    onInput={(e: any) => onFeedbackChange(e.target.value)}
-                    placeholder="Provide additional feedback to enhance attribute generation..."
-                    rows={3}
-                    style={{ width: '100%' }}
-                  />
-                </div>
-                <Button
-                  design="Emphasized"
-                  icon="da"
-                  onClick={() => onRegenerate()}
-                  disabled={attributesLoading}
-                >
-                  Regenerate
-                </Button>
-              </div>
-            </div>
-
             {/* Generated Attributes List */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
               <div
@@ -625,6 +656,113 @@ export function AttributeGenerationDialog({
                   })}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Info Popup Dialog */}
+      <Dialog
+        open={infoPopupOpen}
+        headerText="Refine Attribute Generation - Help"
+        style={{ width: '550px', maxHeight: '600px' }}
+        footer={
+          <Bar
+            design="Footer"
+            endContent={
+              <Button design="Emphasized" onClick={() => setInfoPopupOpen(false)}>
+                Got it
+              </Button>
+            }
+          />
+        }
+      >
+        <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div>
+            <Title level="H6" style={{ marginBottom: '0.75rem', fontWeight: '600' }}>
+              What is Attribute Refinement?
+            </Title>
+            <Text>
+              Our system uses AI to automatically suggest the best categories and details
+              (attributes) for your products. You can easily tweak these suggestions until they are
+              perfect. Getting these details right is important because they act as a guide for the
+              next step. Without them, product descriptions can end up sounding too generic.
+              Instead, the AI uses your specific list of attributes to 'look' at each product image
+              and write a detailed, accurate description that fits your brand perfectly.
+            </Text>
+          </div>
+
+          <div>
+            <Title level="H6" style={{ marginBottom: '0.75rem', fontWeight: '600' }}>
+              How to Use Feedback
+            </Title>
+            <Text style={{ display: 'block', marginBottom: '0.5rem' }}>
+              Provide specific feedback in the text area to improve the generated attributes. For
+              example:
+            </Text>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.25rem',
+                marginLeft: '1rem',
+              }}
+            >
+              <Text>• "Add more color-related attributes"</Text>
+              <Text>• "Focus on sustainable materials"</Text>
+              <Text>• "Include size and fit details"</Text>
+              <Text>• "Remove overly technical attributes"</Text>
+            </div>
+          </div>
+
+          <div>
+            <Title level="H6" style={{ marginBottom: '0.75rem', fontWeight: '600' }}>
+              Managing Attributes
+            </Title>
+            <Text style={{ display: 'block', marginBottom: '0.5rem' }}>
+              You can manually manage the generated attributes:
+            </Text>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.25rem',
+                marginLeft: '1rem',
+              }}
+            >
+              <Text>
+                • <Text style={{ fontWeight: '600' }}>Add:</Text> Create new attributes manually
+              </Text>
+              <Text>
+                • <Text style={{ fontWeight: '600' }}>Edit:</Text> Rename existing attributes
+              </Text>
+              <Text>
+                • <Text style={{ fontWeight: '600' }}>Delete:</Text> Remove unwanted attributes
+              </Text>
+              <Text>
+                • <Text style={{ fontWeight: '600' }}>Click:</Text> View and modify attribute
+                options
+              </Text>
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: '1rem',
+              background: 'var(--sapInformationBackground)',
+              border: '1px solid var(--sapInformationBorderColor)',
+              borderRadius: '0.5rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+              <Icon
+                name="hint"
+                style={{ color: 'var(--sapInformativeColor)', marginTop: '0.25rem' }}
+              />
+              <Text>
+                <Text style={{ fontWeight: '600' }}>Tip:</Text> The more specific your feedback, the
+                better the AI can refine the attributes to match your needs.
+              </Text>
             </div>
           </div>
         </div>

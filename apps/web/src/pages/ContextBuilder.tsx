@@ -796,157 +796,166 @@ function ContextBuilder() {
             <div
               style={{
                 width: '360px',
-                padding: '1rem',
-                borderRight: '1px solid var(--sapList_BorderColor)',
+                padding: '0.75rem',
                 display: 'flex',
-                flexDirection: 'row',
-                gap: '0.3rem',
-                flexShrink: 0,
-                justifyContent: 'center',
                 alignItems: 'center',
               }}
             >
               <div
-                style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem',
-                  }}
-                >
-                  <Label style={{ fontSize: '0.875rem', minWidth: '40px' }}>Start:</Label>
-                  <Input
-                    value={startDay}
-                    placeholder="DD"
-                    onInput={(e: any) => handleDateInput('startDay', e.target.value)}
-                    valueState={
-                      startDay && !validateDate(startDay, startMonth || '1') ? 'Negative' : 'None'
-                    }
-                    style={{
-                      width: '60px',
-                      height: '25px',
-                      background: 'var(--sapBackgroundColor)',
-                    }}
-                  />
-                  <span style={{ fontSize: '0.875rem', fontWeight: 'bold' }}>/</span>
-                  <Input
-                    value={startMonth}
-                    placeholder="MM"
-                    onInput={(e: any) => handleDateInput('startMonth', e.target.value)}
-                    valueState={
-                      startMonth && (parseInt(startMonth) < 1 || parseInt(startMonth) > 12)
-                        ? 'Negative'
-                        : 'None'
-                    }
-                    style={{
-                      width: '60px',
-                      height: '25px',
-                      background: 'var(--sapBackgroundColor)',
-                    }}
-                  />
-                </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem',
-                  }}
-                >
-                  <Label style={{ fontSize: '0.875rem', minWidth: '40px' }}>End:</Label>
-                  <Input
-                    value={endDay}
-                    placeholder="DD"
-                    onInput={(e: any) => handleDateInput('endDay', e.target.value)}
-                    valueState={
-                      endDay && !validateDate(endDay, endMonth || '1') ? 'Negative' : 'None'
-                    }
-                    style={{
-                      width: '60px',
-                      height: '25px',
-                      background: 'var(--sapBackgroundColor)',
-                    }}
-                  />
-                  <span style={{ fontSize: '0.875rem', fontWeight: 'bold' }}>/</span>
-                  <Input
-                    value={endMonth}
-                    placeholder="MM"
-                    onInput={(e: any) => handleDateInput('endMonth', e.target.value)}
-                    valueState={
-                      endMonth && (parseInt(endMonth) < 1 || parseInt(endMonth) > 12)
-                        ? 'Negative'
-                        : 'None'
-                    }
-                    style={{
-                      width: '60px',
-                      height: '25px',
-                      background: 'var(--sapBackgroundColor)',
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div
                 style={{
+                  borderRight: '1px solid var(--sapList_BorderColor)',
+                  height: '100%',
+                  paddingRight: '1rem',
                   display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.5rem',
-                  width: '100%',
+                  flexDirection: 'row',
+                  gap: '0.3rem',
                   justifyContent: 'center',
+                  alignItems: 'center',
+                  flex: 1,
                 }}
               >
-                {/* Row 1: Spring & Summer */}
-                <div style={{ display: 'flex', gap: '0.3rem' }}>
-                  <Button
-                    design={selectedSeason === 'spring' ? 'Emphasized' : 'Default'}
-                    onClick={() => handleSeasonClick('spring')}
+                <div
+                  style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}
+                >
+                  <div
                     style={{
-                      flex: 1,
-                      fontSize: '0.75rem',
-                      height: '25px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.5rem',
                     }}
                   >
-                    Spring
-                  </Button>
-                  <Button
-                    design={selectedSeason === 'summer' ? 'Emphasized' : 'Default'}
-                    onClick={() => handleSeasonClick('summer')}
+                    <Label style={{ fontSize: '0.875rem', minWidth: '40px' }}>Start:</Label>
+                    <Input
+                      value={startDay}
+                      placeholder="DD"
+                      onInput={(e: any) => handleDateInput('startDay', e.target.value)}
+                      valueState={
+                        startDay && !validateDate(startDay, startMonth || '1') ? 'Negative' : 'None'
+                      }
+                      style={{
+                        width: '60px',
+                        height: '25px',
+                        background: 'var(--sapBackgroundColor)',
+                      }}
+                    />
+                    <span style={{ fontSize: '0.875rem', fontWeight: 'bold' }}>/</span>
+                    <Input
+                      value={startMonth}
+                      placeholder="MM"
+                      onInput={(e: any) => handleDateInput('startMonth', e.target.value)}
+                      valueState={
+                        startMonth && (parseInt(startMonth) < 1 || parseInt(startMonth) > 12)
+                          ? 'Negative'
+                          : 'None'
+                      }
+                      style={{
+                        width: '60px',
+                        height: '25px',
+                        background: 'var(--sapBackgroundColor)',
+                      }}
+                    />
+                  </div>
+                  <div
                     style={{
-                      flex: 1,
-                      fontSize: '0.75rem',
-                      height: '25px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.5rem',
                     }}
                   >
-                    Summer
-                  </Button>
+                    <Label style={{ fontSize: '0.875rem', minWidth: '40px' }}>End:</Label>
+                    <Input
+                      value={endDay}
+                      placeholder="DD"
+                      onInput={(e: any) => handleDateInput('endDay', e.target.value)}
+                      valueState={
+                        endDay && !validateDate(endDay, endMonth || '1') ? 'Negative' : 'None'
+                      }
+                      style={{
+                        width: '60px',
+                        height: '25px',
+                        background: 'var(--sapBackgroundColor)',
+                      }}
+                    />
+                    <span style={{ fontSize: '0.875rem', fontWeight: 'bold' }}>/</span>
+                    <Input
+                      value={endMonth}
+                      placeholder="MM"
+                      onInput={(e: any) => handleDateInput('endMonth', e.target.value)}
+                      valueState={
+                        endMonth && (parseInt(endMonth) < 1 || parseInt(endMonth) > 12)
+                          ? 'Negative'
+                          : 'None'
+                      }
+                      style={{
+                        width: '60px',
+                        height: '25px',
+                        background: 'var(--sapBackgroundColor)',
+                      }}
+                    />
+                  </div>
                 </div>
-                {/* Row 2: Autumn & Winter */}
-                <div style={{ display: 'flex', gap: '0.3rem' }}>
-                  <Button
-                    design={selectedSeason === 'autumn' ? 'Emphasized' : 'Default'}
-                    onClick={() => handleSeasonClick('autumn')}
-                    style={{
-                      flex: 1,
-                      fontSize: '0.75rem',
-                      height: '25px',
-                    }}
-                  >
-                    Autumn
-                  </Button>
-                  <Button
-                    design={selectedSeason === 'winter' ? 'Emphasized' : 'Default'}
-                    onClick={() => handleSeasonClick('winter')}
-                    style={{
-                      flex: 1,
-                      fontSize: '0.75rem',
-                      height: '25px',
-                    }}
-                  >
-                    Winter
-                  </Button>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.5rem',
+                    width: '100%',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {/* Row 1: Spring & Summer */}
+                  <div style={{ display: 'flex', gap: '0.3rem' }}>
+                    <Button
+                      design={selectedSeason === 'spring' ? 'Emphasized' : 'Default'}
+                      onClick={() => handleSeasonClick('spring')}
+                      style={{
+                        flex: 1,
+                        fontSize: '0.75rem',
+                        height: '25px',
+                      }}
+                    >
+                      Spring
+                    </Button>
+                    <Button
+                      design={selectedSeason === 'summer' ? 'Emphasized' : 'Default'}
+                      onClick={() => handleSeasonClick('summer')}
+                      style={{
+                        flex: 1,
+                        fontSize: '0.75rem',
+                        height: '25px',
+                      }}
+                    >
+                      Summer
+                    </Button>
+                  </div>
+                  {/* Row 2: Autumn & Winter */}
+                  <div style={{ display: 'flex', gap: '0.3rem' }}>
+                    <Button
+                      design={selectedSeason === 'autumn' ? 'Emphasized' : 'Default'}
+                      onClick={() => handleSeasonClick('autumn')}
+                      style={{
+                        flex: 1,
+                        fontSize: '0.75rem',
+                        height: '25px',
+                      }}
+                    >
+                      Autumn
+                    </Button>
+                    <Button
+                      design={selectedSeason === 'winter' ? 'Emphasized' : 'Default'}
+                      onClick={() => handleSeasonClick('winter')}
+                      style={{
+                        flex: 1,
+                        fontSize: '0.75rem',
+                        height: '25px',
+                      }}
+                    >
+                      Winter
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>

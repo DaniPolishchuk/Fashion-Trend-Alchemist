@@ -372,7 +372,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
   /**
    * DELETE /api/projects/:id
-   * Delete a project and all its related data (cascade delete)
+   * Delete a project and all its related data including images from SeaweedFS
    */
   fastify.delete<{ Params: { id: string } }>('/projects/:id', async (request, reply) => {
     try {
@@ -387,7 +387,54 @@ export default async function projectRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'Project not found' });
       }
 
-      // Delete in transaction for atomicity
+      // Fetch all generated designs to get their IDs for image cleanup
+      const designs = await db
+        .select({
+          id: generatedDesigns.id,
+          generatedImageUrl: generatedDesigns.generatedImageUrl,
+        })
+        .from(generatedDesigns)
+        .where(eq(generatedDesigns.projectId, projectId));
+
+      fastify.log.info(
+        { projectId, designCount: designs.length },
+        'Deleting project with generated designs'
+      );
+
+      // Clean up images from SeaweedFS (async, non-blocking)
+      if (designs.length > 0) {
+        const { deleteGeneratedImageWithRetry } = await import('../services/s3.js');
+
+        // Delete images in parallel (don't block DB transaction)
+        const imageDeletions = designs
+          .filter((design) => design.generatedImageUrl) // Only delete if image exists
+          .map(async (design) => {
+            try {
+              const success = await deleteGeneratedImageWithRetry(design.id);
+              if (success) {
+                fastify.log.info({ designId: design.id }, 'Image deleted from SeaweedFS');
+              } else {
+                fastify.log.warn({ designId: design.id }, 'Failed to delete image from SeaweedFS');
+              }
+            } catch (error) {
+              fastify.log.error(
+                { designId: design.id, error },
+                'Error during image deletion from SeaweedFS'
+              );
+            }
+          });
+
+        // Run image deletions without blocking DB transaction
+        Promise.allSettled(imageDeletions).then((results) => {
+          const successCount = results.filter((r) => r.status === 'fulfilled').length;
+          fastify.log.info(
+            { projectId, totalImages: designs.length, deletedImages: successCount },
+            'Image cleanup completed'
+          );
+        });
+      }
+
+      // Delete in transaction for atomicity (don't wait for image cleanup)
       await db.transaction(async (tx) => {
         // 1. Delete all generated designs for this project
         await tx.delete(generatedDesigns).where(eq(generatedDesigns.projectId, projectId));
@@ -533,7 +580,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
   /**
    * DELETE /api/projects/:projectId/generated-designs/:designId
-   * Delete a specific generated design
+   * Delete a specific generated design and its image from SeaweedFS
    */
   fastify.delete<{ Params: { projectId: string; designId: string } }>(
     '/projects/:projectId/generated-designs/:designId',
@@ -550,8 +597,33 @@ export default async function projectRoutes(fastify: FastifyInstance) {
           return reply.status(404).send({ error: 'Generated design not found' });
         }
 
-        // Hard delete the design
+        // Delete the image from SeaweedFS if it exists
+        if (design.generatedImageUrl) {
+          fastify.log.info(
+            { designId, imageUrl: design.generatedImageUrl },
+            'Cleaning up generated image'
+          );
+
+          // Import deleteGeneratedImageWithRetry dynamically
+          const { deleteGeneratedImageWithRetry } = await import('../services/s3.js');
+
+          // Attempt to delete from SeaweedFS (non-blocking - don't fail DB delete if this fails)
+          const deleteSuccess = await deleteGeneratedImageWithRetry(designId);
+
+          if (deleteSuccess) {
+            fastify.log.info({ designId }, 'Generated image deleted from SeaweedFS');
+          } else {
+            fastify.log.warn(
+              { designId },
+              'Failed to delete image from SeaweedFS, but continuing with DB deletion'
+            );
+          }
+        }
+
+        // Hard delete the design from database
         await db.delete(generatedDesigns).where(eq(generatedDesigns.id, designId));
+
+        fastify.log.info({ designId, projectId }, 'Generated design deleted successfully');
 
         return reply.status(204).send();
       } catch (error: any) {

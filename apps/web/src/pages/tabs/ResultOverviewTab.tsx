@@ -202,7 +202,6 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
       <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem' }}>
         <Input
           placeholder="Search generated variants..."
-          icon={<Icon name="search" />}
           value={searchQuery}
           onInput={(e: any) => handleSearchChange(e.target.value)}
           style={{ flex: 1 }}
@@ -332,9 +331,6 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
                       }}
                     />
                   </div>
-
-                  {/* Arrow */}
-                  <Icon name="slim-arrow-right" style={{ color: 'var(--sapContent_IconColor)' }} />
                 </div>
               );
             })
