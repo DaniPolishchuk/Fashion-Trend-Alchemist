@@ -1,3 +1,8 @@
+/**
+ * Result Overview Tab
+ * Optimized with constants, CSS modules, types, and helper functions
+ */
+
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -18,47 +23,42 @@ import '@ui5/webcomponents-icons/dist/slim-arrow-right.js';
 import '@ui5/webcomponents-icons/dist/accept.js';
 import '@ui5/webcomponents-icons/dist/delete.js';
 
-// Types for multi-image support
-interface GeneratedImages {
-  front: { url: string | null; status: string };
-  back: { url: string | null; status: string };
-  model: { url: string | null; status: string };
-}
-
-interface GeneratedDesign {
-  id: string;
-  name: string;
-  predictedAttributes: Record<string, string> | null;
-  inputConstraints: Record<string, string> | null;
-  generatedImageUrl: string | null;
-  generatedImages?: GeneratedImages | null;
-  createdAt?: string;
-}
-
-interface ResultOverviewTabProps {
-  projectId: string;
-}
-
-const ITEMS_PER_PAGE = 5;
+// Constants, types, and utilities
+import {
+  ITEMS_PER_PAGE,
+  ICONS,
+  TEXT,
+  API_ENDPOINTS,
+  ROUTES,
+} from '../../constants/resultOverviewTab';
+import type { GeneratedDesign, ResultOverviewTabProps } from '../../types/resultOverviewTab';
+import { getDisplayInfo, getPrimaryImageUrl } from '../../utils/resultOverviewHelpers';
+import styles from '../../styles/pages/ResultOverviewTab.module.css';
 
 function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
+
+  // Data state
   const [designs, setDesigns] = useState<GeneratedDesign[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // UI state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Delete state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [designToDelete, setDesignToDelete] = useState<GeneratedDesign | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Fetch generated designs from API
+  // Fetch generated designs
   useEffect(() => {
     const fetchDesigns = async () => {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch(`/api/projects/${projectId}/generated-designs`);
+        const response = await fetch(API_ENDPOINTS.GENERATED_DESIGNS(projectId));
 
         if (!response.ok) {
           throw new Error(`Failed to fetch designs: ${response.statusText}`);
@@ -78,29 +78,6 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
       fetchDesigns();
     }
   }, [projectId]);
-
-  // Extract given and predicted attributes for display
-  const getDisplayInfo = (design: GeneratedDesign) => {
-    const given = design.inputConstraints || {};
-    const predicted = design.predictedAttributes || {};
-
-    // Filter out internal keys (prefixed with _)
-    const givenEntries = Object.entries(given).filter(([key]) => !key.startsWith('_'));
-    const predictedEntries = Object.entries(predicted).filter(([key]) => !key.startsWith('_'));
-
-    // Get first 2 attributes from each
-    const givenText = givenEntries
-      .slice(0, 2)
-      .map(([_, value]) => value)
-      .join(', ');
-
-    const predictedText = predictedEntries
-      .slice(0, 2)
-      .map(([_, value]) => value)
-      .join(', ');
-
-    return { givenText, predictedText };
-  };
 
   // Filter designs by search query
   const filteredDesigns = useMemo(() => {
@@ -148,26 +125,19 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
 
     try {
       setDeleting(true);
-      const response = await fetch(
-        `/api/projects/${projectId}/generated-designs/${designToDelete.id}`,
-        {
-          method: 'DELETE',
-        }
-      );
+      const response = await fetch(API_ENDPOINTS.DELETE_DESIGN(projectId, designToDelete.id), {
+        method: 'DELETE',
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to delete design: ${response.statusText}`);
       }
 
-      // Remove from local state
       setDesigns((prev) => prev.filter((d) => d.id !== designToDelete.id));
-
-      // Close dialog
       setDeleteDialogOpen(false);
       setDesignToDelete(null);
     } catch (err) {
       console.error('Error deleting design:', err);
-      // You could show an error message here if needed
     } finally {
       setDeleting(false);
     }
@@ -178,20 +148,22 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
     setDesignToDelete(null);
   };
 
+  // Loading state
   if (loading) {
     return (
-      <div
-        style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}
-      >
+      <div className={styles.loadingContainer}>
         <BusyIndicator active />
       </div>
     );
   }
 
+  // Error state
   if (error) {
     return (
-      <div style={{ padding: '3rem', textAlign: 'center' }}>
-        <Text style={{ color: 'var(--sapNegativeColor)' }}>Error: {error}</Text>
+      <div className={styles.errorContainer}>
+        <Text className={styles.errorText}>
+          {TEXT.ERROR_PREFIX} {error}
+        </Text>
       </div>
     );
   }
@@ -199,31 +171,22 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
   return (
     <div>
       {/* Search Bar */}
-      <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem' }}>
+      <div className={styles.searchContainer}>
         <Input
-          placeholder="Search generated variants..."
+          placeholder={TEXT.SEARCH_PLACEHOLDER}
           value={searchQuery}
           onInput={(e: any) => handleSearchChange(e.target.value)}
-          style={{ flex: 1 }}
+          className={styles.searchInput}
         />
       </div>
 
       {/* Results Header */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '1rem',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Title level="H5">Generated Products</Title>
-          <Icon name="accept" style={{ color: 'var(--sapPositiveColor)' }} />
+      <div className={styles.resultsHeader}>
+        <div className={styles.headerLeft}>
+          <Title level="H5">{TEXT.TITLE}</Title>
+          <Icon name={ICONS.ACCEPT} className={styles.headerIcon} />
         </div>
-        <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '0.875rem' }}>
-          {filteredDesigns.length} variants generated
-        </Text>
+        <Text className={styles.headerCount}>{TEXT.VARIANTS_COUNT(filteredDesigns.length)}</Text>
       </div>
 
       {/* Results Card */}
@@ -231,100 +194,58 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
         {/* Results List */}
         <div>
           {paginatedDesigns.length === 0 ? (
-            <div style={{ padding: '3rem', textAlign: 'center' }}>
-              <Text style={{ color: 'var(--sapContent_LabelColor)' }}>
-                {searchQuery ? 'No results match your search.' : 'No generated designs yet.'}
+            <div className={styles.emptyContainer}>
+              <Text className={styles.emptyText}>
+                {searchQuery ? TEXT.NO_RESULTS : TEXT.NO_DESIGNS}
               </Text>
             </div>
           ) : (
-            paginatedDesigns.map((design, index) => {
+            paginatedDesigns.map((design) => {
               const { givenText, predictedText } = getDisplayInfo(design);
+              const imageUrl = getPrimaryImageUrl(design);
+
               return (
                 <div
                   key={design.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '1rem 1.5rem',
-                    borderBottom:
-                      index < paginatedDesigns.length - 1
-                        ? '1px solid var(--sapList_BorderColor)'
-                        : 'none',
-                    cursor: 'pointer',
-                    transition: 'background 0.2s',
-                  }}
-                  onClick={() => navigate(`/project/${projectId}/design/${design.id}`)}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = 'var(--sapList_Hover_Background)')
-                  }
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  className={styles.designItem}
+                  onClick={() => navigate(ROUTES.DESIGN_DETAIL(projectId, design.id))}
                 >
                   {/* Thumbnail */}
-                  <div
-                    style={{
-                      width: '64px',
-                      height: '64px',
-                      borderRadius: '0.5rem',
-                      background: 'var(--sapBackgroundColor)',
-                      marginRight: '1rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      overflow: 'hidden',
-                      flexShrink: 0,
-                    }}
-                  >
-                    {/* Use generatedImages.front if available, fall back to generatedImageUrl */}
-                    {(design.generatedImages?.front?.url || design.generatedImageUrl) ? (
-                      <img
-                        src={design.generatedImages?.front?.url || design.generatedImageUrl || ''}
-                        alt={design.name}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
+                  <div className={styles.thumbnail}>
+                    {imageUrl ? (
+                      <img src={imageUrl} alt={design.name} className={styles.thumbnailImage} />
                     ) : (
-                      <div
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          background: 'linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%)',
-                        }}
-                      />
+                      <div className={styles.thumbnailPlaceholder} />
                     )}
                   </div>
 
                   {/* Content */}
-                  <div style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: 600, fontSize: '0.9375rem', display: 'block' }}>
-                      {design.name}
-                    </Text>
-                    <Text
-                      style={{
-                        color: 'var(--sapContent_LabelColor)',
-                        fontSize: '0.8125rem',
-                        display: 'block',
-                      }}
-                    >
+                  <div className={styles.designContent}>
+                    <Text className={styles.designName}>{design.name}</Text>
+                    <Text className={styles.designAttributes}>
                       {givenText && (
                         <>
-                          <span style={{ fontWeight: 500 }}>Given:</span> {givenText}
+                          <span className={styles.attributeLabel}>{TEXT.LABEL_GIVEN}</span>{' '}
+                          {givenText}
                         </>
                       )}
                       {givenText && predictedText && ' | '}
                       {predictedText && (
                         <>
-                          <span style={{ fontWeight: 500 }}>Predicted:</span> {predictedText}
+                          <span className={styles.attributeLabel}>{TEXT.LABEL_PREDICTED}</span>{' '}
+                          {predictedText}
                         </>
                       )}
-                      {!givenText && !predictedText && 'No attributes'}
+                      {!givenText && !predictedText && TEXT.NO_ATTRIBUTES}
                     </Text>
                   </div>
 
-                  {/* Delete Icon */}
-                  <div style={{ marginRight: '1rem' }}>
+                  {/* Delete Button */}
+                  <div className={styles.deleteButton}>
                     <Button
-                      icon="delete"
+                      icon={ICONS.DELETE}
                       design="Transparent"
-                      tooltip="Delete generated product"
+                      tooltip={TEXT.DELETE_TOOLTIP}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDeleteClick(design);
@@ -342,25 +263,27 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
           <Bar
             design="Footer"
             startContent={
-              <Text style={{ fontSize: '0.875rem', color: 'var(--sapContent_LabelColor)' }}>
-                Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}-
-                {Math.min(currentPage * ITEMS_PER_PAGE, filteredDesigns.length)} of{' '}
-                {filteredDesigns.length}
+              <Text className={styles.paginationText}>
+                {TEXT.SHOWING_TEMPLATE(
+                  (currentPage - 1) * ITEMS_PER_PAGE + 1,
+                  Math.min(currentPage * ITEMS_PER_PAGE, filteredDesigns.length),
+                  filteredDesigns.length
+                )}
               </Text>
             }
             endContent={
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div className={styles.paginationControls}>
                 <Button
-                  icon="navigation-left-arrow"
+                  icon={ICONS.NAV_LEFT}
                   design="Transparent"
                   disabled={currentPage === 1}
                   onClick={handlePreviousPage}
                 />
-                <Text style={{ fontSize: '0.875rem', minWidth: '80px', textAlign: 'center' }}>
-                  Page {currentPage} of {totalPages}
+                <Text className={styles.paginationPage}>
+                  {TEXT.PAGE_TEMPLATE(currentPage, totalPages)}
                 </Text>
                 <Button
-                  icon="navigation-right-arrow"
+                  icon={ICONS.NAV_RIGHT}
                   design="Transparent"
                   disabled={currentPage === totalPages}
                   onClick={handleNextPage}
@@ -374,21 +297,19 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
       {/* Delete Confirmation Dialog */}
       <Dialog
         open={deleteDialogOpen}
-        headerText="Delete Generated Product?"
+        headerText={TEXT.DELETE_DIALOG_TITLE}
         footer={
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div className={styles.dialogFooter}>
             <Button onClick={handleDeleteCancel} disabled={deleting}>
-              Cancel
+              {TEXT.CANCEL_BUTTON}
             </Button>
             <Button design="Negative" onClick={handleDeleteConfirm} disabled={deleting}>
-              {deleting ? 'Deleting...' : 'Delete'}
+              {deleting ? TEXT.DELETING_BUTTON : TEXT.DELETE_BUTTON}
             </Button>
           </div>
         }
       >
-        <Text>
-          Are you sure you want to delete "{designToDelete?.name}"? This action cannot be undone.
-        </Text>
+        <Text>{designToDelete && TEXT.DELETE_CONFIRMATION(designToDelete.name)}</Text>
       </Dialog>
     </div>
   );

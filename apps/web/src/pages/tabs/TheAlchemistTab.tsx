@@ -1,3 +1,8 @@
+/**
+ * The Alchemist Tab
+ * Optimized with constants, CSS modules, types, and helper functions
+ */
+
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Card,
@@ -21,68 +26,33 @@ import '@ui5/webcomponents-icons/dist/ai.js';
 import '@ui5/webcomponents-icons/dist/decline.js';
 import '@ui5/webcomponents-icons/dist/add.js';
 import '@ui5/webcomponents-icons/dist/hint.js';
-import '@ui5/webcomponents-icons/dist/inspection.js';
 import '@ui5/webcomponents-icons/dist/target-group.js';
 import '@ui5/webcomponents-icons/dist/activate.js';
-import '@ui5/webcomponents-icons/dist/message-success.js';
-import '@ui5/webcomponents-icons/dist/message-error.js';
 
-// Article-level attribute keys (from database schema)
-const ARTICLE_ATTRIBUTES = [
-  'product_type',
-  'product_group',
-  'product_family',
-  'pattern_style',
-  'specific_color',
-  'color_intensity',
-  'color_family',
-  'customer_segment',
-  'style_concept',
-  'fabric_type_base',
-] as const;
-
-// Attributes that start in "Locked" by default (first 3 after product_type)
-const DEFAULT_LOCKED = ['product_family', 'pattern_style', 'specific_color'];
-
-// Attributes that start in "Not Included" by default
-const DEFAULT_NOT_INCLUDED = ['product_group', 'product_type'];
-
-// Maximum AI Variables allowed (RPT-1 Large limit)
-const MAX_AI_VARIABLES = 10;
-
-interface ProjectData {
-  id: string;
-  name: string;
-  ontologySchema: Record<string, Record<string, string[]>> | null;
-  scopeConfig: {
-    productTypes?: string[];
-    [key: string]: unknown;
-  } | null;
-}
-
-type AttributeCategory = 'locked' | 'ai' | 'notIncluded';
-
-interface AttributeConfig {
-  key: string;
-  displayName: string;
-  variants: string[];
-  category: AttributeCategory;
-  selectedValue: string | null;
-  isArticleLevel: boolean; // true if from article schema, false if from ontology
-}
-
-interface TheAlchemistTabProps {
-  project: ProjectData;
-}
-
-interface PreviewData {
-  contextRowCount: number;
-  totalContextItems: number;
-  missingEnrichmentCount: number;
-  lockedAttributes: { key: string; displayName: string; value: string }[];
-  aiVariables: { key: string; displayName: string }[];
-  samplePayload: object;
-}
+// Constants, types, and utilities
+import {
+  ATTRIBUTE_CATEGORIES,
+  COLUMNS,
+  ICONS,
+  TEXT,
+  SUCCESS_SCORE_CONFIG,
+  getSuccessScoreLabel,
+  MAX_AI_VARIABLES,
+  API_ENDPOINTS,
+  getErrorMessage,
+} from '../../constants/theAlchemistTab';
+import type {
+  AttributeConfig,
+  PreviewData,
+  TheAlchemistTabProps,
+} from '../../types/theAlchemistTab';
+import {
+  fetchArticleAttributes,
+  initializeAttributes,
+  buildLockedAttributes,
+  buildAIVariables,
+} from '../../utils/theAlchemistHelpers';
+import styles from '../../styles/pages/TheAlchemistTab.module.css';
 
 function TheAlchemistTab({ project }: TheAlchemistTabProps) {
   const [attributes, setAttributes] = useState<AttributeConfig[]>([]);
@@ -98,192 +68,52 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
   const [transmutingDialogOpen, setTransmutingDialogOpen] = useState(false);
   const [designName, setDesignName] = useState<string>('');
   const [transmutingError, setTransmutingError] = useState<string | null>(null);
-  const [successScore, setSuccessScore] = useState(100); // Default to 100% (maximum success)
+  const [successScore, setSuccessScore] = useState(SUCCESS_SCORE_CONFIG.DEFAULT);
 
-  // Memoize productTypes as a stable string to prevent unnecessary refetches
-  // when the array reference changes but values remain the same
+  // Memoize stable keys to prevent unnecessary refetches
   const productTypesKey = useMemo(
     () => (project.scopeConfig?.productTypes ?? []).slice().sort().join(','),
     [project.scopeConfig?.productTypes]
   );
 
-  // Memoize ontologySchema as a stable string to prevent unnecessary effect runs
   const ontologySchemaKey = useMemo(
     () => JSON.stringify(project.ontologySchema ?? {}),
     [project.ontologySchema]
   );
 
-  // Format attribute name: convert snake_case to Title Case
-  const formatAttributeName = (name: string): string => {
-    return name
-      .split('_')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  };
-
-  // Fetch article-level attribute options based on product types
-  // Uses cancellation flag to prevent stale fetches from updating state (React Strict Mode safety)
+  // Fetch article attributes
   useEffect(() => {
     let isCancelled = false;
 
-    const fetchArticleAttributes = async () => {
-      const productTypes = project.scopeConfig?.productTypes;
-      if (!productTypes || productTypes.length === 0) {
-        // No product types - set empty options so initialization can proceed
-        if (!isCancelled) setArticleAttributeOptions({});
-        return;
-      }
-
-      try {
-        const typesParam = productTypes.join(',');
-        const response = await fetch(
-          `/api/filters/attributes?types=${encodeURIComponent(typesParam)}`
-        );
-
-        // Don't update state if the effect was cleaned up (component unmounted or deps changed)
-        if (isCancelled) return;
-
-        if (response.ok) {
-          const data = await response.json();
-          // Map response keys to snake_case to match article schema
-          setArticleAttributeOptions({
-            product_group: data.productGroup || [],
-            product_family: data.productFamily || [],
-            pattern_style: data.patternStyle || [],
-            specific_color: data.specificColor || [],
-            color_intensity: data.colorIntensity || [],
-            color_family: data.colorFamily || [],
-            customer_segment: data.customerSegment || [],
-            style_concept: data.styleConcept || [],
-            fabric_type_base: data.fabricTypeBase || [],
-            // product_type comes from scopeConfig
-            product_type: productTypes,
-          });
-        } else {
-          // On error, set empty options so initialization can proceed
-          setArticleAttributeOptions({});
-        }
-      } catch (error) {
-        if (!isCancelled) {
-          console.error('Failed to fetch article attributes:', error);
-          // On error, set empty options so initialization can proceed
-          setArticleAttributeOptions({});
-        }
-      }
+    const loadArticleAttributes = async () => {
+      const options = await fetchArticleAttributes(project.scopeConfig?.productTypes);
+      if (!isCancelled) setArticleAttributeOptions(options);
     };
 
-    fetchArticleAttributes();
-
-    // Cleanup: cancel stale fetch updates when deps change or component unmounts
+    loadArticleAttributes();
     return () => {
       isCancelled = true;
     };
-  }, [productTypesKey, project.scopeConfig?.productTypes]); // productTypesKey for stable comparison, productTypes for ESLint
+  }, [productTypesKey, project.scopeConfig?.productTypes]);
 
-  // Initialize attributes ONCE when article options are loaded
-  // Uses attributesInitialized flag to prevent re-initialization on subsequent renders
-  // BUT allows re-initialization if ontologySchema changes from null to a value (after lock-context)
+  // Initialize attributes
   useEffect(() => {
-    // Wait until article attributes have been fetched (null = not yet fetched)
     if (articleAttributeOptions === null) return;
 
-    // Debug: Log current state to diagnose initialization issues
-    console.log('[TheAlchemistTab] Attribute initialization check:', {
-      articleAttributeOptionsLoaded: articleAttributeOptions !== null,
-      articleAttributeCount: Object.keys(articleAttributeOptions || {}).length,
-      ontologySchema: project.ontologySchema,
-      ontologySchemaKey,
-      attributesInitialized,
-      projectStatus: project.scopeConfig ? 'has scopeConfig' : 'no scopeConfig',
-    });
-
-    // Only initialize once, UNLESS ontologySchema was previously null and now has a value
-    // This handles the case where user creates a project (ontologySchema=null) and later
-    // locks context (ontologySchema gets populated)
     if (attributesInitialized) {
-      // Check if we need to re-initialize because ontologySchema was added
       const hasOntologyAttributes = attributes.some((attr) => !attr.isArticleLevel);
       const ontologyNowAvailable =
         project.ontologySchema && Object.keys(project.ontologySchema).length > 0;
 
       if (!hasOntologyAttributes && ontologyNowAvailable) {
-        console.log('[TheAlchemistTab] Ontology schema now available, re-initializing attributes');
-        // Reset flag to allow re-initialization with ontology attributes
         setAttributesInitialized(false);
         return;
       }
-
-      // Already initialized and no new ontology data - skip
       return;
     }
 
-    const initialAttributes: AttributeConfig[] = [];
-
-    // Add article-level attributes
-    ARTICLE_ATTRIBUTES.forEach((attrKey) => {
-      const variants = articleAttributeOptions[attrKey] || [];
-      if (variants.length > 0) {
-        const isLocked = DEFAULT_LOCKED.includes(attrKey);
-        const isNotIncluded = DEFAULT_NOT_INCLUDED.includes(attrKey);
-
-        let category: AttributeCategory;
-        let selectedValue: string | null = null;
-
-        if (isLocked) {
-          category = 'locked';
-          selectedValue = variants[0] || null; // Set first variant as default
-        } else if (isNotIncluded) {
-          category = 'notIncluded';
-        } else {
-          category = 'ai';
-        }
-
-        initialAttributes.push({
-          key: `article_${attrKey}`,
-          displayName: formatAttributeName(attrKey),
-          variants,
-          category,
-          selectedValue,
-          isArticleLevel: true,
-        });
-      }
-    });
-
-    // Add ontology-generated attributes
-    if (project.ontologySchema) {
-      Object.entries(project.ontologySchema).forEach(([productType, productAttributes]) => {
-        if (typeof productAttributes === 'object' && productAttributes !== null) {
-          Object.entries(productAttributes).forEach(([attrKey, variants]) => {
-            if (Array.isArray(variants) && variants.length > 0) {
-              initialAttributes.push({
-                key: `ontology_${productType}_${attrKey}`,
-                displayName: formatAttributeName(attrKey),
-                variants,
-                category: 'ai', // Ontology attributes default to AI Variables
-                selectedValue: null,
-                isArticleLevel: false,
-              });
-            }
-          });
-        }
-      });
-    } else {
-      console.log(
-        '[TheAlchemistTab] WARNING: ontologySchema is null/undefined - ontology attributes will not be loaded'
-      );
-    }
-
-    // Debug: Log what attributes were initialized
-    const articleCount = initialAttributes.filter((a) => a.isArticleLevel).length;
-    const ontologyCount = initialAttributes.filter((a) => !a.isArticleLevel).length;
-    console.log('[TheAlchemistTab] Initializing attributes:', {
-      totalAttributes: initialAttributes.length,
-      articleAttributes: articleCount,
-      ontologyAttributes: ontologyCount,
-      attributeKeys: initialAttributes.map((a) => a.key),
-    });
-
-    setAttributes(initialAttributes);
+    const initialized = initializeAttributes(articleAttributeOptions, project.ontologySchema);
+    setAttributes(initialized);
     setAttributesInitialized(true);
   }, [
     ontologySchemaKey,
@@ -293,54 +123,57 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
     attributes,
   ]);
 
-  // Move attribute to locked
-  const handleMoveToLocked = (key: string) => {
+  // Attribute movement handlers
+  const handleMoveToLocked = useCallback((key: string) => {
     setAttributes((prev) =>
       prev.map((attr) =>
         attr.key === key
-          ? { ...attr, category: 'locked', selectedValue: attr.variants[0] || null }
+          ? {
+              ...attr,
+              category: ATTRIBUTE_CATEGORIES.LOCKED,
+              selectedValue: attr.variants[0] || null,
+            }
           : attr
       )
     );
-  };
+  }, []);
 
-  // Move attribute to AI Variable
-  const handleMoveToAIVariable = (key: string) => {
+  const handleMoveToAIVariable = useCallback((key: string) => {
     setAttributes((prev) =>
       prev.map((attr) =>
-        attr.key === key ? { ...attr, category: 'ai', selectedValue: null } : attr
+        attr.key === key
+          ? { ...attr, category: ATTRIBUTE_CATEGORIES.AI, selectedValue: null }
+          : attr
       )
     );
-  };
+  }, []);
 
-  // Move attribute to Not Included
-  const handleMoveToNotIncluded = (key: string) => {
+  const handleMoveToNotIncluded = useCallback((key: string) => {
     setAttributes((prev) =>
       prev.map((attr) =>
-        attr.key === key ? { ...attr, category: 'notIncluded', selectedValue: null } : attr
+        attr.key === key
+          ? { ...attr, category: ATTRIBUTE_CATEGORIES.NOT_INCLUDED, selectedValue: null }
+          : attr
       )
     );
-  };
+  }, []);
 
-  // Update selected value for locked attribute
-  const handleValueChange = (key: string, value: string) => {
+  const handleValueChange = useCallback((key: string, value: string) => {
     setAttributes((prev) =>
       prev.map((attr) => (attr.key === key ? { ...attr, selectedValue: value } : attr))
     );
-  };
+  }, []);
 
   // Fetch preview data
   const fetchPreviewData = useCallback(async () => {
     setPreviewLoading(true);
     try {
-      const response = await fetch(`/api/projects/${project.id}/rpt1-preview`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch preview data');
-      }
-      const contextData = await response.json();
+      const response = await fetch(API_ENDPOINTS.RPT1_PREVIEW(project.id));
+      if (!response.ok) throw new Error('Failed to fetch preview data');
 
+      const contextData = await response.json();
       const lockedAttrs = attributes
-        .filter((attr) => attr.category === 'locked')
+        .filter((attr) => attr.category === ATTRIBUTE_CATEGORIES.LOCKED)
         .map((attr) => ({
           key: attr.key,
           displayName: attr.displayName,
@@ -348,19 +181,15 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
         }));
 
       const aiVars = attributes
-        .filter((attr) => attr.category === 'ai')
-        .map((attr) => ({
-          key: attr.key,
-          displayName: attr.displayName,
-        }));
+        .filter((attr) => attr.category === ATTRIBUTE_CATEGORIES.AI)
+        .map((attr) => ({ key: attr.key, displayName: attr.displayName }));
 
-      // Build sample payload
       const queryRow: Record<string, string> = {};
       lockedAttrs.forEach((attr) => {
         queryRow[attr.key] = attr.value;
       });
       aiVars.forEach((attr) => {
-        queryRow[attr.key] = '[PREDICT]';
+        queryRow[attr.key] = TEXT.PREDICT_VALUE;
       });
 
       setPreviewData({
@@ -369,50 +198,22 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
         missingEnrichmentCount: (contextData.totalCount || 0) - (contextData.enrichedCount || 0),
         lockedAttributes: lockedAttrs,
         aiVariables: aiVars,
-        samplePayload: {
-          rows: [{ '...': '(context rows from enriched articles)' }, queryRow],
-        },
+        samplePayload: { rows: [{ '...': '(context rows from enriched articles)' }, queryRow] },
       });
     } catch (error) {
       console.error('Failed to fetch preview:', error);
-      // Show basic preview without context data
-      const lockedAttrs = attributes
-        .filter((attr) => attr.category === 'locked')
-        .map((attr) => ({
-          key: attr.key,
-          displayName: attr.displayName,
-          value: attr.selectedValue || '',
-        }));
-
-      const aiVars = attributes
-        .filter((attr) => attr.category === 'ai')
-        .map((attr) => ({
-          key: attr.key,
-          displayName: attr.displayName,
-        }));
-
-      setPreviewData({
-        contextRowCount: 0,
-        totalContextItems: 0,
-        missingEnrichmentCount: 0,
-        lockedAttributes: lockedAttrs,
-        aiVariables: aiVars,
-        samplePayload: {},
-      });
     } finally {
       setPreviewLoading(false);
     }
   }, [project.id, attributes]);
 
-  // Handle Preview button click
   const handlePreview = async () => {
     setPreviewDialogOpen(true);
     await fetchPreviewData();
   };
 
-  // Handle Transmute (Run RPT-1) button click
+  // Handle transmutation
   const handleTransmute = async () => {
-    // Open animated dialog immediately
     setTransmuting(true);
     setTransmutingDialogOpen(true);
     setPreviewDialogOpen(false);
@@ -420,44 +221,20 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
     setTransmutingError(null);
 
     try {
-      const lockedAttrs = attributes
-        .filter((attr) => attr.category === 'locked')
-        .reduce(
-          (acc, attr) => {
-            acc[attr.key] = attr.selectedValue || '';
-            return acc;
-          },
-          {} as Record<string, string>
-        );
-
-      const aiVars = attributes.filter((attr) => attr.category === 'ai').map((attr) => attr.key);
-
-      const response = await fetch(`/api/projects/${project.id}/rpt1-predict`, {
+      const response = await fetch(API_ENDPOINTS.RPT1_PREDICT(project.id), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          lockedAttributes: lockedAttrs,
-          aiVariables: aiVars,
-          successScore: successScore, // Target success score (0-100)
+          lockedAttributes: buildLockedAttributes(attributes),
+          aiVariables: buildAIVariables(attributes),
+          successScore,
         }),
       });
 
       const result = await response.json();
 
       if (!response.ok) {
-        // Show error with code and description
-        const errorCode = response.status;
-        const errorMessages: Record<number, string> = {
-          400: 'Bad Request - Invalid data format or validation error',
-          401: 'Unauthorized - Invalid or missing API token',
-          429: 'Too Many Requests - Rate limit exceeded',
-          503: 'Service Unavailable - Server is under high load',
-          500: 'Internal Server Error - Contact support',
-        };
-        const errorDesc = errorMessages[errorCode] || 'Unknown error occurred';
-        setTransmutingError(
-          `Error ${errorCode}: ${errorDesc}${result.details ? ` - ${result.details}` : ''}`
-        );
+        setTransmutingError(getErrorMessage(response.status, result.details));
         setTransmuting(false);
       } else {
         setDesignName(result.designName);
@@ -472,437 +249,211 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
     }
   };
 
-  const lockedAttributes = attributes.filter((attr) => attr.category === 'locked');
-  const aiVariables = attributes.filter((attr) => attr.category === 'ai');
-  const notIncludedAttributes = attributes.filter((attr) => attr.category === 'notIncluded');
+  // Filter attributes by category
+  const lockedAttributes = useMemo(
+    () => attributes.filter((attr) => attr.category === ATTRIBUTE_CATEGORIES.LOCKED),
+    [attributes]
+  );
+  const aiVariables = useMemo(
+    () => attributes.filter((attr) => attr.category === ATTRIBUTE_CATEGORIES.AI),
+    [attributes]
+  );
+  const notIncludedAttributes = useMemo(
+    () => attributes.filter((attr) => attr.category === ATTRIBUTE_CATEGORIES.NOT_INCLUDED),
+    [attributes]
+  );
 
   const aiVariableCount = aiVariables.length;
   const isOverLimit = aiVariableCount > MAX_AI_VARIABLES;
   const canTransmute = aiVariableCount > 0 && aiVariableCount <= MAX_AI_VARIABLES && !transmuting;
-
-  // Show loading state until all data is fetched and attributes are initialized
   const isLoading = articleAttributeOptions === null || !attributesInitialized;
 
+  // Loading state
   if (isLoading) {
     return (
-      <div>
-        {/* Main Layout: Parameters Card + Success Score Panel with Skeleton Loading */}
-        <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
-          {/* Left: Transmutation Parameters Card with Skeleton */}
-          <Card style={{ flex: 1 }}>
-            {/* Card Header */}
-            <div
-              style={{ padding: '1.5rem', borderBottom: '1px solid var(--sapList_BorderColor)' }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <Icon name="ai" style={{ fontSize: '1.25rem', color: '#0070F2' }} />
-                <div>
-                  <Title level="H4" style={{ marginBottom: '0.25rem' }}>
-                    Transmutation Parameters
-                  </Title>
-                  <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '0.875rem' }}>
-                    Configure locked attributes and AI targets for RPT-1 prediction
-                  </Text>
-                </div>
+      <div className={styles.mainLayout}>
+        <Card className={styles.parametersCard}>
+          <div className={styles.loadingCardHeader}>
+            <div className={styles.cardHeaderLeft}>
+              <Icon name={ICONS.AI} className={styles.cardHeaderIcon} />
+              <div>
+                <Title level="H4" className={styles.cardTitle}>
+                  {TEXT.CARD_TITLE}
+                </Title>
+                <Text className={styles.cardSubtitle}>{TEXT.CARD_SUBTITLE}</Text>
+              </div>
+            </div>
+          </div>
+
+          <div
+            className={styles.loadingColumnsContainer}
+            role="status"
+            aria-busy="true"
+            aria-label="Loading attributes"
+          >
+            <div className={`${styles.loadingColumn} ${styles.loadingColumnLeft}`}>
+              <div className={styles.loadingColumnHeader}>
+                <Icon name={COLUMNS.LOCKED.icon} />
+                <Text className={styles.columnTitle}>{COLUMNS.LOCKED.title} (Loading...)</Text>
+              </div>
+              <div className={styles.loadingColumnContent}>
+                <AttributeSkeletonLoader variant="locked" count={3} />
               </div>
             </div>
 
-            {/* Three Column Layout with Skeleton Loading */}
-            <div
-              style={{ display: 'flex', minHeight: '400px' }}
-              role="status"
-              aria-busy="true"
-              aria-label="Loading attributes"
-            >
-              {/* Left Column: Locked Attributes Skeleton */}
-              <div
-                style={{
-                  flex: 1,
-                  padding: '1.5rem',
-                  borderRight: '1px solid var(--sapList_BorderColor)',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    marginBottom: '1.5rem',
-                  }}
-                >
-                  <Icon name="locked" style={{ color: 'var(--sapContent_LabelColor)' }} />
-                  <Text
-                    style={{
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      fontSize: '0.75rem',
-                      letterSpacing: '0.5px',
-                      color: 'var(--sapContent_LabelColor)',
-                    }}
-                  >
-                    Locked Attributes (Loading...)
-                  </Text>
-                </div>
-                <div
-                  style={{
-                    maxHeight: 'calc(5 * 4.25rem)', // ~5 items height + 20px increase (match actual content)
-                    overflowY: 'auto',
-                    paddingRight: '0.5rem', // Space for scrollbar
-                  }}
-                >
-                  <AttributeSkeletonLoader variant="locked" count={3} />
-                </div>
+            <div className={`${styles.loadingColumn} ${styles.loadingColumnMiddle}`}>
+              <div className={styles.loadingColumnHeader}>
+                <Icon name={COLUMNS.AI.icon} style={{ color: COLUMNS.AI.color }} />
+                <Text className={styles.columnTitle} style={{ color: COLUMNS.AI.color }}>
+                  {COLUMNS.AI.title} (Loading...)
+                </Text>
               </div>
-
-              {/* Middle Column: AI Variables Skeleton */}
-              <div
-                style={{
-                  flex: 1,
-                  padding: '1.5rem',
-                  borderRight: '1px solid var(--sapList_BorderColor)',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    marginBottom: '1.5rem',
-                  }}
-                >
-                  <Icon name="ai" style={{ color: '#E9730C' }} />
-                  <Text
-                    style={{
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      fontSize: '0.75rem',
-                      letterSpacing: '0.5px',
-                      color: '#E9730C',
-                    }}
-                  >
-                    AI Variables (Loading...)
-                  </Text>
-                </div>
-                <div
-                  style={{
-                    maxHeight: 'calc(5 * 4.25rem)', // ~5 items height + 20px increase (match actual content)
-                    overflowY: 'auto',
-                    paddingRight: '0.5rem', // Space for scrollbar
-                  }}
-                >
-                  <AttributeSkeletonLoader variant="ai" count={10} />
-                </div>
-              </div>
-
-              {/* Right Column: Not Included Skeleton */}
-              <div style={{ flex: 1, padding: '1.5rem' }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    marginBottom: '1.5rem',
-                  }}
-                >
-                  <Icon name="hint" style={{ color: 'var(--sapNeutralTextColor)' }} />
-                  <Text
-                    style={{
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      fontSize: '0.75rem',
-                      letterSpacing: '0.5px',
-                      color: 'var(--sapNeutralTextColor)',
-                    }}
-                  >
-                    Not Included (Loading...)
-                  </Text>
-                </div>
-                <div
-                  style={{
-                    maxHeight: 'calc(5 * 4.25rem)', // ~5 items height + 20px increase (match actual content)
-                    overflowY: 'auto',
-                    paddingRight: '0.5rem', // Space for scrollbar
-                  }}
-                >
-                  <AttributeSkeletonLoader variant="notIncluded" count={2} />
-                </div>
+              <div className={styles.loadingColumnContent}>
+                <AttributeSkeletonLoader variant="ai" count={10} />
               </div>
             </div>
 
-            {/* Footer with Disabled Transmute Button */}
-            <div
-              style={{
-                padding: '1rem 1.5rem',
-                borderTop: '1px solid var(--sapList_BorderColor)',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '0.875rem' }}>
-                  Loading attributes...
-                </Text>
-              </div>
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <Button
-                  design="Emphasized"
-                  icon="ai"
-                  disabled
-                  tooltip="Loading attributes..."
-                  style={{ opacity: 0.5 }}
-                >
-                  Transmute (Run RPT-1)
-                </Button>
-              </div>
-            </div>
-          </Card>
-
-          {/* Right: Success Score Panel (remains visible during loading) */}
-          <Card style={{ width: '280px', flexShrink: 0 }}>
-            <div style={{ padding: '1.5rem' }}>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  marginBottom: '1.5rem',
-                }}
-              >
-                <Icon name="target-group" style={{ color: '#107E3E' }} />
-                <Text
-                  style={{
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    fontSize: '0.75rem',
-                    letterSpacing: '0.5px',
-                    color: '#107E3E',
-                  }}
-                >
-                  Target Success
-                </Text>
-              </div>
-
-              <div style={{ marginBottom: '1.5rem' }}>
-                <Text
-                  style={{
-                    fontSize: '0.875rem',
-                    color: 'var(--sapContent_LabelColor)',
-                    marginBottom: '0.75rem',
-                    display: 'block',
-                  }}
-                >
-                  Set the desired performance level for the generated design. Higher values target
-                  top-performing attribute combinations.
-                </Text>
-              </div>
-
-              {/* Success Score Display */}
-              <div
-                style={{
-                  textAlign: 'center',
-                  padding: '1.5rem',
-                  background:
-                    'linear-gradient(135deg, rgba(16, 126, 62, 0.1) 0%, rgba(16, 126, 62, 0.05) 100%)',
-                  borderRadius: '0.75rem',
-                  marginBottom: '1.5rem',
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: '3rem',
-                    fontWeight: 700,
-                    color: '#107E3E',
-                    lineHeight: 1,
-                  }}
-                >
-                  {successScore}
-                </Text>
-                <Text
-                  style={{
-                    fontSize: '1rem',
-                    color: '#107E3E',
-                    marginLeft: '0.25rem',
-                  }}
-                >
-                  %
-                </Text>
-                <Text
-                  style={{
-                    display: 'block',
-                    fontSize: '0.75rem',
-                    color: 'var(--sapContent_LabelColor)',
-                    marginTop: '0.5rem',
-                  }}
-                >
-                  {successScore >= 90
-                    ? 'Top Performer'
-                    : successScore >= 70
-                      ? 'Above Average'
-                      : successScore >= 50
-                        ? 'Average'
-                        : 'Below Average'}
-                </Text>
-              </div>
-
-              {/* Slider - disabled during loading */}
-              <div style={{ padding: '0 0.5rem' }}>
-                <Slider
-                  value={successScore}
-                  min={0}
-                  max={100}
-                  step={5}
-                  showTickmarks
-                  labelInterval={4}
-                  onChange={(e: any) => setSuccessScore(e.target.value)}
-                  disabled={isLoading}
-                  style={{ width: '100%', opacity: isLoading ? 0.6 : 1 }}
+            <div className={styles.loadingColumn}>
+              <div className={styles.loadingColumnHeader}>
+                <Icon
+                  name={COLUMNS.NOT_INCLUDED.icon}
+                  style={{ color: COLUMNS.NOT_INCLUDED.color }}
                 />
-                <div
-                  style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}
-                >
-                  <Text style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)' }}>
-                    Low
-                  </Text>
-                  <Text style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)' }}>
-                    High
-                  </Text>
-                </div>
+                <Text className={styles.columnTitle} style={{ color: COLUMNS.NOT_INCLUDED.color }}>
+                  {COLUMNS.NOT_INCLUDED.title} (Loading...)
+                </Text>
+              </div>
+              <div className={styles.loadingColumnContent}>
+                <AttributeSkeletonLoader variant="notIncluded" count={2} />
               </div>
             </div>
-          </Card>
-        </div>
+          </div>
+
+          <div className={styles.loadingFooter}>
+            <div className={styles.loadingFooterLeft}>
+              <Text className={styles.loadingFooterText}>{TEXT.LOADING_ATTRIBUTES}</Text>
+            </div>
+            <div className={styles.loadingFooterButtons}>
+              <Button
+                design="Emphasized"
+                icon={ICONS.AI}
+                disabled
+                className={styles.transmuteButtonDisabled}
+              >
+                {TEXT.TRANSMUTE_BUTTON}
+              </Button>
+            </div>
+          </div>
+        </Card>
+
+        <Card className={styles.successPanel}>
+          <div className={styles.successPanelContent}>
+            <div className={styles.successPanelHeader}>
+              <Icon name={ICONS.TARGET_GROUP} className={styles.successPanelIcon} />
+              <Text className={styles.successPanelTitle}>{TEXT.SUCCESS_PANEL_TITLE}</Text>
+            </div>
+            <div className={styles.successPanelDescription}>
+              <Text className={styles.successPanelDescriptionText}>
+                {TEXT.SUCCESS_PANEL_DESCRIPTION}
+              </Text>
+            </div>
+            <div className={styles.successScoreDisplay}>
+              <Text className={styles.successScoreValue}>{successScore}</Text>
+              <Text className={styles.successScorePercent}>%</Text>
+              <Text className={styles.successScoreLabel}>{getSuccessScoreLabel(successScore)}</Text>
+            </div>
+            <div className={styles.sliderContainer}>
+              <Slider
+                value={successScore}
+                min={SUCCESS_SCORE_CONFIG.MIN}
+                max={SUCCESS_SCORE_CONFIG.MAX}
+                step={SUCCESS_SCORE_CONFIG.STEP}
+                showTickmarks
+                labelInterval={SUCCESS_SCORE_CONFIG.LABEL_INTERVAL}
+                onChange={(e: any) => setSuccessScore(e.target.value)}
+                disabled={isLoading}
+                className={`${styles.sliderWrapper} ${isLoading ? styles.sliderWrapperDisabled : ''}`}
+              />
+              <div className={styles.sliderLabels}>
+                <Text className={styles.sliderLabelText}>{TEXT.SLIDER_LOW}</Text>
+                <Text className={styles.sliderLabelText}>{TEXT.SLIDER_HIGH}</Text>
+              </div>
+            </div>
+          </div>
+        </Card>
       </div>
     );
   }
 
+  // Empty state
   if (!project.ontologySchema && Object.keys(articleAttributeOptions || {}).length === 0) {
     return (
-      <Card style={{ padding: '2rem', textAlign: 'center' }}>
-        <Text>No attributes available for this project.</Text>
+      <Card className={styles.emptyCard}>
+        <Text>{TEXT.NO_ATTRIBUTES}</Text>
       </Card>
     );
   }
 
   return (
     <div>
-      {/* Main Layout: Parameters Card + Success Score Panel */}
-      <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
-        {/* Left: Transmutation Parameters Card */}
-        <Card style={{ flex: 1 }}>
-          {/* Card Header */}
-          <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--sapList_BorderColor)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <Icon name="ai" style={{ fontSize: '1.25rem', color: '#0070F2' }} />
+      <div className={styles.mainLayout}>
+        {/* Parameters Card */}
+        <Card className={styles.parametersCard}>
+          <div className={styles.cardHeader}>
+            <div className={styles.cardHeaderContent}>
+              <div className={styles.cardHeaderLeft}>
+                <Icon name={ICONS.AI} className={styles.cardHeaderIcon} />
                 <div>
-                  <Title level="H4" style={{ marginBottom: '0.25rem' }}>
-                    Transmutation Parameters
+                  <Title level="H4" className={styles.cardTitle}>
+                    {TEXT.CARD_TITLE}
                   </Title>
-                  <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '0.875rem' }}>
-                    Configure locked attributes and AI targets for RPT-1 prediction
-                  </Text>
+                  <Text className={styles.cardSubtitle}>{TEXT.CARD_SUBTITLE}</Text>
                 </div>
               </div>
-              {/* Warning message for too many AI Variables - moved from column to header */}
               {isOverLimit && (
-                <div style={{ maxWidth: '300px' }}>
+                <div className={styles.warningContainer}>
                   <MessageStrip design="Negative" hideCloseButton>
-                    Too many AI Variables. Maximum is {MAX_AI_VARIABLES}. Move some to "Not
-                    Included".
+                    {TEXT.WARNING_TOO_MANY(MAX_AI_VARIABLES)}
                   </MessageStrip>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Three Column Layout */}
-          <div style={{ display: 'flex', minHeight: '400px' }}>
-            {/* Left Column: Locked Attributes */}
-            <div
-              style={{
-                flex: 1,
-                padding: '1.5rem',
-                borderRight: '1px solid var(--sapList_BorderColor)',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  marginBottom: '1.5rem',
-                }}
-              >
-                <Icon name="locked" style={{ color: 'var(--sapContent_LabelColor)' }} />
-                <Text
-                  style={{
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    fontSize: '0.75rem',
-                    letterSpacing: '0.5px',
-                    color: 'var(--sapContent_LabelColor)',
-                  }}
-                >
-                  Locked Attributes ({lockedAttributes.length})
+          <div className={styles.columnsContainer}>
+            {/* Locked Column */}
+            <div className={`${styles.column} ${styles.columnLeft}`}>
+              <div className={styles.columnHeader}>
+                <Icon name={COLUMNS.LOCKED.icon} />
+                <Text className={`${styles.columnTitle} ${styles.columnTitleLocked}`}>
+                  {COLUMNS.LOCKED.title} ({lockedAttributes.length})
                 </Text>
               </div>
 
               {lockedAttributes.length === 0 ? (
-                <Text style={{ color: 'var(--sapContent_LabelColor)', fontStyle: 'italic' }}>
-                  No locked attributes. Move attributes here to fix their values.
-                </Text>
+                <Text className={styles.emptyText}>{TEXT.EMPTY_LOCKED}</Text>
               ) : (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '1rem',
-                    maxHeight: 'calc(5 * 4.25rem)', // ~5 items height + 20px increase
-                    overflowY: 'auto',
-                    paddingRight: '0.5rem', // Space for scrollbar
-                  }}
-                >
+                <div className={styles.columnContent}>
                   {lockedAttributes.map((attr) => (
-                    <div key={attr.key}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          marginBottom: '0.5rem',
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: '0.875rem',
-                            fontWeight: 500,
-                          }}
-                        >
+                    <div key={attr.key} className={styles.lockedCard}>
+                      <div className={styles.lockedCardHeader}>
+                        <Text className={styles.lockedCardTitle}>
                           {attr.displayName}
                           {attr.isArticleLevel && (
-                            <span
-                              style={{
-                                fontSize: '0.7rem',
-                                color: 'var(--sapContent_LabelColor)',
-                                marginLeft: '0.5rem',
-                              }}
-                            >
-                              (Article)
-                            </span>
+                            <span className={styles.lockedCardBadge}>{TEXT.ARTICLE_BADGE}</span>
                           )}
                         </Text>
                         <Button
-                          icon="decline"
+                          icon={ICONS.DECLINE}
                           design="Transparent"
                           tooltip="Move to Not Included"
                           onClick={() => handleMoveToNotIncluded(attr.key)}
-                          style={{ minWidth: 'auto', padding: '0.25rem' }}
+                          className={styles.lockedCardButton}
                         />
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <div className={styles.lockedCardControls}>
                         <Select
-                          style={{ flex: 1 }}
+                          className={styles.lockedCardSelect}
                           value={attr.selectedValue || ''}
                           onChange={(e: any) =>
                             handleValueChange(attr.key, e.detail.selectedOption.value)
@@ -915,7 +466,7 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                           ))}
                         </Select>
                         <Button
-                          icon="arrow-right"
+                          icon={ICONS.ARROW_RIGHT}
                           design="Transparent"
                           tooltip="Move to AI Variables"
                           onClick={() => handleMoveToAIVariable(attr.key)}
@@ -927,108 +478,46 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
               )}
             </div>
 
-            {/* Middle Column: AI Variables */}
-            <div
-              style={{
-                flex: 1,
-                padding: '1.5rem',
-                borderRight: '1px solid var(--sapList_BorderColor)',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  marginBottom: '1.5rem',
-                }}
-              >
-                <Icon name="ai" style={{ color: '#E9730C' }} />
+            {/* AI Column */}
+            <div className={`${styles.column} ${styles.columnMiddle}`}>
+              <div className={styles.columnHeader}>
+                <Icon name={COLUMNS.AI.icon} style={{ color: COLUMNS.AI.color }} />
                 <Text
-                  style={{
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    fontSize: '0.75rem',
-                    letterSpacing: '0.5px',
-                    color: isOverLimit ? '#BB0000' : '#E9730C',
-                  }}
+                  className={`${styles.columnTitle} ${isOverLimit ? styles.columnTitleAIOverLimit : styles.columnTitleAI}`}
                 >
-                  AI Variables ({aiVariableCount}/{MAX_AI_VARIABLES})
+                  {COLUMNS.AI.title} ({aiVariableCount}/{MAX_AI_VARIABLES})
                 </Text>
               </div>
 
               {aiVariables.length === 0 ? (
-                <Text style={{ color: 'var(--sapContent_LabelColor)', fontStyle: 'italic' }}>
-                  No AI variables. Move attributes here to have RPT-1 predict them.
-                </Text>
+                <Text className={styles.emptyText}>{TEXT.EMPTY_AI}</Text>
               ) : (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.75rem',
-                    maxHeight: 'calc(5 * 4.25rem)', // ~5 items height + 20px increase (uniform with locked)
-                    overflowY: 'auto',
-                    paddingRight: '0.5rem', // Space for scrollbar
-                  }}
-                >
+                <div className={`${styles.columnContent} ${styles.columnContentAI}`}>
                   {aiVariables.map((attr) => (
-                    <div
-                      key={attr.key}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                      }}
-                    >
+                    <div key={attr.key} className={styles.aiCard}>
                       <Button
-                        icon="arrow-left"
+                        icon={ICONS.ARROW_LEFT}
                         design="Transparent"
                         tooltip="Move to Locked Attributes"
                         onClick={() => handleMoveToLocked(attr.key)}
                       />
                       <div
-                        style={{
-                          flex: 1,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '0.75rem 1rem',
-                          border: `1px solid ${isOverLimit ? '#BB0000' : '#E9730C'}`,
-                          borderRadius: '0.5rem',
-                          background: isOverLimit
-                            ? 'rgba(187, 0, 0, 0.05)'
-                            : 'rgba(233, 115, 12, 0.05)',
-                        }}
+                        className={`${styles.aiCardContent} ${isOverLimit ? styles.aiCardContentOverLimit : ''}`}
                       >
-                        <Icon
-                          name="ai"
-                          style={{
-                            color: '#E9730C',
-                            fontSize: '1.25rem',
-                          }}
-                        />
-                        <Text style={{ fontSize: '0.875rem' }}>
+                        <Icon name={ICONS.AI} className={styles.aiCardIcon} />
+                        <Text className={styles.aiCardTitle}>
                           {attr.displayName}
                           {attr.isArticleLevel && (
-                            <span
-                              style={{
-                                fontSize: '0.7rem',
-                                color: 'var(--sapContent_LabelColor)',
-                                marginLeft: '0.5rem',
-                              }}
-                            >
-                              (Article)
-                            </span>
+                            <span className={styles.lockedCardBadge}>{TEXT.ARTICLE_BADGE}</span>
                           )}
                         </Text>
                       </div>
                       <Button
-                        icon="decline"
+                        icon={ICONS.DECLINE}
                         design="Transparent"
                         tooltip="Move to Not Included"
                         onClick={() => handleMoveToNotIncluded(attr.key)}
-                        style={{ minWidth: 'auto' }}
+                        className={styles.aiCardButton}
                       />
                     </div>
                   ))}
@@ -1036,81 +525,35 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
               )}
             </div>
 
-            {/* Right Column: Not Included */}
-            <div style={{ flex: 1, padding: '1.5rem' }}>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  marginBottom: '1.5rem',
-                }}
-              >
-                <Icon name="hint" style={{ color: 'var(--sapNeutralTextColor)' }} />
-                <Text
-                  style={{
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    fontSize: '0.75rem',
-                    letterSpacing: '0.5px',
-                    color: 'var(--sapNeutralTextColor)',
-                  }}
-                >
-                  Not Included ({notIncludedAttributes.length})
+            {/* Not Included Column */}
+            <div className={styles.column}>
+              <div className={styles.columnHeader}>
+                <Icon
+                  name={COLUMNS.NOT_INCLUDED.icon}
+                  style={{ color: COLUMNS.NOT_INCLUDED.color }}
+                />
+                <Text className={`${styles.columnTitle} ${styles.columnTitleNotIncluded}`}>
+                  {COLUMNS.NOT_INCLUDED.title} ({notIncludedAttributes.length})
                 </Text>
               </div>
 
               {notIncludedAttributes.length === 0 ? (
-                <Text style={{ color: 'var(--sapContent_LabelColor)', fontStyle: 'italic' }}>
-                  No excluded attributes. Use the X button to move attributes here.
-                </Text>
+                <Text className={styles.emptyText}>{TEXT.EMPTY_NOT_INCLUDED}</Text>
               ) : (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.75rem',
-                    maxHeight: 'calc(5 * 4.25rem)', // ~5 items height + 20px increase (uniform with locked)
-                    overflowY: 'auto',
-                    paddingRight: '0.5rem', // Space for scrollbar
-                  }}
-                >
+                <div className={`${styles.columnContent} ${styles.columnContentAI}`}>
                   {notIncludedAttributes.map((attr) => (
-                    <div
-                      key={attr.key}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                      }}
-                    >
+                    <div key={attr.key} className={styles.notIncludedCard}>
                       <Button
-                        icon="add"
+                        icon={ICONS.ADD}
                         design="Transparent"
                         tooltip="Move to AI Variables"
                         onClick={() => handleMoveToAIVariable(attr.key)}
                       />
-                      <div
-                        style={{
-                          flex: 1,
-                          padding: '0.75rem 1rem',
-                          border: '1px dashed var(--sapNeutralBorderColor)',
-                          borderRadius: '0.5rem',
-                          background: 'var(--sapNeutralBackground)',
-                        }}
-                      >
-                        <Text style={{ color: 'var(--sapNeutralTextColor)', fontSize: '0.875rem' }}>
+                      <div className={styles.notIncludedCardContent}>
+                        <Text className={styles.notIncludedCardTitle}>
                           {attr.displayName}
                           {attr.isArticleLevel && (
-                            <span
-                              style={{
-                                fontSize: '0.7rem',
-                                color: 'var(--sapContent_LabelColor)',
-                                marginLeft: '0.5rem',
-                              }}
-                            >
-                              (Article)
-                            </span>
+                            <span className={styles.lockedCardBadge}>{TEXT.ARTICLE_BADGE}</span>
                           )}
                         </Text>
                       </div>
@@ -1121,310 +564,107 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
             </div>
           </div>
 
-          {/* Footer with Transmute Button */}
-          <div
-            style={{
-              padding: '1rem 1.5rem',
-              borderTop: '1px solid var(--sapList_BorderColor)',
-              display: 'flex',
-              justifyContent: 'flex-end',
-              alignItems: 'center',
-            }}
-          >
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
+          <div className={styles.cardFooter}>
+            <div className={styles.footerButtons}>
               <Button
                 design="Emphasized"
-                icon="ai"
+                icon={ICONS.AI}
                 onClick={handlePreview}
                 disabled={!canTransmute}
-                style={{
-                  background: canTransmute
-                    ? 'linear-gradient(90deg, #0070F2 0%, #0050C8 100%)'
-                    : undefined,
-                  opacity: canTransmute ? 1 : 0.5,
-                }}
+                className={canTransmute ? styles.transmuteButton : styles.transmuteButtonDisabled}
               >
-                {transmuting ? 'Transmuting...' : 'Transmute (Run RPT-1)'}
+                {transmuting ? TEXT.TRANSMUTING : TEXT.TRANSMUTE_BUTTON}
               </Button>
             </div>
           </div>
         </Card>
 
-        {/* Right: Success Score Panel */}
-        <Card style={{ width: '280px', flexShrink: 0 }}>
-          <div style={{ padding: '1.5rem' }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                marginBottom: '1.5rem',
-              }}
-            >
-              <Icon name="target-group" style={{ color: '#107E3E' }} />
-              <Text
-                style={{
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  fontSize: '0.75rem',
-                  letterSpacing: '0.5px',
-                  color: '#107E3E',
-                }}
-              >
-                Target Success
+        {/* Success Score Panel */}
+        <Card className={styles.successPanel}>
+          <div className={styles.successPanelContent}>
+            <div className={styles.successPanelHeader}>
+              <Icon name={ICONS.TARGET_GROUP} className={styles.successPanelIcon} />
+              <Text className={styles.successPanelTitle}>{TEXT.SUCCESS_PANEL_TITLE}</Text>
+            </div>
+            <div className={styles.successPanelDescription}>
+              <Text className={styles.successPanelDescriptionText}>
+                {TEXT.SUCCESS_PANEL_DESCRIPTION}
               </Text>
             </div>
-
-            <div style={{ marginBottom: '1.5rem' }}>
-              <Text
-                style={{
-                  fontSize: '0.875rem',
-                  color: 'var(--sapContent_LabelColor)',
-                  marginBottom: '0.75rem',
-                  display: 'block',
-                }}
-              >
-                Set the desired performance level for the generated design. Higher values target
-                top-performing attribute combinations.
-              </Text>
+            <div className={styles.successScoreDisplay}>
+              <Text className={styles.successScoreValue}>{successScore}</Text>
+              <Text className={styles.successScorePercent}>%</Text>
+              <Text className={styles.successScoreLabel}>{getSuccessScoreLabel(successScore)}</Text>
             </div>
-
-            {/* Success Score Display */}
-            <div
-              style={{
-                textAlign: 'center',
-                padding: '1.5rem',
-                background:
-                  'linear-gradient(135deg, rgba(16, 126, 62, 0.1) 0%, rgba(16, 126, 62, 0.05) 100%)',
-                borderRadius: '0.75rem',
-                marginBottom: '1.5rem',
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: '3rem',
-                  fontWeight: 700,
-                  color: '#107E3E',
-                  lineHeight: 1,
-                }}
-              >
-                {successScore}
-              </Text>
-              <Text
-                style={{
-                  fontSize: '1rem',
-                  color: '#107E3E',
-                  marginLeft: '0.25rem',
-                }}
-              >
-                %
-              </Text>
-              <Text
-                style={{
-                  display: 'block',
-                  fontSize: '0.75rem',
-                  color: 'var(--sapContent_LabelColor)',
-                  marginTop: '0.5rem',
-                }}
-              >
-                {successScore >= 90
-                  ? 'Top Performer'
-                  : successScore >= 70
-                    ? 'Above Average'
-                    : successScore >= 50
-                      ? 'Average'
-                      : 'Below Average'}
-              </Text>
-            </div>
-
-            {/* Slider */}
-            <div style={{ padding: '0 0.5rem' }}>
+            <div className={styles.sliderContainer}>
               <Slider
                 value={successScore}
-                min={0}
-                max={100}
-                step={5}
+                min={SUCCESS_SCORE_CONFIG.MIN}
+                max={SUCCESS_SCORE_CONFIG.MAX}
+                step={SUCCESS_SCORE_CONFIG.STEP}
                 showTickmarks
-                labelInterval={4}
+                labelInterval={SUCCESS_SCORE_CONFIG.LABEL_INTERVAL}
                 onChange={(e: any) => setSuccessScore(e.target.value)}
-                style={{ width: '100%' }}
+                className={styles.sliderWrapper}
               />
-              <div
-                style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}
-              >
-                <Text style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)' }}>
-                  Low
-                </Text>
-                <Text style={{ fontSize: '0.7rem', color: 'var(--sapContent_LabelColor)' }}>
-                  High
-                </Text>
+              <div className={styles.sliderLabels}>
+                <Text className={styles.sliderLabelText}>{TEXT.SLIDER_LOW}</Text>
+                <Text className={styles.sliderLabelText}>{TEXT.SLIDER_HIGH}</Text>
               </div>
             </div>
           </div>
         </Card>
       </div>
 
-      {/* Transmuting Animation Dialog */}
+      {/* Transmuting Dialog */}
       <Dialog
         open={transmutingDialogOpen}
         onClose={transmuting ? undefined : () => setTransmutingDialogOpen(false)}
         headerText=""
         style={{ width: '400px' }}
       >
-        <div
-          style={{
-            padding: '3rem 2rem',
-            textAlign: 'center',
-            height: '200px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-          }}
-        >
+        <div className={styles.dialogContent}>
           {transmuting ? (
-            /* Animated "Cooking" State */
             <>
-              <Text
-                style={{
-                  fontSize: '1.5rem',
-                  fontWeight: 600,
-                  color: 'var(--sapContent_LabelColor)',
-                }}
-              >
-                Let the SAP-RPT-1 cook...
-              </Text>
-              <div style={{ display: 'flex', flexDirection: 'row' }}>
-                <Icon
-                  name="activate"
-                  style={{
-                    fontSize: '4rem',
-                    animation:
-                      'pulseSize 1.5s ease-in-out infinite, cycleColors 6s linear infinite',
-                    display: 'block',
-                    margin: '1rem auto',
-                  }}
-                />
-                <Icon
-                  name="activate"
-                  style={{
-                    fontSize: '4rem',
-                    animation:
-                      'pulseSize 1.5s ease-in-out infinite, cycleColors 6s linear infinite',
-                    display: 'block',
-                    margin: '1rem auto',
-                  }}
-                />
-                <Icon
-                  name="activate"
-                  style={{
-                    fontSize: '4rem',
-                    animation:
-                      'pulseSize 1.5s ease-in-out infinite, cycleColors 6s linear infinite',
-                    display: 'block',
-                    margin: '1rem auto',
-                  }}
-                />
+              <Text className={styles.dialogTitle}>{TEXT.TRANSMUTING_MESSAGE}</Text>
+              <div className={styles.dialogIconContainer}>
+                <Icon name={ICONS.ACTIVATE} className={styles.dialogAnimatedIcon} />
+                <Icon name={ICONS.ACTIVATE} className={styles.dialogAnimatedIcon} />
+                <Icon name={ICONS.ACTIVATE} className={styles.dialogAnimatedIcon} />
               </div>
             </>
           ) : transmutingError ? (
-            /* Error State */
             <>
-              <Text
-                style={{
-                  fontSize: '1.25rem',
-                  fontWeight: 600,
-                  color: '#BB0000',
-                  display: 'block',
-                  marginBottom: '1rem',
-                }}
-              >
-                Generation Failed
-              </Text>
-              <Text
-                style={{
-                  fontSize: '1rem',
-                  color: 'var(--sapContent_LabelColor)',
-                  display: 'block',
-                  marginBottom: '1rem',
-                }}
-              >
-                {transmutingError}
-              </Text>
+              <Text className={styles.dialogErrorTitle}>{TEXT.ERROR_TITLE}</Text>
+              <Text className={styles.dialogErrorMessage}>{transmutingError}</Text>
               <Button design="Emphasized" onClick={() => setTransmutingDialogOpen(false)}>
-                Close
+                {TEXT.BUTTON_CLOSE}
               </Button>
             </>
           ) : (
-            /* Success State */
             <>
-              <Text
-                style={{
-                  fontSize: '1.25rem',
-                  fontWeight: 600,
-                  color: '#107E3E',
-                  display: 'block',
-                  marginBottom: '0.5rem',
-                }}
-              >
-                Design Created Successfully!
-              </Text>
-              <Text
-                style={{
-                  fontSize: '1rem',
-                  color: 'var(--sapContent_LabelColor)',
-                  display: 'block',
-                  marginBottom: '1rem',
-                }}
-              >
-                "{designName}"
-              </Text>
+              <Text className={styles.dialogSuccessTitle}>{TEXT.SUCCESS_TITLE}</Text>
+              <Text className={styles.dialogSuccessName}>"{designName}"</Text>
               <Button design="Emphasized" onClick={() => setTransmutingDialogOpen(false)}>
-                Close
+                {TEXT.BUTTON_CLOSE}
               </Button>
             </>
           )}
         </div>
       </Dialog>
 
-      {/* CSS Keyframes for Animations */}
-      <style>{`
-        @keyframes pulseSize {
-          0%, 100% { 
-            transform: scale(1); 
-          }
-          50% { 
-            transform: scale(2); 
-          }
-        }
-
-        @keyframes cycleColors {
-          0% { 
-            color: #0070F2; /* Fiori Blue */
-          }
-          33% { 
-            color: #107E3E; /* Fiori Green */
-          }
-          66% { 
-            color: #BB0000; /* Fiori Red */
-          }
-          100% { 
-            color: #0070F2; /* Back to Blue */
-          }
-        }
-      `}</style>
-
       {/* Preview Dialog */}
       <Dialog
         open={previewDialogOpen}
         onClose={() => setPreviewDialogOpen(false)}
-        headerText="RPT-1 Request Preview"
+        headerText={TEXT.PREVIEW_DIALOG_TITLE}
         style={{ width: '600px' }}
         footer={
           <Bar
             endContent={
               <>
                 <Button design="Transparent" onClick={() => setPreviewDialogOpen(false)}>
-                  Cancel
+                  {TEXT.BUTTON_CANCEL}
                 </Button>
                 <Button
                   design="Emphasized"
@@ -1439,78 +679,59 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
         }
       >
         {previewLoading ? (
-          <div style={{ padding: '2rem', textAlign: 'center' }}>
+          <div className={styles.previewLoading}>
             <BusyIndicator active size="M" />
-            <Text style={{ display: 'block', marginTop: '1rem' }}>Loading preview data...</Text>
+            <Text className={styles.previewLoadingText}>{TEXT.LOADING_PREVIEW}</Text>
           </div>
         ) : previewData ? (
-          <div style={{ padding: '1rem' }}>
-            {/* Context Summary */}
-            <div style={{ marginBottom: '1.5rem' }}>
-              <Title level="H5" style={{ marginBottom: '0.75rem' }}>
-                Context Summary
+          <div className={styles.previewContent}>
+            <div className={styles.previewSection}>
+              <Title level="H5" className={styles.previewSectionTitle}>
+                {TEXT.CONTEXT_SUMMARY_TITLE}
               </Title>
-              <div
-                style={{
-                  padding: '1rem',
-                  background: 'var(--sapList_Background)',
-                  borderRadius: '0.5rem',
-                  border: '1px solid var(--sapList_BorderColor)',
-                }}
-              >
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                  <Text style={{ fontWeight: 600 }}>Context Rows:</Text>
+              <div className={styles.previewContextSummary}>
+                <div className={styles.previewContextRow}>
+                  <Text className={styles.previewContextLabel}>{TEXT.CONTEXT_ROWS}</Text>
                   <Text>
-                    {previewData.contextRowCount} of {previewData.totalContextItems} articles
+                    {previewData.contextRowCount} {TEXT.OF} {previewData.totalContextItems}{' '}
+                    {TEXT.ARTICLES}
                   </Text>
                 </div>
                 {previewData.missingEnrichmentCount > 0 && (
-                  <MessageStrip design="Critical" hideCloseButton style={{ marginTop: '0.5rem' }}>
-                    {previewData.missingEnrichmentCount} articles missing enriched attributes (will
-                    be excluded)
+                  <MessageStrip
+                    design="Critical"
+                    hideCloseButton
+                    className={styles.previewMessageStrip}
+                  >
+                    {TEXT.WARNING_MISSING_ENRICHMENT(previewData.missingEnrichmentCount)}
                   </MessageStrip>
                 )}
                 {previewData.contextRowCount === 0 && (
-                  <MessageStrip design="Negative" hideCloseButton style={{ marginTop: '0.5rem' }}>
-                    No context rows available. Run image enrichment first.
+                  <MessageStrip
+                    design="Negative"
+                    hideCloseButton
+                    className={styles.previewMessageStrip}
+                  >
+                    {TEXT.WARNING_NO_CONTEXT}
                   </MessageStrip>
                 )}
               </div>
             </div>
 
-            {/* Query Structure */}
-            <div style={{ marginBottom: '1.5rem' }}>
-              <Title level="H5" style={{ marginBottom: '0.75rem' }}>
-                Query Structure
+            <div className={styles.previewSection}>
+              <Title level="H5" className={styles.previewSectionTitle}>
+                {TEXT.QUERY_STRUCTURE_TITLE}
               </Title>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <table className={styles.previewTable}>
                 <thead>
                   <tr>
-                    <th
-                      style={{
-                        textAlign: 'left',
-                        padding: '0.5rem',
-                        borderBottom: '1px solid var(--sapList_BorderColor)',
-                      }}
-                    >
+                    <th className={styles.previewTableHeader}>
                       <Text>Attribute</Text>
                     </th>
-                    <th
-                      style={{
-                        textAlign: 'left',
-                        padding: '0.5rem',
-                        borderBottom: '1px solid var(--sapList_BorderColor)',
-                      }}
-                    >
+                    <th className={styles.previewTableHeader}>
                       <Text>Type</Text>
                     </th>
-                    <th
-                      style={{
-                        textAlign: 'left',
-                        padding: '0.5rem',
-                        borderBottom: '1px solid var(--sapList_BorderColor)',
-                      }}
-                    >
+                    <th className={styles.previewTableHeader}>
                       <Text>Value</Text>
                     </th>
                   </tr>
@@ -1518,57 +739,31 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                 <tbody>
                   {previewData.lockedAttributes.map((attr) => (
                     <tr key={attr.key}>
-                      <td
-                        style={{
-                          padding: '0.5rem',
-                          borderBottom: '1px solid var(--sapList_BorderColor)',
-                        }}
-                      >
+                      <td className={styles.previewTableCell}>
                         <Text>{attr.displayName}</Text>
                       </td>
-                      <td
-                        style={{
-                          padding: '0.5rem',
-                          borderBottom: '1px solid var(--sapList_BorderColor)',
-                        }}
-                      >
-                        <Text style={{ color: 'var(--sapContent_LabelColor)' }}>Locked</Text>
+                      <td className={styles.previewTableCell}>
+                        <Text>{TEXT.TYPE_LOCKED}</Text>
                       </td>
-                      <td
-                        style={{
-                          padding: '0.5rem',
-                          borderBottom: '1px solid var(--sapList_BorderColor)',
-                        }}
-                      >
+                      <td className={styles.previewTableCell}>
                         <Text>{attr.value}</Text>
                       </td>
                     </tr>
                   ))}
                   {previewData.aiVariables.map((attr) => (
                     <tr key={attr.key}>
-                      <td
-                        style={{
-                          padding: '0.5rem',
-                          borderBottom: '1px solid var(--sapList_BorderColor)',
-                        }}
-                      >
+                      <td className={styles.previewTableCell}>
                         <Text>{attr.displayName}</Text>
                       </td>
-                      <td
-                        style={{
-                          padding: '0.5rem',
-                          borderBottom: '1px solid var(--sapList_BorderColor)',
-                        }}
-                      >
-                        <Text style={{ color: '#E9730C' }}>AI Variable</Text>
+                      <td className={styles.previewTableCell}>
+                        <Text className={styles.previewTableTextAI}>{TEXT.TYPE_AI}</Text>
                       </td>
-                      <td
-                        style={{
-                          padding: '0.5rem',
-                          borderBottom: '1px solid var(--sapList_BorderColor)',
-                        }}
-                      >
-                        <Text style={{ color: '#E9730C', fontFamily: 'monospace' }}>[PREDICT]</Text>
+                      <td className={styles.previewTableCell}>
+                        <Text
+                          className={`${styles.previewTableTextAI} ${styles.previewTableTextMonospace}`}
+                        >
+                          {TEXT.PREDICT_VALUE}
+                        </Text>
                       </td>
                     </tr>
                   ))}
@@ -1576,26 +771,11 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
               </table>
             </div>
 
-            {/* Raw JSON (collapsible) */}
-            <details>
-              <summary
-                style={{
-                  cursor: 'pointer',
-                  marginBottom: '0.5rem',
-                }}
-              >
-                <Text style={{ color: 'var(--sapContent_LabelColor)' }}>View Raw JSON Payload</Text>
+            <details className={styles.previewDetails}>
+              <summary>
+                <Text className={styles.previewDetailsText}>{TEXT.VIEW_RAW_JSON}</Text>
               </summary>
-              <pre
-                style={{
-                  background: 'var(--sapShell_Background)',
-                  padding: '1rem',
-                  borderRadius: '0.5rem',
-                  overflow: 'auto',
-                  fontSize: '0.75rem',
-                  maxHeight: '200px',
-                }}
-              >
+              <pre className={styles.previewJson}>
                 {JSON.stringify(previewData.samplePayload, null, 2)}
               </pre>
             </details>

@@ -1,3 +1,8 @@
+/**
+ * Enhanced Table Tab
+ * Optimized with constants, CSS modules, types, and helper functions
+ */
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Card,
@@ -29,61 +34,26 @@ import '@ui5/webcomponents-icons/dist/slim-arrow-right.js';
 import '@ui5/webcomponents-icons/dist/zoom-in.js';
 import '@ui5/webcomponents-icons/dist/decline.js';
 
-interface ContextItem {
-  articleId: string;
-  productType: string;
-  productGroup: string | null;
-  colorFamily: string | null;
-  patternStyle: string | null;
-  specificColor: string | null;
-  colorIntensity: string | null;
-  productFamily: string | null;
-  customerSegment: string | null;
-  styleConcept: string | null;
-  fabricTypeBase: string | null;
-  detailDesc: string | null;
-  velocityScore: number;
-  enrichedAttributes: Record<string, string> | null;
-  enrichmentError: string | null;
-  imageUrl: string;
-}
-
-interface Summary {
-  total: number;
-  successful: number;
-  pending: number;
-  failed: number;
-}
-
-interface EnhancedTableTabProps {
-  projectId: string;
-  enrichmentStatus: 'idle' | 'running' | 'completed' | 'failed';
-  currentArticleId: string | null;
-}
-
-type FilterType = 'all' | 'successful' | 'pending' | 'failed';
-type SortField = 'velocityScore' | 'articleId' | 'productType';
-
-const ITEMS_PER_PAGE = 25;
-
-/**
- * Format attribute name: replace underscores with spaces and capitalize first letter
- */
-function formatAttributeName(attr: string): string {
-  return attr.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-/**
- * Get color for velocity score based on value (0-100)
- * Returns heat map style colors (red-green gradient) for intuitive velocity performance visualization
- */
-function getVelocityColor(score: number): string {
-  if (score >= 90) return '#1D7044'; // Deep Green - Exceptional performers
-  if (score >= 70) return '#4CAF50'; // Light Green - Strong performers
-  if (score >= 50) return '#FFC107'; // Yellow - Average performers
-  if (score >= 30) return '#FF9800'; // Orange - Below average
-  return '#D32F2F'; // Red - Poor performers
-}
+// Constants, types, and utilities
+import {
+  ITEMS_PER_PAGE,
+  POLL_INTERVAL,
+  FILTER_TYPES,
+  SORT_FIELDS,
+  ICONS,
+  TEXT,
+  API_ENDPOINTS,
+  type FilterType,
+  type SortField,
+} from '../../constants/enhancedTableTab';
+import type { ContextItem, Summary, EnhancedTableTabProps } from '../../types/enhancedTableTab';
+import {
+  formatAttributeName,
+  getVelocityColor,
+  getStatusDisplay,
+  exportToCSV,
+} from '../../utils/enhancedTableHelpers';
+import styles from '../../styles/pages/EnhancedTableTab.module.css';
 
 function EnhancedTableTab({
   projectId,
@@ -104,8 +74,8 @@ function EnhancedTableTab({
 
   // UI state
   const [controlPanelExpanded, setControlPanelExpanded] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
-  const [sortBy, setSortBy] = useState<SortField>('velocityScore');
+  const [activeFilter, setActiveFilter] = useState<FilterType>(FILTER_TYPES.ALL);
+  const [sortBy, setSortBy] = useState<SortField>(SORT_FIELDS.VELOCITY_SCORE);
   const [sortDesc, setSortDesc] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -114,7 +84,7 @@ function EnhancedTableTab({
   const [retryingItems, setRetryingItems] = useState<Set<string>>(new Set());
   const [retryingAll, setRetryingAll] = useState(false);
 
-  // Expandable row state (accordion - only one at a time)
+  // Expandable row state
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
 
   // Image modal state
@@ -126,7 +96,7 @@ function EnhancedTableTab({
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`/api/projects/${projectId}/context-items`);
+      const response = await fetch(API_ENDPOINTS.CONTEXT_ITEMS(projectId));
 
       if (!response.ok) {
         throw new Error(`Failed to fetch context items: ${response.statusText}`);
@@ -162,14 +132,13 @@ function EnhancedTableTab({
     }
   }, [enrichmentStatus, fetchContextItems]);
 
-  // Poll for updates every 5 seconds while enrichment is running
+  // Poll for updates while enrichment is running
   useEffect(() => {
     if (enrichmentStatus !== 'running') return;
 
     const pollInterval = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        // Silent refresh without showing loading state
-        fetch(`/api/projects/${projectId}/context-items`)
+        fetch(API_ENDPOINTS.CONTEXT_ITEMS(projectId))
           .then((res) => res.json())
           .then((data) => {
             setContextItems(data.items);
@@ -178,7 +147,7 @@ function EnhancedTableTab({
           })
           .catch((err) => console.error('Polling error:', err));
       }
-    }, 5000);
+    }, POLL_INTERVAL);
 
     return () => clearInterval(pollInterval);
   }, [enrichmentStatus, projectId]);
@@ -187,22 +156,19 @@ function EnhancedTableTab({
   const filteredItems = useMemo(() => {
     let items = contextItems;
 
-    // Apply filter
-    if (activeFilter === 'successful') {
+    if (activeFilter === FILTER_TYPES.SUCCESSFUL) {
       items = items.filter((item) => item.enrichedAttributes !== null);
-    } else if (activeFilter === 'pending') {
+    } else if (activeFilter === FILTER_TYPES.PENDING) {
       items = items.filter(
         (item) => item.enrichedAttributes === null && item.enrichmentError === null
       );
-    } else if (activeFilter === 'failed') {
+    } else if (activeFilter === FILTER_TYPES.FAILED) {
       items = items.filter((item) => item.enrichmentError !== null);
     }
 
-    // Apply search - searches through all columns except image and status
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       items = items.filter((item) => {
-        // Search base text fields including new columns
         const baseMatch =
           item.articleId.toLowerCase().includes(query) ||
           item.productType.toLowerCase().includes(query) ||
@@ -218,7 +184,6 @@ function EnhancedTableTab({
           (item.detailDesc && item.detailDesc.toLowerCase().includes(query)) ||
           item.velocityScore.toString().includes(query);
 
-        // Search enriched attributes (dynamic LLM-generated fields)
         const enrichedMatch = item.enrichedAttributes
           ? Object.values(item.enrichedAttributes).some(
               (value) => value && value.toLowerCase().includes(query)
@@ -235,20 +200,17 @@ function EnhancedTableTab({
   // Sort items
   const sortedItems = useMemo(() => {
     let items = [...filteredItems];
-
-    // Sort by field
     items.sort((a, b) => {
       let comparison = 0;
-      if (sortBy === 'velocityScore') {
+      if (sortBy === SORT_FIELDS.VELOCITY_SCORE) {
         comparison = a.velocityScore - b.velocityScore;
-      } else if (sortBy === 'articleId') {
+      } else if (sortBy === SORT_FIELDS.ARTICLE_ID) {
         comparison = a.articleId.localeCompare(b.articleId);
-      } else if (sortBy === 'productType') {
+      } else if (sortBy === SORT_FIELDS.PRODUCT_TYPE) {
         comparison = a.productType.localeCompare(b.productType);
       }
       return sortDesc ? -comparison : comparison;
     });
-
     return items;
   }, [filteredItems, sortBy, sortDesc]);
 
@@ -264,6 +226,7 @@ function EnhancedTableTab({
     setCurrentPage(1);
   }, [activeFilter, searchQuery]);
 
+  // Handlers
   const handlePreviousPage = () => {
     if (currentPage > 1) setCurrentPage((prev) => prev - 1);
   };
@@ -272,24 +235,19 @@ function EnhancedTableTab({
     if (currentPage < totalPages) setCurrentPage((prev) => prev + 1);
   };
 
-  // Retry single item
   const handleRetryItem = async (articleId: string) => {
     if (enrichmentStatus === 'running') return;
 
     setRetryingItems((prev) => new Set(prev).add(articleId));
 
     try {
-      const response = await fetch(`/api/projects/${projectId}/retry-enrichment`, {
+      const response = await fetch(API_ENDPOINTS.RETRY_ENRICHMENT(projectId), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ articleIds: [articleId] }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to retry enrichment');
-      }
-
-      // Refresh data after a short delay to let enrichment start
+      if (!response.ok) throw new Error('Failed to retry enrichment');
       setTimeout(fetchContextItems, 1000);
     } catch (err) {
       console.error('Error retrying enrichment:', err);
@@ -302,24 +260,19 @@ function EnhancedTableTab({
     }
   };
 
-  // Retry all failed items
   const handleRetryAllFailed = async () => {
     if (enrichmentStatus === 'running' || summary.failed === 0) return;
 
     setRetryingAll(true);
 
     try {
-      const response = await fetch(`/api/projects/${projectId}/retry-enrichment`, {
+      const response = await fetch(API_ENDPOINTS.RETRY_ENRICHMENT(projectId), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}), // Empty body = retry all failed
+        body: JSON.stringify({}),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to retry enrichment');
-      }
-
-      // Refresh data after a short delay
+      if (!response.ok) throw new Error('Failed to retry enrichment');
       setTimeout(fetchContextItems, 1000);
     } catch (err) {
       console.error('Error retrying all failed:', err);
@@ -328,182 +281,102 @@ function EnhancedTableTab({
     }
   };
 
-  // Export to CSV
   const handleExportCSV = () => {
-    const headers = [
-      'Article ID',
-      'Product Type',
-      'Product Group',
-      'Color Family',
-      'Pattern Style',
-      'Specific Color',
-      'Color Intensity',
-      'Product Family',
-      'Customer Segment',
-      'Style Concept',
-      'Fabric Type',
-      'Velocity Score',
-      'Status',
-      ...ontologyAttributes,
-    ];
-
-    const rows = sortedItems.map((item) => {
-      const status = item.enrichedAttributes
-        ? 'Success'
-        : item.enrichmentError
-          ? 'Failed'
-          : 'Pending';
-      const baseData = [
-        item.articleId,
-        item.productType,
-        item.productGroup || '',
-        item.colorFamily || '',
-        item.patternStyle || '',
-        item.specificColor || '',
-        item.colorIntensity || '',
-        item.productFamily || '',
-        item.customerSegment || '',
-        item.styleConcept || '',
-        item.fabricTypeBase || '',
-        item.velocityScore.toFixed(2),
-        status,
-      ];
-
-      const enrichedData = ontologyAttributes.map(
-        (attr) => (item.enrichedAttributes && item.enrichedAttributes[attr]) || ''
-      );
-
-      return [...baseData, ...enrichedData];
-    });
-
-    // Escape CSV values
-    const escapeCSV = (value: string) => {
-      if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-        return `"${value.replace(/"/g, '""')}"`;
-      }
-      return value;
-    };
-
-    const csvContent = [
-      headers.map(escapeCSV).join(','),
-      ...rows.map((row) => row.map(escapeCSV).join(',')),
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `context-items-${projectId.slice(0, 8)}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    exportToCSV(sortedItems, ontologyAttributes, projectId);
   };
 
-  // Get status icon and color for an item
-  const getStatusDisplay = (item: ContextItem) => {
-    if (item.enrichedAttributes) {
-      return { icon: 'accept', state: 'Positive' as const, label: 'Success' };
-    }
-    if (item.enrichmentError) {
-      return { icon: 'alert', state: 'Negative' as const, label: 'Failed' };
-    }
-    return { icon: 'pending', state: 'Information' as const, label: 'Pending' };
-  };
-
-  // Toggle row expansion (accordion behavior)
   const handleRowToggle = (articleId: string) => {
     setExpandedRowId((prev) => (prev === articleId ? null : articleId));
   };
 
-  // Open image in modal
   const handleImageClick = (imageUrl: string) => {
     setImageModalUrl(imageUrl);
     setImageModalOpen(true);
   };
 
+  // Loading state
   if (loading) {
     return (
-      <div
-        style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}
-      >
+      <div className={styles.loadingContainer}>
         <BusyIndicator active size="L" />
       </div>
     );
   }
 
+  // Error state
   if (error) {
     return (
-      <div style={{ padding: '3rem', textAlign: 'center' }}>
-        <Text style={{ color: 'var(--sapNegativeColor)' }}>Error: {error}</Text>
-        <div style={{ marginTop: '1rem' }}>
+      <div className={styles.errorContainer}>
+        <Text className={styles.errorText}>Error: {error}</Text>
+        <div className={styles.errorActions}>
           <Button onClick={fetchContextItems}>Retry</Button>
         </div>
       </div>
     );
   }
 
+  const filterCounts = {
+    [FILTER_TYPES.ALL]: summary.total,
+    [FILTER_TYPES.SUCCESSFUL]: summary.successful,
+    [FILTER_TYPES.PENDING]: summary.pending,
+    [FILTER_TYPES.FAILED]: summary.failed,
+  };
+
   return (
     <div>
-      {/* Enrichment Control Panel */}
+      {/* Control Panel */}
       <Card
-        style={{ marginBottom: '1rem' }}
+        className={styles.controlPanel}
         header={
           <CardHeader
-            titleText="Enrichment Status"
+            titleText={TEXT.PANEL_TITLE}
             subtitleText={
               enrichmentStatus === 'running'
-                ? 'Processing...'
-                : `${summary.successful} of ${summary.total} items enriched`
+                ? TEXT.PANEL_SUBTITLE_RUNNING
+                : TEXT.PANEL_SUBTITLE_TEMPLATE(summary.successful, summary.total)
             }
             interactive
             onClick={() => setControlPanelExpanded(!controlPanelExpanded)}
-            action={
-              <Icon
-                name={controlPanelExpanded ? 'slim-arrow-up' : 'slim-arrow-down'}
-                style={{ color: 'var(--sapContent_IconColor)' }}
-              />
-            }
+            action={<Icon name={controlPanelExpanded ? ICONS.ARROW_UP : ICONS.ARROW_DOWN} />}
           />
         }
       >
         {controlPanelExpanded && (
-          <div style={{ padding: '1rem' }}>
-            {/* Status Summary */}
-            <div style={{ display: 'flex', gap: '2rem', marginBottom: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div className={styles.controlPanelContent}>
+            <div className={styles.statusSummary}>
+              <div className={styles.statusItem}>
                 <ObjectStatus state="Positive">
-                  <Icon name="accept" /> {summary.successful} Successful
+                  <Icon name={ICONS.ACCEPT} /> {summary.successful} {TEXT.FILTER_SUCCESSFUL}
                 </ObjectStatus>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div className={styles.statusItem}>
                 <ObjectStatus state="Information">
-                  <Icon name="pending" /> {summary.pending} Pending
+                  <Icon name={ICONS.PENDING} /> {summary.pending} {TEXT.FILTER_PENDING}
                 </ObjectStatus>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div className={styles.statusItem}>
                 <ObjectStatus state="Negative">
-                  <Icon name="alert" /> {summary.failed} Failed
+                  <Icon name={ICONS.ALERT} /> {summary.failed} {TEXT.FILTER_FAILED}
                 </ObjectStatus>
               </div>
             </div>
 
-            {/* Current Article Display */}
             {enrichmentStatus === 'running' && currentArticleId && (
-              <div style={{ marginBottom: '1rem' }}>
-                <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '0.875rem' }}>
-                  Processing: {currentArticleId}
+              <div className={styles.processingInfo}>
+                <Text className={styles.processingText}>
+                  {TEXT.PROCESSING_LABEL} {currentArticleId}
                 </Text>
               </div>
             )}
 
-            {/* Retry Button */}
             {summary.failed > 0 && enrichmentStatus !== 'running' && (
               <Button
                 design="Emphasized"
-                icon="refresh"
+                icon={ICONS.REFRESH}
                 onClick={handleRetryAllFailed}
                 disabled={retryingAll}
               >
-                {retryingAll ? 'Retrying...' : `Retry All Failed (${summary.failed})`}
+                {retryingAll ? TEXT.RETRYING : TEXT.RETRY_ALL_BUTTON(summary.failed)}
               </Button>
             )}
           </div>
@@ -511,139 +384,114 @@ function EnhancedTableTab({
       </Card>
 
       {/* Table Controls */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '1rem',
-          flexWrap: 'wrap',
-          gap: '0.5rem',
-        }}
-      >
-        {/* Filter Chips */}
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {(['all', 'successful', 'pending', 'failed'] as FilterType[]).map((filter) => {
-            const counts: Record<FilterType, number> = {
-              all: summary.total,
-              successful: summary.successful,
-              pending: summary.pending,
-              failed: summary.failed,
-            };
-            const isActive = activeFilter === filter;
-            return (
-              <button
-                key={filter}
-                onClick={() => setActiveFilter(filter)}
-                style={{
-                  padding: '0.5rem 1rem',
-                  border: `1px solid ${isActive ? '#0070F2' : 'var(--sapList_BorderColor)'}`,
-                  borderRadius: '1rem',
-                  background: isActive ? '#0070F2' : 'transparent',
-                  color: isActive ? 'white' : 'var(--sapTextColor)',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                  fontWeight: isActive ? 600 : 400,
-                }}
-              >
-                {filter.charAt(0).toUpperCase() + filter.slice(1)} ({counts[filter]})
-              </button>
-            );
-          })}
+      <div className={styles.tableControls}>
+        <div className={styles.filterChips}>
+          {Object.values(FILTER_TYPES).map((filter) => (
+            <button
+              key={filter}
+              onClick={() => setActiveFilter(filter)}
+              className={`${styles.filterChip} ${activeFilter === filter ? styles.filterChipActive : ''}`}
+            >
+              {TEXT[`FILTER_${filter.toUpperCase()}` as keyof typeof TEXT] as string} (
+              {filterCounts[filter]})
+            </button>
+          ))}
         </div>
 
-        {/* Right Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div className={styles.rightControls}>
           <Select
             onChange={(e: any) => setSortBy(e.detail.selectedOption.dataset.value as SortField)}
-            style={{ minWidth: '150px' }}
+            className={styles.sortSelect}
           >
-            <Option data-value="velocityScore" selected={sortBy === 'velocityScore'}>
-              Velocity Score
+            <Option
+              data-value={SORT_FIELDS.VELOCITY_SCORE}
+              selected={sortBy === SORT_FIELDS.VELOCITY_SCORE}
+            >
+              {TEXT.SORT_VELOCITY}
             </Option>
-            <Option data-value="articleId" selected={sortBy === 'articleId'}>
-              Article ID
+            <Option
+              data-value={SORT_FIELDS.ARTICLE_ID}
+              selected={sortBy === SORT_FIELDS.ARTICLE_ID}
+            >
+              {TEXT.SORT_ARTICLE}
             </Option>
-            <Option data-value="productType" selected={sortBy === 'productType'}>
-              Product Type
+            <Option
+              data-value={SORT_FIELDS.PRODUCT_TYPE}
+              selected={sortBy === SORT_FIELDS.PRODUCT_TYPE}
+            >
+              {TEXT.SORT_PRODUCT}
             </Option>
           </Select>
 
           <Button
-            icon={sortDesc ? 'sort-descending' : 'sort-ascending'}
+            icon={sortDesc ? ICONS.SORT_DESC : ICONS.SORT_ASC}
             design="Transparent"
             onClick={() => setSortDesc(!sortDesc)}
-            tooltip={sortDesc ? 'Descending' : 'Ascending'}
+            tooltip={sortDesc ? TEXT.SORT_DESC : TEXT.SORT_ASC}
           />
 
           <Input
-            placeholder="Search..."
+            placeholder={TEXT.SEARCH_PLACEHOLDER}
             value={searchQuery}
             onInput={(e: any) => setSearchQuery(e.target.value)}
-            style={{ width: '200px' }}
+            className={styles.searchInput}
           />
 
           <Button
-            icon="download"
+            icon={ICONS.DOWNLOAD}
             design="Transparent"
             onClick={handleExportCSV}
-            tooltip="Export CSV"
+            tooltip={TEXT.EXPORT_TOOLTIP}
           />
         </div>
       </div>
 
       {/* Results Header */}
-      <div style={{ marginBottom: '0.5rem' }}>
-        <Title level="H5">Context Items ({sortedItems.length})</Title>
+      <div className={styles.resultsHeader}>
+        <Title level="H5">
+          {TEXT.RESULTS_TITLE} ({sortedItems.length})
+        </Title>
       </div>
 
       {/* Data Table */}
       <Card>
-        <div style={{ overflowX: 'auto' }}>
-          <table
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              fontSize: '0.875rem',
-            }}
-          >
-            <thead style={{ background: 'var(--sapList_HeaderBackground)' }}>
+        <div className={styles.tableContainer}>
+          <table className={styles.dataTable}>
+            <thead className={styles.tableHeader}>
               <tr>
-                <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center', width: '40px' }}></th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', width: '60px' }}>Image</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Article ID</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Product Type</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', width: '120px' }}>
-                  Velocity Score
+                <th className={styles.tableHeaderCellExpand}></th>
+                <th className={`${styles.tableHeaderCell} ${styles.tableHeaderCellImage}`}>
+                  {TEXT.COL_IMAGE}
                 </th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Pattern Style</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Color Family</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Specific Color</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Color Intensity</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Product Family</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Customer Segment</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Style Concept</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Fabric Type</th>
-                {/* Dynamic LLM attribute columns */}
+                <th className={styles.tableHeaderCell}>{TEXT.COL_ARTICLE_ID}</th>
+                <th className={styles.tableHeaderCell}>{TEXT.COL_PRODUCT_TYPE}</th>
+                <th className={`${styles.tableHeaderCell} ${styles.tableHeaderCellVelocity}`}>
+                  {TEXT.COL_VELOCITY}
+                </th>
+                <th className={styles.tableHeaderCell}>{TEXT.COL_PATTERN}</th>
+                <th className={styles.tableHeaderCell}>{TEXT.COL_COLOR_FAMILY}</th>
+                <th className={styles.tableHeaderCell}>{TEXT.COL_SPECIFIC_COLOR}</th>
+                <th className={styles.tableHeaderCell}>{TEXT.COL_COLOR_INTENSITY}</th>
+                <th className={styles.tableHeaderCell}>{TEXT.COL_PRODUCT_FAMILY}</th>
+                <th className={styles.tableHeaderCell}>{TEXT.COL_CUSTOMER_SEGMENT}</th>
+                <th className={styles.tableHeaderCell}>{TEXT.COL_STYLE_CONCEPT}</th>
+                <th className={styles.tableHeaderCell}>{TEXT.COL_FABRIC_TYPE}</th>
                 {ontologyAttributes.map((attr) => (
-                  <th key={attr} style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>
+                  <th key={attr} className={styles.tableHeaderCell}>
                     {formatAttributeName(attr)}
                   </th>
                 ))}
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'center', width: '100px' }}>
-                  Status
+                <th className={`${styles.tableHeaderCellCenter} ${styles.tableHeaderCellStatus}`}>
+                  {TEXT.COL_STATUS}
                 </th>
               </tr>
             </thead>
             <tbody>
               {paginatedItems.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={14 + ontologyAttributes.length}
-                    style={{ padding: '3rem', textAlign: 'center' }}
-                  >
-                    <Text style={{ color: 'var(--sapContent_LabelColor)' }}>
-                      {searchQuery ? 'No items match your search.' : 'No context items found.'}
+                  <td colSpan={14 + ontologyAttributes.length} className={styles.emptyCell}>
+                    <Text className={styles.emptyText}>
+                      {searchQuery ? TEXT.NO_MATCH : TEXT.NO_ITEMS}
                     </Text>
                   </td>
                 </tr>
@@ -658,52 +506,26 @@ function EnhancedTableTab({
                     <React.Fragment key={item.articleId}>
                       {/* Main Row */}
                       <tr
-                        style={{
-                          borderBottom: isExpanded
-                            ? 'none'
-                            : '1px solid var(--sapList_BorderColor)',
-                          animation: isProcessing ? 'pulse 2s ease-in-out infinite' : undefined,
-                          backgroundColor: isProcessing
-                            ? 'var(--sapInformationBackground)'
-                            : undefined,
-                          cursor: 'pointer',
-                        }}
+                        className={`${styles.tableRow} ${isExpanded ? styles.tableRowExpanded : ''} ${isProcessing ? styles.tableRowProcessing : ''}`}
                         onClick={() => handleRowToggle(item.articleId)}
                       >
-                        {/* Expand Icon */}
-                        <td style={{ padding: '0.5rem', textAlign: 'center' }}>
-                          <Icon
-                            name={isExpanded ? 'slim-arrow-down' : 'slim-arrow-right'}
-                            style={{ color: 'var(--sapContent_IconColor)' }}
-                          />
+                        <td className={styles.tableCellExpand}>
+                          <Icon name={isExpanded ? ICONS.ARROW_DOWN : ICONS.ARROW_RIGHT} />
                         </td>
 
-                        {/* Image */}
-                        <td style={{ padding: '0.5rem 1rem' }}>
-                          <div
-                            style={{
-                              width: '50px',
-                              height: '50px',
-                              borderRadius: '4px',
-                              overflow: 'hidden',
-                              backgroundColor: 'var(--sapNeutralBackground)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
+                        <td className={styles.tableCellImage}>
+                          <div className={styles.imageThumbnail}>
                             <img
                               src={item.imageUrl}
                               alt={item.articleId}
-                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              className={styles.imageThumbnailImg}
                               onError={(e) => {
                                 const target = e.currentTarget;
                                 target.style.display = 'none';
                                 const parent = target.parentElement;
                                 if (parent && !parent.querySelector('ui5-icon')) {
                                   const icon = document.createElement('ui5-icon');
-                                  icon.setAttribute('name', 'product');
-                                  icon.style.color = 'var(--sapContent_IconColor)';
+                                  icon.setAttribute('name', ICONS.PRODUCT);
                                   icon.style.fontSize = '1.5rem';
                                   parent.appendChild(icon);
                                 }
@@ -712,121 +534,78 @@ function EnhancedTableTab({
                           </div>
                         </td>
 
-                        {/* Article ID */}
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <Text style={{ fontWeight: 500 }}>{item.articleId}</Text>
+                        <td className={styles.tableCell}>
+                          <Text className={styles.articleId}>{item.articleId}</Text>
                         </td>
 
-                        {/* Product Type */}
-                        <td style={{ padding: '0.75rem 1rem' }}>
+                        <td className={styles.tableCell}>
                           <Text>{item.productType}</Text>
                         </td>
 
-                        {/* Velocity Score */}
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div
-                              style={{
-                                width: '60px',
-                                height: '6px',
-                                backgroundColor: 'var(--sapContent_ForegroundBorderColor)',
-                                borderRadius: '3px',
-                                overflow: 'hidden',
-                              }}
-                            >
+                        <td className={styles.tableCell}>
+                          <div className={styles.velocityContainer}>
+                            <div className={styles.velocityBar}>
                               <div
+                                className={styles.velocityBarFill}
                                 style={{
                                   width: `${item.velocityScore}%`,
-                                  height: '100%',
                                   backgroundColor: getVelocityColor(item.velocityScore),
-                                  borderRadius: '3px',
-                                  transition: 'width 0.3s ease',
                                 }}
                               />
                             </div>
                             <Text
-                              style={{
-                                fontSize: '0.75rem',
-                                color: getVelocityColor(item.velocityScore),
-                                fontWeight: 600,
-                                minWidth: '35px',
-                              }}
+                              className={styles.velocityScore}
+                              style={{ color: getVelocityColor(item.velocityScore) }}
                             >
                               {item.velocityScore.toFixed(1)}
                             </Text>
                           </div>
                         </td>
 
-                        {/* Pattern Style */}
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <Text>{item.patternStyle || '-'}</Text>
+                        <td className={styles.tableCell}>
+                          <Text>{item.patternStyle || TEXT.EMPTY_VALUE}</Text>
+                        </td>
+                        <td className={styles.tableCell}>
+                          <Text>{item.colorFamily || TEXT.EMPTY_VALUE}</Text>
+                        </td>
+                        <td className={styles.tableCell}>
+                          <Text>{item.specificColor || TEXT.EMPTY_VALUE}</Text>
+                        </td>
+                        <td className={styles.tableCell}>
+                          <Text>{item.colorIntensity || TEXT.EMPTY_VALUE}</Text>
+                        </td>
+                        <td className={styles.tableCell}>
+                          <Text>{item.productFamily || TEXT.EMPTY_VALUE}</Text>
+                        </td>
+                        <td className={styles.tableCell}>
+                          <Text>{item.customerSegment || TEXT.EMPTY_VALUE}</Text>
+                        </td>
+                        <td className={styles.tableCell}>
+                          <Text>{item.styleConcept || TEXT.EMPTY_VALUE}</Text>
+                        </td>
+                        <td className={styles.tableCell}>
+                          <Text>{item.fabricTypeBase || TEXT.EMPTY_VALUE}</Text>
                         </td>
 
-                        {/* Color Family */}
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <Text>{item.colorFamily || '-'}</Text>
-                        </td>
-
-                        {/* Specific Color */}
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <Text>{item.specificColor || '-'}</Text>
-                        </td>
-
-                        {/* Color Intensity */}
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <Text>{item.colorIntensity || '-'}</Text>
-                        </td>
-
-                        {/* Product Family */}
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <Text>{item.productFamily || '-'}</Text>
-                        </td>
-
-                        {/* Customer Segment */}
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <Text>{item.customerSegment || '-'}</Text>
-                        </td>
-
-                        {/* Style Concept */}
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <Text>{item.styleConcept || '-'}</Text>
-                        </td>
-
-                        {/* Fabric Type Base */}
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <Text>{item.fabricTypeBase || '-'}</Text>
-                        </td>
-
-                        {/* Dynamic LLM attributes */}
                         {ontologyAttributes.map((attr) => (
-                          <td key={attr} style={{ padding: '0.75rem 1rem' }}>
+                          <td key={attr} className={styles.tableCell}>
                             <Text>
-                              {(item.enrichedAttributes && item.enrichedAttributes[attr]) || '-'}
+                              {(item.enrichedAttributes && item.enrichedAttributes[attr]) ||
+                                TEXT.EMPTY_VALUE}
                             </Text>
                           </td>
                         ))}
 
-                        {/* Status */}
-                        <td
-                          style={{ padding: '0.75rem 1rem', textAlign: 'center' }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: '0.5rem',
-                            }}
-                          >
+                        <td className={styles.tableCellCenter} onClick={(e) => e.stopPropagation()}>
+                          <div className={styles.statusCell}>
                             <ObjectStatus state={statusInfo.state}>
                               <Icon name={statusInfo.icon} />
                             </ObjectStatus>
                             {item.enrichmentError && enrichmentStatus !== 'running' && (
                               <Button
-                                icon="refresh"
+                                icon={ICONS.REFRESH}
                                 design="Transparent"
-                                tooltip={`Retry: ${item.enrichmentError}`}
+                                tooltip={TEXT.RETRY_TOOLTIP(item.enrichmentError)}
                                 onClick={() => handleRetryItem(item.articleId)}
                                 disabled={isRetrying}
                               />
@@ -837,30 +616,14 @@ function EnhancedTableTab({
 
                       {/* Expanded Detail Row */}
                       {isExpanded && (
-                        <tr style={{ borderBottom: '1px solid var(--sapList_BorderColor)' }}>
+                        <tr className={styles.expandedRow}>
                           <td
-                            colSpan={8 + ontologyAttributes.length}
-                            style={{
-                              padding: '1rem 1.5rem',
-                              backgroundColor: 'var(--sapList_Background)',
-                            }}
+                            colSpan={14 + ontologyAttributes.length}
+                            className={styles.expandedContent}
                           >
-                            <div style={{ display: 'flex', gap: '2rem' }}>
-                              {/* Large Image */}
+                            <div className={styles.expandedLayout}>
                               <div
-                                style={{
-                                  width: '150px',
-                                  height: '150px',
-                                  borderRadius: '8px',
-                                  overflow: 'hidden',
-                                  backgroundColor: 'var(--sapNeutralBackground)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  flexShrink: 0,
-                                  cursor: 'pointer',
-                                  position: 'relative',
-                                }}
+                                className={styles.imageDetail}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleImageClick(item.imageUrl);
@@ -869,241 +632,132 @@ function EnhancedTableTab({
                                 <img
                                   src={item.imageUrl}
                                   alt={item.articleId}
-                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  className={styles.imageDetailImg}
                                   onError={(e) => {
-                                    const target = e.currentTarget;
-                                    target.style.display = 'none';
+                                    e.currentTarget.style.display = 'none';
                                   }}
                                 />
-                                <div
-                                  style={{
-                                    position: 'absolute',
-                                    bottom: '8px',
-                                    right: '8px',
-                                    backgroundColor: 'rgba(0,0,0,0.5)',
-                                    borderRadius: '4px',
-                                    padding: '4px',
-                                  }}
-                                >
-                                  <Icon
-                                    name="zoom-in"
-                                    style={{ color: 'white', fontSize: '1rem' }}
-                                  />
+                                <div className={styles.imageZoomIcon}>
+                                  <Icon name={ICONS.ZOOM_IN} className={styles.imageZoomIconSvg} />
                                 </div>
                               </div>
 
-                              {/* Details */}
-                              <div style={{ flex: 1 }}>
-                                <Title level="H5" style={{ marginBottom: '1rem' }}>
-                                  Article Details
+                              <div className={styles.expandedDetails}>
+                                <Title level="H5" className={styles.detailsTitle}>
+                                  {TEXT.DETAILS_TITLE}
                                 </Title>
 
-                                <div
-                                  style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-                                    gap: '0.75rem 2rem',
-                                  }}
-                                >
-                                  {/* Base Attributes */}
+                                <div className={styles.detailsGrid}>
                                   <div>
-                                    <Text
-                                      style={{
-                                        fontSize: '0.75rem',
-                                        color: 'var(--sapContent_LabelColor)',
-                                      }}
-                                    >
-                                      Product Group
+                                    <Text className={styles.detailLabel}>
+                                      {TEXT.LABEL_PRODUCT_GROUP}
                                     </Text>
-                                    <Text style={{ display: 'block' }}>
-                                      {item.productGroup || '-'}
+                                    <Text className={styles.detailValue}>
+                                      {item.productGroup || TEXT.EMPTY_VALUE}
                                     </Text>
                                   </div>
                                   <div>
-                                    <Text
-                                      style={{
-                                        fontSize: '0.75rem',
-                                        color: 'var(--sapContent_LabelColor)',
-                                      }}
-                                    >
-                                      Product Type
+                                    <Text className={styles.detailLabel}>
+                                      {TEXT.COL_PRODUCT_TYPE}
                                     </Text>
-                                    <Text style={{ display: 'block' }}>{item.productType}</Text>
+                                    <Text className={styles.detailValue}>{item.productType}</Text>
                                   </div>
                                   <div>
-                                    <Text
-                                      style={{
-                                        fontSize: '0.75rem',
-                                        color: 'var(--sapContent_LabelColor)',
-                                      }}
-                                    >
-                                      Pattern Style
-                                    </Text>
-                                    <Text style={{ display: 'block' }}>
-                                      {item.patternStyle || '-'}
+                                    <Text className={styles.detailLabel}>{TEXT.COL_PATTERN}</Text>
+                                    <Text className={styles.detailValue}>
+                                      {item.patternStyle || TEXT.EMPTY_VALUE}
                                     </Text>
                                   </div>
                                   <div>
-                                    <Text
-                                      style={{
-                                        fontSize: '0.75rem',
-                                        color: 'var(--sapContent_LabelColor)',
-                                      }}
-                                    >
-                                      Color Family
+                                    <Text className={styles.detailLabel}>
+                                      {TEXT.COL_COLOR_FAMILY}
                                     </Text>
-                                    <Text style={{ display: 'block' }}>
-                                      {item.colorFamily || '-'}
+                                    <Text className={styles.detailValue}>
+                                      {item.colorFamily || TEXT.EMPTY_VALUE}
                                     </Text>
                                   </div>
                                   <div>
-                                    <Text
-                                      style={{
-                                        fontSize: '0.75rem',
-                                        color: 'var(--sapContent_LabelColor)',
-                                      }}
-                                    >
-                                      Specific Color
+                                    <Text className={styles.detailLabel}>
+                                      {TEXT.COL_SPECIFIC_COLOR}
                                     </Text>
-                                    <Text style={{ display: 'block' }}>
-                                      {item.specificColor || '-'}
+                                    <Text className={styles.detailValue}>
+                                      {item.specificColor || TEXT.EMPTY_VALUE}
                                     </Text>
                                   </div>
                                   <div>
-                                    <Text
-                                      style={{
-                                        fontSize: '0.75rem',
-                                        color: 'var(--sapContent_LabelColor)',
-                                      }}
-                                    >
-                                      Color Intensity
+                                    <Text className={styles.detailLabel}>
+                                      {TEXT.COL_COLOR_INTENSITY}
                                     </Text>
-                                    <Text style={{ display: 'block' }}>
-                                      {item.colorIntensity || '-'}
+                                    <Text className={styles.detailValue}>
+                                      {item.colorIntensity || TEXT.EMPTY_VALUE}
                                     </Text>
                                   </div>
                                   <div>
-                                    <Text
-                                      style={{
-                                        fontSize: '0.75rem',
-                                        color: 'var(--sapContent_LabelColor)',
-                                      }}
-                                    >
-                                      Product Family
+                                    <Text className={styles.detailLabel}>
+                                      {TEXT.COL_PRODUCT_FAMILY}
                                     </Text>
-                                    <Text style={{ display: 'block' }}>
-                                      {item.productFamily || '-'}
+                                    <Text className={styles.detailValue}>
+                                      {item.productFamily || TEXT.EMPTY_VALUE}
                                     </Text>
                                   </div>
                                   <div>
-                                    <Text
-                                      style={{
-                                        fontSize: '0.75rem',
-                                        color: 'var(--sapContent_LabelColor)',
-                                      }}
-                                    >
-                                      Customer Segment
+                                    <Text className={styles.detailLabel}>
+                                      {TEXT.COL_CUSTOMER_SEGMENT}
                                     </Text>
-                                    <Text style={{ display: 'block' }}>
-                                      {item.customerSegment || '-'}
+                                    <Text className={styles.detailValue}>
+                                      {item.customerSegment || TEXT.EMPTY_VALUE}
                                     </Text>
                                   </div>
                                   <div>
-                                    <Text
-                                      style={{
-                                        fontSize: '0.75rem',
-                                        color: 'var(--sapContent_LabelColor)',
-                                      }}
-                                    >
-                                      Style Concept
+                                    <Text className={styles.detailLabel}>
+                                      {TEXT.COL_STYLE_CONCEPT}
                                     </Text>
-                                    <Text style={{ display: 'block' }}>
-                                      {item.styleConcept || '-'}
+                                    <Text className={styles.detailValue}>
+                                      {item.styleConcept || TEXT.EMPTY_VALUE}
                                     </Text>
                                   </div>
                                   <div>
-                                    <Text
-                                      style={{
-                                        fontSize: '0.75rem',
-                                        color: 'var(--sapContent_LabelColor)',
-                                      }}
-                                    >
-                                      Fabric Type
+                                    <Text className={styles.detailLabel}>
+                                      {TEXT.COL_FABRIC_TYPE}
                                     </Text>
-                                    <Text style={{ display: 'block' }}>
-                                      {item.fabricTypeBase || '-'}
+                                    <Text className={styles.detailValue}>
+                                      {item.fabricTypeBase || TEXT.EMPTY_VALUE}
                                     </Text>
                                   </div>
                                   <div>
+                                    <Text className={styles.detailLabel}>{TEXT.COL_VELOCITY}</Text>
                                     <Text
-                                      style={{
-                                        fontSize: '0.75rem',
-                                        color: 'var(--sapContent_LabelColor)',
-                                      }}
-                                    >
-                                      Velocity Score
-                                    </Text>
-                                    <Text
-                                      style={{
-                                        display: 'block',
-                                        color: getVelocityColor(item.velocityScore),
-                                        fontWeight: 600,
-                                      }}
+                                      className={`${styles.detailValue} ${styles.detailValueVelocity}`}
+                                      style={{ color: getVelocityColor(item.velocityScore) }}
                                     >
                                       {item.velocityScore.toFixed(2)}
                                     </Text>
                                   </div>
                                 </div>
 
-                                {/* Description */}
                                 {item.detailDesc && (
-                                  <div style={{ marginTop: '1rem' }}>
-                                    <Text
-                                      style={{
-                                        fontSize: '0.75rem',
-                                        color: 'var(--sapContent_LabelColor)',
-                                      }}
-                                    >
-                                      Description
+                                  <div className={styles.descriptionSection}>
+                                    <Text className={styles.detailLabel}>
+                                      {TEXT.LABEL_DESCRIPTION}
                                     </Text>
-                                    <Text style={{ display: 'block' }}>{item.detailDesc}</Text>
+                                    <Text className={styles.detailValue}>{item.detailDesc}</Text>
                                   </div>
                                 )}
 
-                                {/* Enriched Attributes */}
                                 {item.enrichedAttributes &&
                                   Object.keys(item.enrichedAttributes).length > 0 && (
-                                    <div style={{ marginTop: '1rem' }}>
-                                      <Text
-                                        style={{
-                                          fontSize: '0.875rem',
-                                          fontWeight: 600,
-                                          marginBottom: '0.5rem',
-                                          display: 'block',
-                                        }}
-                                      >
-                                        Enriched Attributes
+                                    <div className={styles.enrichedSection}>
+                                      <Text className={styles.enrichedTitle}>
+                                        {TEXT.ENRICHED_TITLE}
                                       </Text>
-                                      <div
-                                        style={{
-                                          display: 'grid',
-                                          gridTemplateColumns:
-                                            'repeat(auto-fill, minmax(200px, 1fr))',
-                                          gap: '0.5rem 2rem',
-                                        }}
-                                      >
+                                      <div className={styles.enrichedGrid}>
                                         {Object.entries(item.enrichedAttributes).map(
                                           ([key, value]) => (
                                             <div key={key}>
-                                              <Text
-                                                style={{
-                                                  fontSize: '0.75rem',
-                                                  color: 'var(--sapContent_LabelColor)',
-                                                }}
-                                              >
+                                              <Text className={styles.detailLabel}>
                                                 {formatAttributeName(key)}
                                               </Text>
-                                              <Text style={{ display: 'block' }}>{value}</Text>
+                                              <Text className={styles.detailValue}>{value}</Text>
                                             </div>
                                           )
                                         )}
@@ -1111,29 +765,12 @@ function EnhancedTableTab({
                                     </div>
                                   )}
 
-                                {/* Error Message */}
                                 {item.enrichmentError && (
-                                  <div
-                                    style={{
-                                      marginTop: '1rem',
-                                      padding: '0.75rem',
-                                      backgroundColor: 'var(--sapErrorBackground)',
-                                      borderRadius: '4px',
-                                      border: '1px solid var(--sapErrorBorderColor)',
-                                    }}
-                                  >
-                                    <Text
-                                      style={{
-                                        fontSize: '0.875rem',
-                                        fontWeight: 600,
-                                        color: 'var(--sapNegativeColor)',
-                                        display: 'block',
-                                        marginBottom: '0.25rem',
-                                      }}
-                                    >
-                                      Enrichment Error
+                                  <div className={styles.errorSection}>
+                                    <Text className={styles.errorSectionTitle}>
+                                      {TEXT.ERROR_TITLE}
                                     </Text>
-                                    <Text style={{ color: 'var(--sapNegativeColor)' }}>
+                                    <Text className={styles.errorSectionText}>
                                       {item.enrichmentError}
                                     </Text>
                                   </div>
@@ -1151,29 +788,32 @@ function EnhancedTableTab({
           </table>
         </div>
 
-        {/* Pagination Footer */}
+        {/* Pagination */}
         {sortedItems.length > ITEMS_PER_PAGE && (
           <Bar
             design="Footer"
             startContent={
-              <Text style={{ fontSize: '0.875rem', color: 'var(--sapContent_LabelColor)' }}>
-                Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}-
-                {Math.min(currentPage * ITEMS_PER_PAGE, sortedItems.length)} of {sortedItems.length}
+              <Text className={styles.paginationText}>
+                {TEXT.SHOWING_TEMPLATE(
+                  (currentPage - 1) * ITEMS_PER_PAGE + 1,
+                  Math.min(currentPage * ITEMS_PER_PAGE, sortedItems.length),
+                  sortedItems.length
+                )}
               </Text>
             }
             endContent={
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div className={styles.paginationControls}>
                 <Button
-                  icon="navigation-left-arrow"
+                  icon={ICONS.NAV_LEFT}
                   design="Transparent"
                   disabled={currentPage === 1}
                   onClick={handlePreviousPage}
                 />
-                <Text style={{ fontSize: '0.875rem', minWidth: '80px', textAlign: 'center' }}>
-                  Page {currentPage} of {totalPages}
+                <Text className={styles.paginationPage}>
+                  {TEXT.PAGE_TEMPLATE(currentPage, totalPages)}
                 </Text>
                 <Button
-                  icon="navigation-right-arrow"
+                  icon={ICONS.NAV_RIGHT}
                   design="Transparent"
                   disabled={currentPage === totalPages}
                   onClick={handleNextPage}
@@ -1184,52 +824,26 @@ function EnhancedTableTab({
         )}
       </Card>
 
-      {/* CSS for pulse animation */}
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { background-color: transparent; }
-          50% { background-color: var(--sapInformationBackground); }
-        }
-      `}</style>
-
       {/* Image Modal */}
       <Dialog
         open={imageModalOpen}
         onClose={() => setImageModalOpen(false)}
         header={
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '1rem 1.5rem',
-              borderBottom: '1px solid var(--sapList_BorderColor)',
-              width: '100%',
-            }}
-          >
-            <Title level="H5" style={{ margin: 0, flex: 0 }}>
-              Product Image
+          <div className={styles.modalHeader}>
+            <Title level="H5" className={styles.modalTitle}>
+              {TEXT.MODAL_TITLE}
             </Title>
             <Button
               design="Transparent"
-              icon="decline"
+              icon={ICONS.DECLINE}
               onClick={() => setImageModalOpen(false)}
-              style={{ minWidth: '2.5rem', marginLeft: 'auto' }}
+              className={styles.modalCloseButton}
             />
           </div>
         }
       >
-        <div style={{ padding: '1rem', textAlign: 'center' }}>
-          <img
-            src={imageModalUrl}
-            alt="Product"
-            style={{
-              maxWidth: '100%',
-              maxHeight: '70vh',
-              objectFit: 'contain',
-              borderRadius: '8px',
-            }}
-          />
+        <div className={styles.modalImageContainer}>
+          <img src={imageModalUrl} alt="Product" className={styles.modalImage} />
         </div>
       </Dialog>
     </div>

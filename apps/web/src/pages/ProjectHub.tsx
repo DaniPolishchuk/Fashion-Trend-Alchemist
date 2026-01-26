@@ -1,4 +1,9 @@
-import { useState, useEffect } from 'react';
+/**
+ * Project Hub Page
+ * Optimized with constants, CSS modules, custom hooks, and reusable components
+ */
+
+import { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   BusyIndicator,
@@ -9,16 +14,11 @@ import {
   Icon,
   Breadcrumbs,
   BreadcrumbsItem,
-  ObjectStatus,
-  ProgressIndicator,
 } from '@ui5/webcomponents-react';
 import '@ui5/webcomponents-icons/dist/ai.js';
 import '@ui5/webcomponents-icons/dist/table-chart.js';
 import '@ui5/webcomponents-icons/dist/grid.js';
 import '@ui5/webcomponents-icons/dist/business-objects-experience.js';
-import '@ui5/webcomponents-icons/dist/play.js';
-import '@ui5/webcomponents-icons/dist/accept.js';
-import '@ui5/webcomponents-icons/dist/error.js';
 
 // Tab components
 import TheAlchemistTab from './tabs/TheAlchemistTab';
@@ -26,23 +26,14 @@ import ResultOverviewTab from './tabs/ResultOverviewTab';
 import EnhancedTableTab from './tabs/EnhancedTableTab';
 import DataAnalysisTab from './tabs/DataAnalysisTab';
 
-type TabType = 'alchemist' | 'enhanced-table' | 'result-overview' | 'data-analysis';
+// Custom components and hooks
+import EnrichmentStatusCard from '../components/EnrichmentStatusCard';
+import { useProjectData } from '../hooks/useProjectData';
+import { useEnrichmentSSE } from '../hooks/useEnrichmentSSE';
 
-interface ProjectData {
-  id: string;
-  userId: string;
-  name: string;
-  status: 'draft' | 'active';
-  seasonConfig: Record<string, unknown> | null;
-  scopeConfig: Record<string, unknown> | null;
-  ontologySchema: Record<string, Record<string, string[]>> | null;
-  createdAt: string;
-  deletedAt: string | null;
-  enrichmentStatus?: 'idle' | 'running' | 'completed' | 'failed';
-  enrichmentProcessed?: number;
-  enrichmentTotal?: number;
-  enrichmentCompletedAt?: string | null;
-}
+// Constants and styles
+import { TABS, TEXT, API_ENDPOINTS, type TabType } from '../constants/projectHub';
+import styles from '../styles/pages/ProjectHub.module.css';
 
 // Helper function to format creation date
 const formatCreationDate = (createdAt: string): string => {
@@ -57,95 +48,55 @@ const formatCreationDate = (createdAt: string): string => {
 function ProjectHub() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-
-  // State
-  const [project, setProject] = useState<ProjectData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('alchemist');
 
-  // Enrichment state
-  const [enrichmentStatus, setEnrichmentStatus] = useState<
-    'idle' | 'running' | 'completed' | 'failed'
-  >('idle');
-  const [enrichmentProgress, setEnrichmentProgress] = useState({ processed: 0, total: 0 });
-  const [currentArticleId, setCurrentArticleId] = useState<string | null>(null);
+  // Use custom hook for project data
+  const {
+    project,
+    loading,
+    error,
+    enrichmentStatus,
+    enrichmentProgress,
+    currentArticleId,
+    setEnrichmentStatus,
+    setEnrichmentProgress,
+    setCurrentArticleId,
+  } = useProjectData(projectId);
 
-  // Fetch project data and enrichment status
-  useEffect(() => {
-    const fetchProject = async () => {
-      if (!projectId) {
-        setError('No project ID provided');
-        setLoading(false);
-        return;
-      }
+  // Handle SSE updates
+  const handleProgress = useCallback(
+    (progress: { processed: number; total: number }, articleId: string | null) => {
+      setEnrichmentProgress(progress);
+      setCurrentArticleId(articleId);
+    },
+    [setEnrichmentProgress, setCurrentArticleId]
+  );
 
-      try {
-        setLoading(true);
+  const handleCompleted = useCallback(() => {
+    setEnrichmentStatus('completed');
+    setCurrentArticleId(null);
+  }, [setEnrichmentStatus, setCurrentArticleId]);
 
-        // Fetch project data and enrichment status in parallel
-        const [projectResponse, statusResponse] = await Promise.all([
-          fetch(`/api/projects/${projectId}`),
-          fetch(`/api/projects/${projectId}/enrichment-status`),
-        ]);
+  const handleError = useCallback(() => {
+    setEnrichmentStatus('failed');
+    setCurrentArticleId(null);
+  }, [setEnrichmentStatus, setCurrentArticleId]);
 
-        if (!projectResponse.ok) {
-          throw new Error('Failed to fetch project');
-        }
-        const data = await projectResponse.json();
-        setProject(data);
-
-        // Set enrichment status if available
-        if (statusResponse.ok) {
-          const statusData = await statusResponse.json();
-          setEnrichmentStatus(statusData.status || 'idle');
-          setEnrichmentProgress(statusData.progress || { processed: 0, total: 0 });
-          setCurrentArticleId(statusData.currentArticleId || null);
-        }
-      } catch (err) {
-        console.error('Failed to fetch project:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load project');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProject();
-  }, [projectId]);
-
-  // SSE connection for real-time enrichment progress
-  useEffect(() => {
-    if (enrichmentStatus !== 'running' || !projectId) return;
-
-    const eventSource = new EventSource(`/api/projects/${projectId}/enrichment-progress`);
-
-    eventSource.addEventListener('progress', (e) => {
-      const data = JSON.parse(e.data);
-      setEnrichmentProgress({ processed: data.processed, total: data.total });
-      setCurrentArticleId(data.currentArticleId || null);
-    });
-
-    eventSource.addEventListener('completed', () => {
-      setEnrichmentStatus('completed');
-      setCurrentArticleId(null);
-      eventSource.close();
-    });
-
-    eventSource.addEventListener('error', () => {
-      setEnrichmentStatus('failed');
-      setCurrentArticleId(null);
-      eventSource.close();
-    });
-
-    return () => eventSource.close();
-  }, [projectId, enrichmentStatus]);
+  // Use SSE hook
+  useEnrichmentSSE({
+    projectId,
+    enrichmentStatus,
+    onProgress: handleProgress,
+    onCompleted: handleCompleted,
+    onError: handleError,
+  });
 
   // Handle start enrichment
   const handleStartEnrichment = async () => {
     if (!projectId) return;
 
     try {
-      const response = await fetch(`/api/projects/${projectId}/start-enrichment`, {
+      const response = await fetch(API_ENDPOINTS.START_ENRICHMENT(projectId), {
         method: 'POST',
       });
 
@@ -160,13 +111,7 @@ function ProjectHub() {
     }
   };
 
-  const tabs: { id: TabType; label: string; icon: string }[] = [
-    { id: 'alchemist', label: 'The Alchemist', icon: 'ai' },
-    { id: 'enhanced-table', label: 'Enhanced Table', icon: 'table-chart' },
-    { id: 'result-overview', label: 'Result Overview', icon: 'grid' },
-    { id: 'data-analysis', label: 'Data Analysis', icon: 'business-objects-experience' },
-  ];
-
+  // Render tab content
   const renderTabContent = () => {
     if (!project) return null;
 
@@ -190,31 +135,26 @@ function ProjectHub() {
     }
   };
 
+  // Loading state
   if (loading) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          height: 'calc(100vh - 44px)',
-        }}
-      >
+      <div className={styles.loadingContainer}>
         <BusyIndicator active size="L" />
       </div>
     );
   }
 
+  // Error state
   if (error || !project) {
     return (
-      <div style={{ padding: '2rem' }}>
+      <div className={styles.errorContainer}>
         <IllustratedMessage
           name="NoData"
-          titleText="Error Loading Project"
-          subtitleText={error || 'Project not found'}
+          titleText={TEXT.ERROR_TITLE}
+          subtitleText={error || TEXT.ERROR_NOT_FOUND}
         >
           <Button design="Emphasized" onClick={() => navigate('/')}>
-            Back to Home
+            {TEXT.BUTTON_BACK_HOME}
           </Button>
         </IllustratedMessage>
       </div>
@@ -222,322 +162,58 @@ function ProjectHub() {
   }
 
   return (
-    <div
-      style={{
-        background: 'var(--sapBackgroundColor)',
-        minHeight: 'calc(100vh - 44px)',
-        paddingBottom: '2rem',
-      }}
-    >
+    <div className={styles.container}>
       {/* Breadcrumbs */}
-      <div style={{ padding: '12px 2rem 0' }}>
+      <div className={styles.breadcrumbsContainer}>
         <Breadcrumbs
           onItemClick={(e: any) => {
             const text = e.detail.item.textContent?.trim();
-            if (text === 'Home') {
+            if (text === TEXT.BREADCRUMB_HOME) {
               navigate('/');
             }
           }}
         >
-          <BreadcrumbsItem>Home</BreadcrumbsItem>
+          <BreadcrumbsItem>{TEXT.BREADCRUMB_HOME}</BreadcrumbsItem>
           <BreadcrumbsItem>{project.name}</BreadcrumbsItem>
         </Breadcrumbs>
       </div>
 
       {/* Header Section */}
-      <div
-        style={{
-          padding: '1rem 2rem',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-        }}
-      >
-        {/* Left: Project Name and Status */}
-        <div>
-          <div
-            style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}
-          >
-            <Title level="H2" style={{ fontSize: '30px' }}>
+      <div className={styles.header}>
+        <div className={styles.headerLeft}>
+          <div className={styles.headerTitleRow}>
+            <Title level="H2" className={styles.headerTitle}>
               {project.name}
             </Title>
           </div>
-          <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '0.875rem' }}>
-            Created on {formatCreationDate(project.createdAt)}
+          <Text className={styles.headerSubtext}>
+            {TEXT.CREATED_ON} {formatCreationDate(project.createdAt)}
           </Text>
         </div>
 
-        {/* Right: Progress Indicator with Start Button */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-          }}
-        >
-          {/* Conditional rendering based on enrichment state */}
-          {enrichmentStatus === 'completed' || project.enrichmentCompletedAt ? (
-            /* Stage 3: Completion State - Clean success card */
-            <div
-              style={{
-                minWidth: '308px',
-                border: '1px solid #107E3E',
-                borderRadius: '0.5rem',
-                padding: '1rem',
-                background:
-                  'linear-gradient(135deg, rgba(16, 126, 62, 0.08) 0%, rgba(16, 126, 62, 0.03) 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '1rem',
-              }}
-            >
-              <Icon
-                name="accept"
-                style={{
-                  fontSize: '1.5rem',
-                  color: '#107E3E',
-                }}
-              />
-              <div style={{ flex: 1 }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: '0.25rem',
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: '0.875rem',
-                      fontWeight: 600,
-                      color: '#107E3E',
-                    }}
-                  >
-                    Image Enrichment
-                  </Text>
-                  <ObjectStatus state="Positive" inverted>
-                    COMPLETED
-                  </ObjectStatus>
-                </div>
-                <Text
-                  style={{
-                    fontSize: '0.75rem',
-                    color: 'var(--sapContent_LabelColor)',
-                  }}
-                >
-                  {enrichmentProgress.total > 0
-                    ? `${enrichmentProgress.total} items enriched`
-                    : 'All items processed'}
-                  {project.enrichmentCompletedAt &&
-                    ` • ${formatCreationDate(project.enrichmentCompletedAt)}`}
-                </Text>
-              </div>
-            </div>
-          ) : enrichmentStatus === 'failed' ? (
-            /* Stage 4: Failed State - Red error card with retry option */
-            <div
-              style={{
-                minWidth: '308px',
-                border: '1px solid #BB0000',
-                borderRadius: '0.5rem',
-                padding: '1rem',
-                background:
-                  'linear-gradient(135deg, rgba(187, 0, 0, 0.08) 0%, rgba(187, 0, 0, 0.03) 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '1rem',
-              }}
-            >
-              <Button
-                icon="play"
-                design="Transparent"
-                onClick={handleStartEnrichment}
-                disabled={project.status !== 'active'}
-                tooltip="Retry Image Enrichment"
-                style={{ minWidth: 'auto', padding: '0.5rem' }}
-              >
-                Retry
-              </Button>
-              <div style={{ flex: 1 }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: '0.25rem',
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: '0.875rem',
-                      fontWeight: 600,
-                      color: '#BB0000',
-                    }}
-                  >
-                    Image Enrichment
-                  </Text>
-                  <ObjectStatus state="Negative" inverted>
-                    FAILED
-                  </ObjectStatus>
-                </div>
-                <Text
-                  style={{
-                    fontSize: '0.75rem',
-                    color: 'var(--sapContent_LabelColor)',
-                  }}
-                >
-                  Processing stopped at {enrichmentProgress.processed}/{enrichmentProgress.total}
-                </Text>
-              </div>
-            </div>
-          ) : enrichmentStatus === 'running' ? (
-            /* Stage 2: Running State - Blue progress bar */
-            <div
-              style={{
-                minWidth: '308px',
-                border: '1px solid #0070F2',
-                borderRadius: '0.5rem',
-                padding: '1rem',
-                background:
-                  'linear-gradient(135deg, rgba(0, 112, 242, 0.08) 0%, rgba(0, 112, 242, 0.03) 100%)',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '0.5rem',
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: '0.875rem',
-                    fontWeight: 600,
-                    color: '#0070F2',
-                  }}
-                >
-                  Image Enrichment
-                </Text>
-                <ObjectStatus state="Information" inverted>
-                  RUNNING
-                </ObjectStatus>
-              </div>
-              <Text
-                style={{
-                  fontSize: '0.75rem',
-                  color: 'var(--sapContent_LabelColor)',
-                  marginBottom: '0.5rem',
-                }}
-              >
-                Processing {enrichmentProgress.processed} of {enrichmentProgress.total} items
-              </Text>
-              <ProgressIndicator
-                value={
-                  enrichmentProgress.total > 0
-                    ? (enrichmentProgress.processed / enrichmentProgress.total) * 100
-                    : 0
-                }
-                valueState="Information"
-                style={{ width: '100%' }}
-              />
-            </div>
-          ) : (
-            /* Stage 1: Idle/Ready State - SAP Blue ready to start */
-            <div
-              style={{
-                minWidth: '308px',
-                border: '1px solid #0070F2',
-                borderRadius: '0.5rem',
-                padding: '1rem',
-                background:
-                  'linear-gradient(135deg, rgba(0, 112, 242, 0.08) 0%, rgba(0, 112, 242, 0.03) 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '1rem',
-              }}
-            >
-              <Button
-                icon="play"
-                design="Transparent"
-                onClick={handleStartEnrichment}
-                disabled={project.status !== 'active'}
-                tooltip="Start Image Enrichment"
-                style={{ minWidth: 'auto', padding: '0.5rem' }}
-              />
-              <div style={{ flex: 1 }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: '0.25rem',
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: '0.875rem',
-                      fontWeight: 600,
-                      color: '#0070F2',
-                    }}
-                  >
-                    Image Enrichment
-                  </Text>
-                  <ObjectStatus state="Information" inverted>
-                    READY
-                  </ObjectStatus>
-                </div>
-                <Text
-                  style={{
-                    fontSize: '0.75rem',
-                    color: 'var(--sapContent_LabelColor)',
-                  }}
-                >
-                  {project.status === 'active'
-                    ? 'Ready to enrich article context '
-                    : 'Activate project to start enrichment'}
-                </Text>
-              </div>
-            </div>
-          )}
+        {/* Enrichment Status Card */}
+        <div className={styles.headerRight}>
+          <EnrichmentStatusCard
+            status={enrichmentStatus}
+            progress={enrichmentProgress}
+            projectStatus={project.status}
+            completedAt={project.enrichmentCompletedAt}
+            onStart={handleStartEnrichment}
+          />
         </div>
       </div>
 
       {/* Tab Navigation */}
-      <div
-        style={{
-          padding: '0 2rem',
-          borderBottom: '1px solid var(--sapList_BorderColor)',
-          display: 'flex',
-          gap: '0.5rem',
-        }}
-      >
-        {tabs.map((tab) => (
+      <div className={styles.tabNavigation}>
+        {TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.75rem 1rem',
-              border: 'none',
-              background: 'transparent',
-              cursor: 'pointer',
-              fontSize: '0.875rem',
-              color: activeTab === tab.id ? '#0070F2' : 'var(--sapContent_LabelColor)',
-              fontWeight: activeTab === tab.id ? 600 : 400,
-              borderBottom: activeTab === tab.id ? '2px solid #0070F2' : '2px solid transparent',
-              marginBottom: '-1px',
-              transition: 'all 0.2s',
-            }}
+            className={`${styles.tab} ${activeTab === tab.id ? styles.tabActive : ''}`}
           >
             <Icon
               name={tab.icon}
-              style={{
-                color: activeTab === tab.id ? '#0070F2' : 'var(--sapContent_LabelColor)',
-              }}
+              className={`${styles.tabIcon} ${activeTab === tab.id ? styles.tabIconActive : ''}`}
             />
             {tab.label}
           </button>
@@ -545,7 +221,7 @@ function ProjectHub() {
       </div>
 
       {/* Tab Content */}
-      <div style={{ padding: '1.5rem 2rem' }}>{renderTabContent()}</div>
+      <div className={styles.tabContent}>{renderTabContent()}</div>
     </div>
   );
 }

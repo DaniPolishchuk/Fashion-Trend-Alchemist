@@ -1,0 +1,451 @@
+/**
+ * Enhanced Table Tab Styles
+ * Context items table with enrichment tracking
+ */
+
+/* ==================== LOADING & ERROR STATES ==================== */
+
+.loadingContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+}
+
+.errorContainer {
+  padding: 3rem;
+  text-align: center;
+}
+
+.errorText {
+  color: var(--sapNegativeColor);
+}
+
+.errorActions {
+  margin-top: 1rem;
+}
+
+/* ==================== CONTROL PANEL ==================== */
+
+.controlPanel {
+  margin-bottom: 1rem;
+}
+
+.controlPanelContent {
+  padding: 1rem;
+}
+
+.statusSummary {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 1rem;
+}
+
+.statusItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.processingInfo {
+  margin-bottom: 1rem;
+}
+
+.processingText {
+  color: var(--sapContent_LabelColor);
+  font-size: 0.875rem;
+}
+
+/* ==================== TABLE CONTROLS ==================== */
+
+.tableControls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.filterChips {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.filterChip {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--sapList_BorderColor);
+  border-radius: 1rem;
+  background: transparent;
+  color: var(--sapTextColor);
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 400;
+  transition: all 0.2s ease;
+}
+
+.filterChip:hover {
+  background: var(--sapList_Hover_Background);
+}
+
+.filterChipActive {
+  border-color: #0070f2;
+  background: #0070f2;
+  color: white;
+  font-weight: 600;
+}
+
+.rightControls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sortSelect {
+  min-width: 150px;
+}
+
+.searchInput {
+  width: 200px;
+}
+
+/* ==================== RESULTS HEADER ==================== */
+
+.resultsHeader {
+  margin-bottom: 0.5rem;
+}
+
+/* ==================== DATA TABLE ==================== */
+
+.tableContainer {
+  overflow-x: auto;
+}
+
+.dataTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.tableHeader {
+  background: var(--sapList_HeaderBackground);
+}
+
+.tableHeaderCell {
+  padding: 0.75rem 1rem;
+  text-align: left;
+}
+
+.tableHeaderCellCenter {
+  text-align: center;
+}
+
+.tableHeaderCellExpand {
+  padding: 0.75rem 0.5rem;
+  text-align: center;
+  width: 40px;
+}
+
+.tableHeaderCellImage {
+  width: 60px;
+}
+
+.tableHeaderCellVelocity {
+  width: 120px;
+}
+
+.tableHeaderCellStatus {
+  width: 100px;
+}
+
+/* ==================== TABLE ROWS ==================== */
+
+.tableRow {
+  border-bottom: 1px solid var(--sapList_BorderColor);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.tableRow:hover {
+  background-color: var(--sapList_Hover_Background);
+}
+
+.tableRowExpanded {
+  border-bottom: none;
+}
+
+.tableRowProcessing {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.tableCell {
+  padding: 0.75rem 1rem;
+}
+
+.tableCellCenter {
+  text-align: center;
+}
+
+.tableCellExpand {
+  padding: 0.5rem;
+  text-align: center;
+}
+
+.tableCellImage {
+  padding: 0.5rem 1rem;
+}
+
+/* ==================== EXPANDED DETAIL ROW ==================== */
+
+.expandedRow {
+  border-bottom: 1px solid var(--sapList_BorderColor);
+}
+
+.expandedContent {
+  padding: 1rem 1.5rem;
+  background-color: var(--sapList_Background);
+}
+
+.expandedLayout {
+  display: flex;
+  gap: 2rem;
+}
+
+.expandedDetails {
+  flex: 1;
+}
+
+.detailsTitle {
+  margin-bottom: 1rem;
+}
+
+.detailsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem 2rem;
+}
+
+.detailLabel {
+  font-size: 0.75rem;
+  color: var(--sapContent_LabelColor);
+}
+
+.detailValue {
+  display: block;
+}
+
+.detailValueVelocity {
+  font-weight: 600;
+}
+
+.descriptionSection {
+  margin-top: 1rem;
+}
+
+.enrichedSection {
+  margin-top: 1rem;
+}
+
+.enrichedTitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+.enrichedGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.5rem 2rem;
+}
+
+.errorSection {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background-color: var(--sapErrorBackground);
+  border-radius: 4px;
+  border: 1px solid var(--sapErrorBorderColor);
+}
+
+.errorSectionTitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--sapNegativeColor);
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.errorSectionText {
+  color: var(--sapNegativeColor);
+}
+
+/* ==================== IMAGE ==================== */
+
+.imageThumbnail {
+  width: 50px;
+  height: 50px;
+  border-radius: 4px;
+  overflow: hidden;
+  background-color: var(--sapNeutralBackground);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.imageThumbnailImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.imageDetail {
+  width: 150px;
+  height: 150px;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: var(--sapNeutralBackground);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  position: relative;
+}
+
+.imageDetailImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.imageZoomIcon {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background-color: rgba(0, 0, 0, 0.5);
+  border-radius: 4px;
+  padding: 4px;
+}
+
+.imageZoomIconSvg {
+  color: white;
+  font-size: 1rem;
+}
+
+/* ==================== IMAGE MODAL ==================== */
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--sapList_BorderColor);
+  width: 100%;
+}
+
+.modalTitle {
+  margin: 0;
+  flex: 0;
+}
+
+.modalCloseButton {
+  min-width: 2.5rem;
+  margin-left: auto;
+}
+
+.modalImageContainer {
+  padding: 1rem;
+  text-align: center;
+}
+
+.modalImage {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+/* ==================== ARTICLE ID ==================== */
+
+.articleId {
+  font-weight: 500;
+}
+
+/* ==================== VELOCITY SCORE ==================== */
+
+.velocityContainer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.velocityBar {
+  width: 60px;
+  height: 6px;
+  background-color: var(--sapContent_ForegroundBorderColor);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.velocityBarFill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.velocityScore {
+  font-size: 0.75rem;
+  font-weight: 600;
+  min-width: 35px;
+}
+
+/* ==================== STATUS CELL ==================== */
+
+.statusCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+/* ==================== EMPTY STATE ==================== */
+
+.emptyCell {
+  padding: 3rem;
+  text-align: center;
+}
+
+.emptyText {
+  color: var(--sapContent_LabelColor);
+}
+
+/* ==================== PAGINATION ==================== */
+
+.paginationText {
+  font-size: 0.875rem;
+  color: var(--sapContent_LabelColor);
+}
+
+.paginationControls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.paginationPage {
+  font-size: 0.875rem;
+  min-width: 80px;
+  text-align: center;
+}
+
+/* ==================== ANIMATIONS ==================== */
+
+@keyframes pulse {
+  0%,
+  100% {
+    background-color: transparent;
+  }
+  50% {
+    background-color: var(--sapInformationBackground);
+  }
+}

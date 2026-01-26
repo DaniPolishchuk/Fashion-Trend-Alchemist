@@ -1,0 +1,172 @@
+/**
+ * Result Overview Tab Styles
+ * Generated designs overview with search and pagination
+ */
+
+/* ==================== LOADING & ERROR STATES ==================== */
+
+.loadingContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+}
+
+.errorContainer {
+  padding: 3rem;
+  text-align: center;
+}
+
+.errorText {
+  color: var(--sapNegativeColor);
+}
+
+.errorActions {
+  margin-top: 1rem;
+}
+
+/* ==================== SEARCH BAR ==================== */
+
+.searchContainer {
+  margin-bottom: 1rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.searchInput {
+  flex: 1;
+}
+
+/* ==================== RESULTS HEADER ==================== */
+
+.resultsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.headerIcon {
+  color: var(--sapPositiveColor);
+}
+
+.headerCount {
+  color: var(--sapContent_LabelColor);
+  font-size: 0.875rem;
+}
+
+/* ==================== DESIGN LIST ITEMS ==================== */
+
+.designItem {
+  display: flex;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.designItem:not(:last-child) {
+  border-bottom: 1px solid var(--sapList_BorderColor);
+}
+
+.designItem:hover {
+  background: var(--sapList_Hover_Background);
+}
+
+/* ==================== THUMBNAIL ==================== */
+
+.thumbnail {
+  width: 64px;
+  height: 64px;
+  border-radius: 0.5rem;
+  background: var(--sapBackgroundColor);
+  margin-right: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.thumbnailImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumbnailPlaceholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
+}
+
+/* ==================== DESIGN CONTENT ==================== */
+
+.designContent {
+  flex: 1;
+}
+
+.designName {
+  font-weight: 600;
+  font-size: 0.9375rem;
+  display: block;
+}
+
+.designAttributes {
+  color: var(--sapContent_LabelColor);
+  font-size: 0.8125rem;
+  display: block;
+}
+
+.attributeLabel {
+  font-weight: 500;
+}
+
+/* ==================== DELETE BUTTON ==================== */
+
+.deleteButton {
+  margin-right: 1rem;
+}
+
+/* ==================== EMPTY STATE ==================== */
+
+.emptyContainer {
+  padding: 3rem;
+  text-align: center;
+}
+
+.emptyText {
+  color: var(--sapContent_LabelColor);
+}
+
+/* ==================== PAGINATION ==================== */
+
+.paginationText {
+  font-size: 0.875rem;
+  color: var(--sapContent_LabelColor);
+}
+
+.paginationControls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.paginationPage {
+  font-size: 0.875rem;
+  min-width: 80px;
+  text-align: center;
+}
+
+/* ==================== DELETE DIALOG ==================== */
+
+.dialogFooter {
+  display: flex;
+  gap: 0.5rem;
+}
