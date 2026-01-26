@@ -15,9 +15,10 @@ import {
   isNotNull,
   sql,
 } from '@fashion/db';
+import type { GeneratedImages } from '@fashion/db';
 import { rpt1Config } from '@fashion/config';
-import { buildImagePrompt, generateImageWithRetry } from '../services/imageGeneration.js';
-import { uploadGeneratedImageWithRetry } from '../services/s3.js';
+import { buildImagePromptForView, generateImageWithRetry, type ImageView } from '../services/imageGeneration.js';
+import { uploadGeneratedImageForViewWithRetry } from '../services/s3.js';
 
 interface PredictRequestBody {
   lockedAttributes: Record<string, string>;
@@ -454,7 +455,13 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
       const sequenceNumber = (existingDesignsCount[0]?.count || 0) + 1;
       const designName = `${project.name}_${String(sequenceNumber).padStart(3, '0')}`;
 
-      // Store the generated design with pending image status
+      // Store the generated design with pending image status and initial generatedImages structure
+      const initialGeneratedImages: GeneratedImages = {
+        front: { url: null, status: 'pending' },
+        back: { url: null, status: 'pending' },
+        model: { url: null, status: 'pending' },
+      };
+
       const [newDesign] = await db
         .insert(generatedDesigns)
         .values({
@@ -466,59 +473,94 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
           },
           predictedAttributes,
           imageGenerationStatus: 'pending',
+          generatedImages: initialGeneratedImages,
         })
         .returning();
 
-      // Start async image generation (don't await)
+      // Start async image generation (don't await) - generates front, back, model sequentially
       const designId = newDesign.id;
       const asyncImageGeneration = async () => {
-        try {
-          // Update status to generating
-          await db
-            .update(generatedDesigns)
-            .set({ imageGenerationStatus: 'generating' })
-            .where(eq(generatedDesigns.id, designId));
+        const views: ImageView[] = ['front', 'back', 'model'];
+        const generatedImages: GeneratedImages = {
+          front: { url: null, status: 'pending' },
+          back: { url: null, status: 'pending' },
+          model: { url: null, status: 'pending' },
+        };
 
-          fastify.log.info({ designId }, 'Starting async image generation');
+        // Update overall status to generating
+        await db
+          .update(generatedDesigns)
+          .set({ imageGenerationStatus: 'generating' })
+          .where(eq(generatedDesigns.id, designId));
 
-          // Build prompt from all attributes
-          const prompt = buildImagePrompt(lockedAttributes, predictedAttributes);
+        fastify.log.info({ designId }, 'Starting async multi-image generation (front/back/model)');
 
-          // Generate image with retry
-          const imageBuffer = await generateImageWithRetry(prompt, 1);
-
-          if (imageBuffer) {
-            // Upload to S3/SeaweedFS with retry logic
-            const imageUrl = await uploadGeneratedImageWithRetry(designId, imageBuffer, 2);
-
-            // Update design with image URL and completed status
+        // Generate images sequentially for each view
+        for (const view of views) {
+          try {
+            // Update status to generating for this view
+            generatedImages[view].status = 'generating';
             await db
               .update(generatedDesigns)
-              .set({
-                generatedImageUrl: imageUrl,
-                imageGenerationStatus: 'completed',
-              })
+              .set({ generatedImages })
               .where(eq(generatedDesigns.id, designId));
 
-            fastify.log.info({ designId, imageUrl }, 'Image generation completed');
-          } else {
-            // Image generation failed after retries
+            fastify.log.info({ designId, view }, `Starting ${view} image generation`);
+
+            // Build view-specific prompt and generate
+            const prompt = buildImagePromptForView(lockedAttributes, predictedAttributes, view);
+            const imageBuffer = await generateImageWithRetry(prompt, 1);
+
+            if (imageBuffer) {
+              // Upload to S3/SeaweedFS with retry logic
+              const imageUrl = await uploadGeneratedImageForViewWithRetry(designId, imageBuffer, view, 2);
+              generatedImages[view] = { url: imageUrl, status: 'completed' };
+              fastify.log.info({ designId, view, imageUrl }, `${view} image completed`);
+            } else {
+              generatedImages[view].status = 'failed';
+              fastify.log.warn({ designId, view }, `${view} image generation failed after retries`);
+            }
+
+            // Update DB after each view
             await db
               .update(generatedDesigns)
-              .set({ imageGenerationStatus: 'failed' })
+              .set({ generatedImages })
               .where(eq(generatedDesigns.id, designId));
-
-            fastify.log.warn({ designId }, 'Image generation failed after retries');
+          } catch (error) {
+            fastify.log.error({ designId, view, error }, `Error generating ${view} image`);
+            generatedImages[view].status = 'failed';
+            await db
+              .update(generatedDesigns)
+              .set({ generatedImages })
+              .where(eq(generatedDesigns.id, designId));
           }
-        } catch (error) {
-          fastify.log.error({ designId, error }, 'Async image generation error');
-
-          // Update status to failed
-          await db
-            .update(generatedDesigns)
-            .set({ imageGenerationStatus: 'failed' })
-            .where(eq(generatedDesigns.id, designId));
         }
+
+        // Determine overall status based on results
+        const allCompleted = views.every((v) => generatedImages[v].status === 'completed');
+        const allFailed = views.every((v) => generatedImages[v].status === 'failed');
+        const overallStatus = allCompleted ? 'completed' : allFailed ? 'failed' : 'partial';
+
+        // Update final status and also set legacy generatedImageUrl to front image for backward compatibility
+        await db
+          .update(generatedDesigns)
+          .set({
+            generatedImages,
+            imageGenerationStatus: overallStatus,
+            generatedImageUrl: generatedImages.front.url, // Legacy field for backward compatibility
+          })
+          .where(eq(generatedDesigns.id, designId));
+
+        fastify.log.info(
+          {
+            designId,
+            overallStatus,
+            frontStatus: generatedImages.front.status,
+            backStatus: generatedImages.back.status,
+            modelStatus: generatedImages.model.status,
+          },
+          'Multi-image generation completed'
+        );
       };
 
       // Fire and forget - don't await

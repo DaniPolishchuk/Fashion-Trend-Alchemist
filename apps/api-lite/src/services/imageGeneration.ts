@@ -18,6 +18,9 @@ let tokenExpiresAt: number = 0;
 // Cache duration: 11 hours (token valid for 12 hours, refresh 1 hour before expiry)
 const TOKEN_CACHE_DURATION_MS = 11 * 60 * 60 * 1000;
 
+// Image view types
+export type ImageView = 'front' | 'back' | 'model';
+
 /**
  * Get OAuth2 access token for image generation API
  * Caches token for 11 hours
@@ -63,22 +66,18 @@ export async function getImageGenToken(): Promise<string> {
 }
 
 /**
- * Build a descriptive prompt from locked and predicted attributes
+ * Build base description from locked and predicted attributes
  */
-export function buildImagePrompt(
+function buildBaseDescription(
   lockedAttributes: Record<string, string>,
   predictedAttributes: Record<string, string>
 ): string {
-  console.log('[ImageGen] Building prompt with attributes:');
-  console.log('  Locked attributes:', JSON.stringify(lockedAttributes, null, 2));
-  console.log('  Predicted attributes:', JSON.stringify(predictedAttributes, null, 2));
-
   const allAttributes = { ...lockedAttributes, ...predictedAttributes };
 
   // Remove internal keys (prefixed with _)
   const filteredAttributes = Object.entries(allAttributes).filter(([key]) => !key.startsWith('_'));
 
-  // Extract key attribute values for the prompt
+  // Extract key attribute values
   const getAttrValue = (keys: string[]): string | null => {
     for (const key of keys) {
       const entry = filteredAttributes.find(([k]) => k.toLowerCase().includes(key.toLowerCase()));
@@ -107,16 +106,61 @@ export function buildImagePrompt(
     }
   }
 
-  const prompt = `Please generate the following piece of clothing:
-A ${productType}${color ? ` in ${color}` : ''}${pattern ? ` with ${pattern} pattern` : ''}${style ? `, ${style} style` : ''}${fabric ? `, made of ${fabric}` : ''}.
+  return `A ${productType}${color ? ` in ${color}` : ''}${pattern ? ` with ${pattern} pattern` : ''}${style ? `, ${style} style` : ''}${fabric ? `, made of ${fabric}` : ''}.
 
 Detailed characteristics:
-${characteristics.map((c) => `- ${c}`).join('\n')}
+${characteristics.map((c) => `- ${c}`).join('\n')}`;
+}
 
+/**
+ * Build a view-specific prompt for image generation
+ * @param lockedAttributes - Attributes with fixed values
+ * @param predictedAttributes - AI-predicted attributes
+ * @param view - The view to generate: 'front', 'back', or 'model'
+ */
+export function buildImagePromptForView(
+  lockedAttributes: Record<string, string>,
+  predictedAttributes: Record<string, string>,
+  view: ImageView
+): string {
+  const baseDescription = buildBaseDescription(lockedAttributes, predictedAttributes);
+
+  switch (view) {
+    case 'front':
+      return `Please generate the following piece of clothing:
+${baseDescription}
+
+View: Front view of the garment, flat lay on neutral background.
 The image should show only the clothing item on a clean, neutral background.
-DO NOT INCLUDE ANY BODY PARTS!!`;
+DO NOT INCLUDE ANY BODY PARTS OR MANNEQUINS!!`;
 
-  return prompt;
+    case 'back':
+      return `Please generate the following piece of clothing:
+${baseDescription}
+
+View: Back view of the same garment, flat lay on neutral background.
+Show the back design, any back details like zippers, pockets, or patterns.
+The image should show only the clothing item on a clean, neutral background.
+DO NOT INCLUDE ANY BODY PARTS OR MANNEQUINS!!`;
+
+    case 'model':
+      return `Please generate the following piece of clothing:
+${baseDescription}
+
+View: Full body shot of a fashion model wearing this exact garment.
+Professional fashion photography style, neutral studio background.
+Model should be standing in a natural pose, showing how the garment fits and drapes.`;
+  }
+}
+
+/**
+ * Build a descriptive prompt from locked and predicted attributes (legacy - defaults to front view)
+ */
+export function buildImagePrompt(
+  lockedAttributes: Record<string, string>,
+  predictedAttributes: Record<string, string>
+): string {
+  return buildImagePromptForView(lockedAttributes, predictedAttributes, 'front');
 }
 
 /**

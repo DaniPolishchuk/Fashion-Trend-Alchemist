@@ -14,6 +14,7 @@ import collectionRoutes from './routes/collections.js';
 import enrichmentRoutes from './routes/enrichment.js';
 import rpt1Routes from './routes/rpt1.js';
 import contextItemsRoutes from './routes/context-items.js';
+import designNameRoutes from './routes/design-name.js';
 
 import { llmConfig } from '@fashion/config';
 import OpenAI from 'openai';
@@ -462,6 +463,9 @@ await fastify.register(rpt1Routes, { prefix: '/api' });
 
 // Register context items routes
 await fastify.register(contextItemsRoutes, { prefix: '/api' });
+
+// Register design name routes
+await fastify.register(designNameRoutes, { prefix: '/api' });
 
 /**
  * POST /api/cache/invalidate

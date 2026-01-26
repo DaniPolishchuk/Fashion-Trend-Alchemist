@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Card,
   Title,
@@ -83,6 +84,9 @@ interface PreviewData {
 }
 
 function TheAlchemistTab({ project }: TheAlchemistTabProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const refineFromDesignId = searchParams.get('refineFrom');
+
   const [attributes, setAttributes] = useState<AttributeConfig[]>([]);
   const [articleAttributeOptions, setArticleAttributeOptions] = useState<Record<
     string,
@@ -98,6 +102,10 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
     type: 'success' | 'error';
   } | null>(null);
   const [successScore, setSuccessScore] = useState(100); // Default to 100% (maximum success)
+
+  // Refine design state
+  const [refineSource, setRefineSource] = useState<{ id: string; name: string } | null>(null);
+  const [refineApplied, setRefineApplied] = useState(false);
 
   // Memoize productTypes as a stable string to prevent unnecessary refetches
   // when the array reference changes but values remain the same
@@ -290,6 +298,88 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
     attributesInitialized,
     project.ontologySchema,
     attributes,
+  ]);
+
+  // Handle refine design pre-population from URL param
+  useEffect(() => {
+    if (!refineFromDesignId || !attributesInitialized || refineApplied) return;
+    if (attributes.length === 0) return;
+
+    const applyRefineState = async () => {
+      try {
+        console.log('[TheAlchemistTab] Applying refine state from design:', refineFromDesignId);
+
+        // Fetch all generated designs to find the source
+        const response = await fetch(`/api/projects/${project.id}/generated-designs`);
+        if (!response.ok) {
+          console.error('[TheAlchemistTab] Failed to fetch designs for refine');
+          return;
+        }
+
+        const designs = await response.json();
+        const sourceDesign = designs.find((d: any) => d.id === refineFromDesignId);
+        if (!sourceDesign) {
+          console.error('[TheAlchemistTab] Source design not found:', refineFromDesignId);
+          return;
+        }
+
+        // Extract attributes from the source design
+        const lockedAttrs = sourceDesign.inputConstraints || {};
+        const predictedAttrs = sourceDesign.predictedAttributes || {};
+
+        // Map design attributes back to attribute configuration
+        setAttributes((prev) =>
+          prev.map((attr) => {
+            // Check if this attr was in inputConstraints (locked)
+            if (lockedAttrs[attr.key] !== undefined) {
+              // Find if the value is in the available variants
+              const valueInVariants = attr.variants.includes(lockedAttrs[attr.key]);
+              return {
+                ...attr,
+                category: 'locked' as const,
+                selectedValue: valueInVariants ? lockedAttrs[attr.key] : attr.variants[0] || null,
+              };
+            }
+            // Check if this attr was in predictedAttributes (should become AI variable)
+            if (predictedAttrs[attr.key] !== undefined) {
+              return {
+                ...attr,
+                category: 'ai' as const,
+                selectedValue: null,
+              };
+            }
+            // Keep other attributes as-is
+            return attr;
+          })
+        );
+
+        // Set target success score if available
+        if (lockedAttrs._targetSuccessScore !== undefined) {
+          setSuccessScore(Number(lockedAttrs._targetSuccessScore) || 100);
+        }
+
+        setRefineSource({ id: sourceDesign.id, name: sourceDesign.name });
+        setRefineApplied(true);
+
+        // Clear the URL param without navigation
+        searchParams.delete('refineFrom');
+        setSearchParams(searchParams, { replace: true });
+
+        console.log('[TheAlchemistTab] Refine state applied from:', sourceDesign.name);
+      } catch (error) {
+        console.error('[TheAlchemistTab] Failed to apply refine state:', error);
+      }
+    };
+
+    applyRefineState();
+  }, [
+    refineFromDesignId,
+    attributesInitialized,
+    refineApplied,
+    attributes.length,
+    project.id,
+    searchParams,
+    setSearchParams,
   ]);
 
   // Move attribute to locked
@@ -800,6 +890,18 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
             {toastMessage.text}
           </div>
         </Toast>
+      )}
+
+      {/* Refine source banner */}
+      {refineSource && (
+        <MessageStrip
+          design="Information"
+          onClose={() => setRefineSource(null)}
+          style={{ marginBottom: '1rem' }}
+        >
+          Pre-filled from design: <strong>{refineSource.name}</strong>. Locked attributes are
+          preserved, predicted attributes are now AI Variables. Modify and run a new prediction.
+        </MessageStrip>
       )}
 
       {/* Main Layout: Parameters Card + Success Score Panel */}
