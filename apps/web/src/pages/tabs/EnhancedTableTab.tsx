@@ -28,6 +28,7 @@ import '@ui5/webcomponents-icons/dist/slim-arrow-down.js';
 import '@ui5/webcomponents-icons/dist/slim-arrow-up.js';
 import '@ui5/webcomponents-icons/dist/slim-arrow-right.js';
 import '@ui5/webcomponents-icons/dist/zoom-in.js';
+import '@ui5/webcomponents-icons/dist/decline.js';
 
 interface ContextItem {
   articleId: string;
@@ -35,6 +36,12 @@ interface ContextItem {
   productGroup: string | null;
   colorFamily: string | null;
   patternStyle: string | null;
+  specificColor: string | null;
+  colorIntensity: string | null;
+  productFamily: string | null;
+  customerSegment: string | null;
+  styleConcept: string | null;
+  fabricTypeBase: string | null;
   detailDesc: string | null;
   velocityScore: number;
   enrichedAttributes: Record<string, string> | null;
@@ -101,7 +108,6 @@ function EnhancedTableTab({
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [sortBy, setSortBy] = useState<SortField>('velocityScore');
   const [sortDesc, setSortDesc] = useState(true);
-  const [failedFirst, setFailedFirst] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -193,16 +199,35 @@ function EnhancedTableTab({
       items = items.filter((item) => item.enrichmentError !== null);
     }
 
-    // Apply search
+    // Apply search - searches through all columns except image and status
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      items = items.filter(
-        (item) =>
+      items = items.filter((item) => {
+        // Search base text fields including new columns
+        const baseMatch =
           item.articleId.toLowerCase().includes(query) ||
           item.productType.toLowerCase().includes(query) ||
+          (item.productGroup && item.productGroup.toLowerCase().includes(query)) ||
           (item.colorFamily && item.colorFamily.toLowerCase().includes(query)) ||
-          (item.patternStyle && item.patternStyle.toLowerCase().includes(query))
-      );
+          (item.patternStyle && item.patternStyle.toLowerCase().includes(query)) ||
+          (item.specificColor && item.specificColor.toLowerCase().includes(query)) ||
+          (item.colorIntensity && item.colorIntensity.toLowerCase().includes(query)) ||
+          (item.productFamily && item.productFamily.toLowerCase().includes(query)) ||
+          (item.customerSegment && item.customerSegment.toLowerCase().includes(query)) ||
+          (item.styleConcept && item.styleConcept.toLowerCase().includes(query)) ||
+          (item.fabricTypeBase && item.fabricTypeBase.toLowerCase().includes(query)) ||
+          (item.detailDesc && item.detailDesc.toLowerCase().includes(query)) ||
+          item.velocityScore.toString().includes(query);
+
+        // Search enriched attributes (dynamic LLM-generated fields)
+        const enrichedMatch = item.enrichedAttributes
+          ? Object.values(item.enrichedAttributes).some(
+              (value) => value && value.toLowerCase().includes(query)
+            )
+          : false;
+
+        return baseMatch || enrichedMatch;
+      });
     }
 
     return items;
@@ -225,15 +250,8 @@ function EnhancedTableTab({
       return sortDesc ? -comparison : comparison;
     });
 
-    // Move failed items to top if enabled
-    if (failedFirst) {
-      const failed = items.filter((item) => item.enrichmentError !== null);
-      const rest = items.filter((item) => item.enrichmentError === null);
-      items = [...failed, ...rest];
-    }
-
     return items;
-  }, [filteredItems, sortBy, sortDesc, failedFirst]);
+  }, [filteredItems, sortBy, sortDesc]);
 
   // Pagination
   const totalPages = Math.ceil(sortedItems.length / ITEMS_PER_PAGE);
@@ -319,6 +337,12 @@ function EnhancedTableTab({
       'Product Group',
       'Color Family',
       'Pattern Style',
+      'Specific Color',
+      'Color Intensity',
+      'Product Family',
+      'Customer Segment',
+      'Style Concept',
+      'Fabric Type',
       'Velocity Score',
       'Status',
       ...ontologyAttributes,
@@ -336,6 +360,12 @@ function EnhancedTableTab({
         item.productGroup || '',
         item.colorFamily || '',
         item.patternStyle || '',
+        item.specificColor || '',
+        item.colorIntensity || '',
+        item.productFamily || '',
+        item.customerSegment || '',
+        item.styleConcept || '',
+        item.fabricTypeBase || '',
         item.velocityScore.toFixed(2),
         status,
       ];
@@ -547,12 +577,6 @@ function EnhancedTableTab({
             tooltip={sortDesc ? 'Descending' : 'Ascending'}
           />
 
-          <CheckBox
-            text="Failed first"
-            checked={failedFirst}
-            onChange={() => setFailedFirst(!failedFirst)}
-          />
-
           <Input
             placeholder="Search..."
             value={searchQuery}
@@ -593,8 +617,14 @@ function EnhancedTableTab({
                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', width: '120px' }}>
                   Velocity Score
                 </th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Color Family</th>
                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Pattern Style</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Color Family</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Specific Color</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Color Intensity</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Product Family</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Customer Segment</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Style Concept</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Fabric Type</th>
                 {/* Dynamic LLM attribute columns */}
                 {ontologyAttributes.map((attr) => (
                   <th key={attr} style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>
@@ -610,7 +640,7 @@ function EnhancedTableTab({
               {paginatedItems.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={8 + ontologyAttributes.length}
+                    colSpan={14 + ontologyAttributes.length}
                     style={{ padding: '3rem', textAlign: 'center' }}
                   >
                     <Text style={{ color: 'var(--sapContent_LabelColor)' }}>
@@ -728,14 +758,44 @@ function EnhancedTableTab({
                           </div>
                         </td>
 
+                        {/* Pattern Style */}
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          <Text>{item.patternStyle || '-'}</Text>
+                        </td>
+
                         {/* Color Family */}
                         <td style={{ padding: '0.75rem 1rem' }}>
                           <Text>{item.colorFamily || '-'}</Text>
                         </td>
 
-                        {/* Pattern Style */}
+                        {/* Specific Color */}
                         <td style={{ padding: '0.75rem 1rem' }}>
-                          <Text>{item.patternStyle || '-'}</Text>
+                          <Text>{item.specificColor || '-'}</Text>
+                        </td>
+
+                        {/* Color Intensity */}
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          <Text>{item.colorIntensity || '-'}</Text>
+                        </td>
+
+                        {/* Product Family */}
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          <Text>{item.productFamily || '-'}</Text>
+                        </td>
+
+                        {/* Customer Segment */}
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          <Text>{item.customerSegment || '-'}</Text>
+                        </td>
+
+                        {/* Style Concept */}
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          <Text>{item.styleConcept || '-'}</Text>
+                        </td>
+
+                        {/* Fabric Type Base */}
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          <Text>{item.fabricTypeBase || '-'}</Text>
                         </td>
 
                         {/* Dynamic LLM attributes */}
@@ -878,6 +938,19 @@ function EnhancedTableTab({
                                         color: 'var(--sapContent_LabelColor)',
                                       }}
                                     >
+                                      Pattern Style
+                                    </Text>
+                                    <Text style={{ display: 'block' }}>
+                                      {item.patternStyle || '-'}
+                                    </Text>
+                                  </div>
+                                  <div>
+                                    <Text
+                                      style={{
+                                        fontSize: '0.75rem',
+                                        color: 'var(--sapContent_LabelColor)',
+                                      }}
+                                    >
                                       Color Family
                                     </Text>
                                     <Text style={{ display: 'block' }}>
@@ -891,10 +964,75 @@ function EnhancedTableTab({
                                         color: 'var(--sapContent_LabelColor)',
                                       }}
                                     >
-                                      Pattern Style
+                                      Specific Color
                                     </Text>
                                     <Text style={{ display: 'block' }}>
-                                      {item.patternStyle || '-'}
+                                      {item.specificColor || '-'}
+                                    </Text>
+                                  </div>
+                                  <div>
+                                    <Text
+                                      style={{
+                                        fontSize: '0.75rem',
+                                        color: 'var(--sapContent_LabelColor)',
+                                      }}
+                                    >
+                                      Color Intensity
+                                    </Text>
+                                    <Text style={{ display: 'block' }}>
+                                      {item.colorIntensity || '-'}
+                                    </Text>
+                                  </div>
+                                  <div>
+                                    <Text
+                                      style={{
+                                        fontSize: '0.75rem',
+                                        color: 'var(--sapContent_LabelColor)',
+                                      }}
+                                    >
+                                      Product Family
+                                    </Text>
+                                    <Text style={{ display: 'block' }}>
+                                      {item.productFamily || '-'}
+                                    </Text>
+                                  </div>
+                                  <div>
+                                    <Text
+                                      style={{
+                                        fontSize: '0.75rem',
+                                        color: 'var(--sapContent_LabelColor)',
+                                      }}
+                                    >
+                                      Customer Segment
+                                    </Text>
+                                    <Text style={{ display: 'block' }}>
+                                      {item.customerSegment || '-'}
+                                    </Text>
+                                  </div>
+                                  <div>
+                                    <Text
+                                      style={{
+                                        fontSize: '0.75rem',
+                                        color: 'var(--sapContent_LabelColor)',
+                                      }}
+                                    >
+                                      Style Concept
+                                    </Text>
+                                    <Text style={{ display: 'block' }}>
+                                      {item.styleConcept || '-'}
+                                    </Text>
+                                  </div>
+                                  <div>
+                                    <Text
+                                      style={{
+                                        fontSize: '0.75rem',
+                                        color: 'var(--sapContent_LabelColor)',
+                                      }}
+                                    >
+                                      Fabric Type
+                                    </Text>
+                                    <Text style={{ display: 'block' }}>
+                                      {item.fabricTypeBase || '-'}
                                     </Text>
                                   </div>
                                   <div>
@@ -1059,7 +1197,28 @@ function EnhancedTableTab({
       <Dialog
         open={imageModalOpen}
         onClose={() => setImageModalOpen(false)}
-        headerText="Product Image"
+        header={
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '1rem 1.5rem',
+              borderBottom: '1px solid var(--sapList_BorderColor)',
+              width: '100%',
+            }}
+          >
+            <Title level="H5" style={{ margin: 0, flex: 0 }}>
+              Product Image
+            </Title>
+            <Button
+              design="Transparent"
+              icon="decline"
+              onClick={() => setImageModalOpen(false)}
+              style={{ minWidth: '2.5rem', marginLeft: 'auto' }}
+            />
+          </div>
+        }
       >
         <div style={{ padding: '1rem', textAlign: 'center' }}>
           <img
