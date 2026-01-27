@@ -16,11 +16,18 @@ export async function fetchAPI<T>(
   options?: RequestInit
 ): Promise<ApiResponse<T>> {
   try {
+    // Only set Content-Type header if there's a body to send
+    const headers: HeadersInit = {
+      ...options?.headers,
+    };
+
+    // Add Content-Type only if there's a body
+    if (options?.body) {
+      (headers as Record<string, string>)['Content-Type'] = 'application/json';
+    }
+
     const response = await fetch(`${API_BASE}${endpoint}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
+      headers,
       ...options,
     });
 

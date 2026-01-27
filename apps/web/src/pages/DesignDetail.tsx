@@ -10,11 +10,10 @@ import {
   Breadcrumbs,
   BreadcrumbsItem,
   Dialog,
-  Select,
-  Option,
   Input,
   Panel,
   ObjectStatus,
+  MessageStrip,
 } from '@ui5/webcomponents-react';
 import '@ui5/webcomponents-icons/dist/download.js';
 import '@ui5/webcomponents-icons/dist/zoom-in.js';
@@ -32,6 +31,8 @@ import '@ui5/webcomponents-icons/dist/synchronize.js';
 import '@ui5/webcomponents-icons/dist/customize.js';
 import '@ui5/webcomponents-icons/dist/ai.js';
 import '@ui5/webcomponents-icons/dist/camera.js';
+
+import SaveToCollectionPopover from '../components/SaveToCollectionPopover';
 
 // Types for multi-image support
 type ImageViewStatus = 'pending' | 'generating' | 'completed' | 'failed';
@@ -59,11 +60,6 @@ interface GeneratedDesign {
   createdAt?: string;
 }
 
-interface Collection {
-  id: string;
-  name: string;
-}
-
 type ImageView = 'front' | 'back' | 'model';
 
 function DesignDetail() {
@@ -76,10 +72,7 @@ function DesignDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedView, setSelectedView] = useState<ImageView>('front');
-  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
-  const [collections, setCollections] = useState<Collection[]>([]);
-  const [selectedCollectionId, setSelectedCollectionId] = useState<string>('');
-  const [saving, setSaving] = useState(false);
+  const [savePopoverOpen, setSavePopoverOpen] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [savingName, setSavingName] = useState(false);
@@ -88,12 +81,23 @@ function DesignDetail() {
   const [overallStatus, setOverallStatus] = useState<string>('pending');
   const [imageModalOpen, setImageModalOpen] = useState(false);
 
+  // Save notification state
+  const [saveNotification, setSaveNotification] = useState<{
+    show: boolean;
+    success: boolean;
+    collectionName: string;
+    collectionId: string;
+    error?: string;
+  } | null>(null);
+
   // Collapsible panel states
   const [predictedPanelCollapsed, setPredictedPanelCollapsed] = useState(false);
   const [givenPanelCollapsed, setGivenPanelCollapsed] = useState(true);
 
   // Polling ref
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  // Auto-dismiss timer ref
+  const dismissTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -243,46 +247,71 @@ function DesignDetail() {
     };
   }, [projectId, designId, generatedImages]);
 
-  // Fetch collections for save dialog
-  useEffect(() => {
-    const fetchCollections = async () => {
-      try {
-        const response = await fetch('/api/collections');
-        if (response.ok) {
-          const data = await response.json();
-          setCollections(data);
-        }
-      } catch (err) {
-        console.error('Failed to fetch collections:', err);
-      }
-    };
+  // Handle save success
+  const handleSaveSuccess = (collectionName: string, collectionId: string) => {
+    // Show success notification
+    setSaveNotification({
+      show: true,
+      success: true,
+      collectionName,
+      collectionId,
+    });
 
-    fetchCollections();
-  }, []);
+    // Set auto-dismiss timer (5 seconds)
+    if (dismissTimerRef.current) {
+      clearTimeout(dismissTimerRef.current);
+    }
+    dismissTimerRef.current = setTimeout(() => {
+      setSaveNotification(null);
+    }, 5000);
+  };
 
-  // Handle save to collection
-  const handleSaveToCollection = async () => {
-    if (!selectedCollectionId || !designId) return;
+  // Handle save error (for future use)
+  const handleSaveError = (error: string) => {
+    setSaveNotification({
+      show: true,
+      success: false,
+      collectionName: '',
+      collectionId: '',
+      error,
+    });
 
-    try {
-      setSaving(true);
-      const response = await fetch(`/api/collections/${selectedCollectionId}/items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ generatedDesignId: designId }),
-      });
+    // Set auto-dismiss timer (5 seconds)
+    if (dismissTimerRef.current) {
+      clearTimeout(dismissTimerRef.current);
+    }
+    dismissTimerRef.current = setTimeout(() => {
+      setSaveNotification(null);
+    }, 5000);
+  };
 
-      if (!response.ok) {
-        throw new Error('Failed to save to collection');
-      }
-
-      setSaveDialogOpen(false);
-    } catch (err) {
-      console.error('Failed to save to collection:', err);
-    } finally {
-      setSaving(false);
+  // Handle notification dismiss
+  const handleDismissNotification = () => {
+    setSaveNotification(null);
+    if (dismissTimerRef.current) {
+      clearTimeout(dismissTimerRef.current);
     }
   };
+
+  // Handle view collection navigation
+  const handleViewCollection = () => {
+    if (saveNotification?.collectionId) {
+      // Navigate to home with collection ID to auto-open the dialog
+      navigate(`/?collection=${saveNotification.collectionId}`);
+    }
+  };
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+      }
+      if (dismissTimerRef.current) {
+        clearTimeout(dismissTimerRef.current);
+      }
+    };
+  }, []);
 
   // Handle name editing
   const handleStartEditName = () => {
@@ -1092,6 +1121,50 @@ function DesignDetail() {
         </div>
       </div>
 
+      {/* Success/Failure Notification - Above Bottom Action Bar */}
+      {saveNotification?.show && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '64px', // Above the action bar (which is ~64px height)
+            right: '2rem', // Align with right side of action bar
+            width: '320px', // Approximate width of both buttons combined
+            zIndex: 11, // Above action bar (which has z-index 10)
+          }}
+        >
+          <MessageStrip
+            design={saveNotification.success ? 'Positive' : 'Negative'}
+            onClose={handleDismissNotification}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+              }}
+            >
+              <div>
+                {saveNotification.success ? (
+                  <Text style={{ fontWeight: '500' }}>
+                    Saved to "{saveNotification.collectionName}"
+                  </Text>
+                ) : (
+                  <Text style={{ fontWeight: '500' }}>
+                    Failed to save: {saveNotification.error}
+                  </Text>
+                )}
+              </div>
+              {saveNotification.success && (
+                <Button design="Transparent" onClick={handleViewCollection}>
+                  View Collection
+                </Button>
+              )}
+            </div>
+          </MessageStrip>
+        </div>
+      )}
+
       {/* Bottom Action Bar */}
       <div
         style={{
@@ -1119,48 +1192,26 @@ function DesignDetail() {
           <Button icon="synchronize" design="Default" onClick={handleRefineDesign}>
             Refine Design
           </Button>
-          <Button design="Emphasized" onClick={() => setSaveDialogOpen(true)}>
+          <Button
+            id="save-to-collection-btn"
+            design="Emphasized"
+            onClick={() => setSavePopoverOpen(true)}
+          >
             Save to Collection
           </Button>
         </div>
       </div>
 
-      {/* Save to Collection Dialog */}
-      <Dialog
-        open={saveDialogOpen}
-        headerText="Save to Collection"
-        footer={
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <Button onClick={() => setSaveDialogOpen(false)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button
-              design="Emphasized"
-              onClick={handleSaveToCollection}
-              disabled={!selectedCollectionId || saving}
-            >
-              {saving ? 'Saving...' : 'Save'}
-            </Button>
-          </div>
-        }
-      >
-        <div style={{ padding: '1rem 0' }}>
-          <Text style={{ display: 'block', marginBottom: '0.5rem' }}>Select a collection:</Text>
-          <Select
-            style={{ width: '100%' }}
-            onChange={(e: any) =>
-              setSelectedCollectionId(e.detail.selectedOption?.dataset?.id || '')
-            }
-          >
-            <Option>Select a collection...</Option>
-            {collections.map((collection) => (
-              <Option key={collection.id} data-id={collection.id}>
-                {collection.name}
-              </Option>
-            ))}
-          </Select>
-        </div>
-      </Dialog>
+      {/* Save to Collection Popover */}
+      {designId && (
+        <SaveToCollectionPopover
+          open={savePopoverOpen}
+          opener="save-to-collection-btn"
+          designId={designId}
+          onClose={() => setSavePopoverOpen(false)}
+          onSaved={handleSaveSuccess}
+        />
+      )}
 
       {/* Image Zoom Modal */}
       <Dialog

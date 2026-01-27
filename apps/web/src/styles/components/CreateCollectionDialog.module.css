@@ -1,0 +1,68 @@
+/**
+ * Create Collection Dialog Styles
+ */
+
+.dialogContent {
+  padding: 1rem 0;
+  min-width: 400px;
+}
+
+.dialogFooter {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  padding: 1rem;
+}
+
+.errorContainer {
+  margin-bottom: 1rem;
+}
+
+.formGroup {
+  margin-bottom: 1.5rem;
+}
+
+.label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: var(--sapTextColor);
+}
+
+.input {
+  width: 100%;
+}
+
+.helpText {
+  padding: 0.75rem;
+  background-color: var(--sapInformationBackground);
+  border-radius: var(--sapElement_BorderCornerRadius);
+  border-left: 3px solid var(--sapInformationBorderColor);
+}
+
+.helpTextContent {
+  color: var(--sapInformationColor);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.loadingSpinner {
+  margin-right: 0.5rem;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 600px) {
+  .dialogContent {
+    min-width: 300px;
+    padding: 0.75rem 0;
+  }
+
+  .dialogFooter {
+    padding: 0.75rem;
+    flex-direction: column-reverse;
+  }
+
+  .dialogFooter button {
+    width: 100%;
+  }
+}
