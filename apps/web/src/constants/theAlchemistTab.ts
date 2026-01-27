@@ -86,7 +86,7 @@ export const ICONS = {
   DECLINE: 'decline',
   ADD: 'add',
   TARGET_GROUP: 'target-group',
-  ACTIVATE: 'activate',
+  LAB: 'lab',
   INSPECTION: 'inspection',
 } as const;
 

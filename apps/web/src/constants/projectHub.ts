@@ -59,8 +59,8 @@ export const STATUS_CONFIGS = {
 
 // ==================== TAB CONFIGURATIONS ====================
 export const TABS = [
-  { id: 'alchemist', label: 'The Alchemist', icon: 'ai' },
   { id: 'enhanced-table', label: 'Enhanced Table', icon: 'table-chart' },
+  { id: 'alchemist', label: 'The Alchemist', icon: 'ai' },
   { id: 'result-overview', label: 'Result Overview', icon: 'grid' },
   { id: 'data-analysis', label: 'Data Analysis', icon: 'business-objects-experience' },
 ] as const;

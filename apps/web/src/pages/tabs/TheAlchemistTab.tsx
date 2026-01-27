@@ -27,7 +27,7 @@ import '@ui5/webcomponents-icons/dist/decline.js';
 import '@ui5/webcomponents-icons/dist/add.js';
 import '@ui5/webcomponents-icons/dist/hint.js';
 import '@ui5/webcomponents-icons/dist/target-group.js';
-import '@ui5/webcomponents-icons/dist/activate.js';
+import '@ui5/webcomponents-icons/dist/lab.js';
 
 // Constants, types, and utilities
 import {
@@ -628,9 +628,9 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
             <>
               <Text className={styles.dialogTitle}>{TEXT.TRANSMUTING_MESSAGE}</Text>
               <div className={styles.dialogIconContainer}>
-                <Icon name={ICONS.ACTIVATE} className={styles.dialogAnimatedIcon} />
-                <Icon name={ICONS.ACTIVATE} className={styles.dialogAnimatedIcon} />
-                <Icon name={ICONS.ACTIVATE} className={styles.dialogAnimatedIcon} />
+                <Icon name={ICONS.LAB} className={styles.dialogAnimatedIcon} />
+                <Icon name={ICONS.LAB} className={styles.dialogAnimatedIcon} />
+                <Icon name={ICONS.LAB} className={styles.dialogAnimatedIcon} />
               </div>
             </>
           ) : transmutingError ? (

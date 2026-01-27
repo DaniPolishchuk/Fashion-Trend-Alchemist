@@ -58,8 +58,12 @@ fashion-trend-alchemist/
 │   │       │   ├── AppShell.tsx                        # SAP Fiori shell wrapper
 │   │       │   ├── AttributeGenerationDialog.tsx       # LLM attribute generation
 │   │       │   ├── AttributeSkeletonLoader.tsx         # Loading skeleton
+│   │       │   ├── CollectionPreviewDialog.tsx         # Collection preview with designs
+│   │       │   ├── CreateCollectionDialog.tsx          # Create new collection
 │   │       │   ├── EnrichmentStatusCard.tsx            # Enrichment status card
-│   │       │   └── FilterCardItem.tsx                  # Reusable filter card
+│   │       │   ├── FilterCardItem.tsx                  # Reusable filter card
+│   │       │   ├── HelpDialog.tsx                      # Context-sensitive help dialog
+│   │       │   └── SaveToCollectionPopover.tsx         # Save design to collection
 │   │       ├── constants/                       # Centralized constants per feature
 │   │       │   ├── appShell.ts                  # App shell navigation & UI constants
 │   │       │   ├── attributeDialog.ts           # Attribute generation dialog constants
