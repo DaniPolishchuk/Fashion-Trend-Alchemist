@@ -53,7 +53,7 @@ const formatCreationDate = (createdAt: string): string => {
 function ProjectHub() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TabType>('alchemist');
+  const [activeTab, setActiveTab] = useState<TabType>('enhanced-table');
 
   // Mismatch review state
   const [mismatchSummary, setMismatchSummary] = useState<MismatchSummary>({

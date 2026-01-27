@@ -75,13 +75,13 @@ This is a **pnpm workspace monorepo** with the following structure:
 - `public/` - Static assets (logo.svg)
 - `src/pages/` - Page components (Home, ProductSelection, ContextBuilder, ProjectHub, DesignDetail)
 - `src/pages/tabs/` - ProjectHub tab components (TheAlchemistTab, ResultOverviewTab, EnhancedTableTab, DataAnalysisTab)
-- `src/components/` - Reusable components (AppShell, AttributeGenerationDialog, AttributeSkeletonLoader, EnrichmentStatusCard, FilterCardItem, MismatchReviewBadge, MismatchReviewDialog, VelocityRecalcIndicator)
-- `src/constants/` - Centralized constants per feature (9 files for each page/component)
+- `src/components/` - Reusable components (AppShell, AttributeGenerationDialog, AttributeSkeletonLoader, EnrichmentStatusCard, FilterCardItem)
+- `src/constants/` - Centralized constants per feature (11 files: appShell, attributeDialog, contextBuilder, designDetail, enhancedTableTab, helpContent, home, productSelection, projectHub, resultOverviewTab, skeletonLoader, theAlchemistTab)
 - `src/hooks/` - Custom React hooks (13 files including useAttributeEditor, useContextFilters, useDateRange, useDebounce, useEnrichmentSSE, useFilterOptions, useOptionsManager, usePersistedSelection, useProducts, useProjectData, useTheme)
 - `src/services/api/` - API client layer (8 files: client, attributes, collections, filters, products, projects, taxonomy, transactions)
 - `src/styles/` - CSS Modules organized by components/ and pages/
 - `src/types/` - Frontend-specific TypeScript types (5 files)
-- `src/utils/` - Helper functions and utilities (7 files)
+- `src/utils/` - Helper functions and utilities (8 files: attributeFormatting, dateValidation, enhancedTableHelpers, helpUtils, projectTransformers, resultOverviewHelpers, theAlchemistHelpers, urlParams)
 - `src/config/` - Frontend configuration (routes, etc.)
 
 **Shared Packages:**
@@ -219,14 +219,15 @@ The frontend (`apps/web/src/`) uses:
 
 #### Key Components (`src/components/`)
 
-- `AppShell.tsx` - Unified SAP Fiori-style shell wrapper with header (ShellBar), logo, search, notifications popover, and user profile popover with menu. Wraps all pages via App.tsx.
+- `AppShell.tsx` - Unified SAP Fiori-style shell wrapper with header (ShellBar), logo, search, notifications popover, help button (triggers context-sensitive help), and user profile popover with menu. Wraps all pages via App.tsx.
 - `AttributeGenerationDialog.tsx` - LLM attribute generation UI with conversation history
 - `AttributeSkeletonLoader.tsx` - Loading skeleton for attribute cards
+- `CollectionPreviewDialog.tsx` - Preview collection with design thumbnails before viewing details
+- `CreateCollectionDialog.tsx` - Dialog for creating new collections with name input
 - `EnrichmentStatusCard.tsx` - Status card for enrichment monitoring
 - `FilterCardItem.tsx` - Reusable filter card component
-- `MismatchReviewBadge.tsx` - Clickable badge showing flagged item count and review status (red=needs review, green=reviewed)
-- `MismatchReviewDialog.tsx` - Modal dialog for reviewing flagged articles with bulk include/exclude actions
-- `VelocityRecalcIndicator.tsx` - Warning indicator shown when velocity scores are stale after exclusion changes
+- `HelpDialog.tsx` - Context-sensitive help dialog that displays page-specific features, tips, and available tabs. Content dynamically loads based on current page/route.
+- `SaveToCollectionPopover.tsx` - Popover for adding designs to collections with collection selection
 
 #### Key Pages (`src/pages/`)
 
@@ -350,18 +351,21 @@ The velocity score measures sales performance normalized across products:
 During Vision LLM enrichment, the system also detects potential product type mismatches:
 
 **Mismatch Confidence Scores (0-100):**
+
 - 0-59: "Likely match" - Image matches expected product type
 - 60-79: "Possible mismatch" - Questionable, could fit but uncertain
 - 80-89: "Likely mismatch" - Probably a different product type
 - 90-100: "Very likely mismatch" - Clearly different category
 
 **Review Workflow:**
+
 1. After enrichment completes, flagged items (confidence >= 80) trigger the mismatch review badge
 2. Users click the badge to open the review dialog showing all flagged items
 3. Users can include/exclude individual items or use bulk actions
 4. On confirm, exclusions are saved and velocity scores are automatically recalculated
 
 **Velocity Score Recalculation:**
+
 - When articles are excluded via the Enhanced Table checkbox, `velocityScoresStale` is set to true
 - The VelocityRecalcIndicator shows a warning with a "Recalculate" button
 - Recalculation re-normalizes velocity scores among included items only (does not re-query transactions)

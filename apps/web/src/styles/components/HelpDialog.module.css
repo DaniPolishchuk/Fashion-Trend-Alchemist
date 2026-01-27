@@ -1,0 +1,117 @@
+/**
+ * Help Dialog Styles
+ */
+
+.dialog {
+  width: 600px;
+  height: 600px;
+}
+
+/* Force the dialog to have proper overflow */
+.dialog :global([ui5-dialog]) {
+  overflow: visible !important;
+}
+
+.content {
+  padding: 0.5rem;
+}
+
+.section {
+  margin-bottom: 1.5rem;
+}
+
+.section:last-child {
+  margin-bottom: 0;
+}
+
+.description {
+  font-size: 1rem;
+  color: var(--sapTextColor);
+  line-height: 1.5;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.sectionIcon {
+  color: var(--sapInformativeColor);
+  font-size: 1.25rem;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--sapTextColor);
+}
+
+.list {
+  margin-top: 0.5rem;
+}
+
+/* Enable multi-line wrapping for list items - aggressive overrides */
+.list :global(ui5-li) {
+  white-space: normal !important;
+  height: auto !important;
+  min-height: 2.75rem;
+  overflow: visible !important;
+}
+
+.list :global(ui5-li::part(native-li)) {
+  white-space: normal !important;
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  height: auto !important;
+  padding: 0.5rem 1rem;
+  line-height: 1.5;
+  overflow: visible !important;
+}
+
+/* Target the title text wrapper inside list items */
+.list :global(ui5-li::part(title)) {
+  white-space: normal !important;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  text-overflow: clip !important;
+  overflow: visible !important;
+  max-width: none !important;
+}
+
+/* Target description text in list items with descriptions */
+.list :global(ui5-li::part(description)) {
+  white-space: normal !important;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  text-overflow: clip !important;
+  overflow: visible !important;
+  max-width: none !important;
+}
+
+/* Ensure text content within list items wraps properly */
+.list :global(ui5-li) :global([slot='default']) {
+  white-space: normal !important;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  display: block;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+/* Target any inner text elements */
+.list :global(ui5-li) * {
+  text-overflow: clip !important;
+  white-space: normal !important;
+  overflow: visible !important;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.5rem;
+  gap: 0.5rem;
+}

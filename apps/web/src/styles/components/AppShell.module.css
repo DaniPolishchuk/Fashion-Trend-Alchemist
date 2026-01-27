@@ -101,3 +101,42 @@
 .notificationsTitle {
   margin-bottom: 0.75rem;
 }
+
+/* ==================== HELP BUTTON ==================== */
+
+.shellBarWrapper {
+  position: relative;
+}
+
+.helpButton {
+  position: absolute;
+  top: 50%;
+  left: 380px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  background: transparent;
+  border: 1px solid var(--sapButton_BorderColor);
+  border-radius: 0.25rem;
+  color: var(--sapButton_TextColor);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 1;
+}
+
+.helpButton:hover {
+  background: var(--sapButton_Hover_Background);
+  border-color: var(--sapButton_Hover_BorderColor);
+}
+
+.helpButton:active {
+  background: var(--sapButton_Active_Background);
+}
+
+.helpIcon {
+  font-size: 1rem;
+  color: var(--sapInformativeColor);
+}

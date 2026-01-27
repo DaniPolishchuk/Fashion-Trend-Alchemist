@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ShellBar,
   Avatar,
@@ -36,6 +36,8 @@ import {
   POPOVER,
   AVATAR,
 } from '../constants/appShell';
+import HelpDialog from './HelpDialog';
+import { getHelpContentForRoute } from '../utils/helpUtils';
 import styles from '../styles/components/AppShell.module.css';
 
 interface AppShellProps {
@@ -44,6 +46,7 @@ interface AppShellProps {
 
 function AppShell({ children }: AppShellProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isDarkTheme, toggleTheme, themeIcon, themeLabel } = useTheme();
 
   // Popover state management
@@ -51,6 +54,10 @@ function AppShell({ children }: AppShellProps) {
   const [profileButtonRef, setProfileButtonRef] = useState<HTMLElement | null>(null);
   const [notificationPopoverOpen, setNotificationPopoverOpen] = useState(false);
   const [notificationButtonRef, setNotificationButtonRef] = useState<HTMLElement | null>(null);
+
+  // Help dialog state
+  const [helpDialogOpen, setHelpDialogOpen] = useState(false);
+  const helpContent = getHelpContentForRoute(location.pathname);
 
   // Navigation handlers
   const handleLogoClick = useCallback(() => {
@@ -92,35 +99,55 @@ function AppShell({ children }: AppShellProps) {
     [toggleTheme]
   );
 
+  // Help dialog handlers
+  const handleHelpClick = useCallback(() => {
+    setHelpDialogOpen(true);
+  }, []);
+
+  const handleHelpClose = useCallback(() => {
+    setHelpDialogOpen(false);
+  }, []);
+
   return (
     <div className={styles.container}>
-      <ShellBar
-        primaryTitle={BRANDING.PRIMARY_TITLE}
-        secondaryTitle={BRANDING.SECONDARY_TITLE}
-        logo={
-          <img
-            src="/logo.svg"
-            alt={BRANDING.LOGO_ALT}
-            className={styles.logo}
-            onClick={handleLogoClick}
-          />
-        }
-        searchField={
-          <Input placeholder={SEARCH.PLACEHOLDER} showClearIcon className={styles.searchField} />
-        }
-        showNotifications
-        notificationsCount={NOTIFICATIONS.COUNT}
-        onNotificationsClick={handleNotificationClick}
-        onProfileClick={handleProfileClick}
-        profile={
-          <Avatar
-            size={AVATAR.SIZE_SMALL}
-            initials={MOCK_USER.INITIALS}
-            colorScheme={MOCK_USER.AVATAR_COLOR}
-            className={styles.avatar}
-          />
-        }
-      />
+      <div className={styles.shellBarWrapper}>
+        <ShellBar
+          primaryTitle={BRANDING.PRIMARY_TITLE}
+          secondaryTitle={BRANDING.SECONDARY_TITLE}
+          logo={
+            <img
+              src="/logo.svg"
+              alt={BRANDING.LOGO_ALT}
+              className={styles.logo}
+              onClick={handleLogoClick}
+            />
+          }
+          searchField={
+            <Input placeholder={SEARCH.PLACEHOLDER} showClearIcon className={styles.searchField} />
+          }
+          showNotifications
+          notificationsCount={NOTIFICATIONS.COUNT}
+          onNotificationsClick={handleNotificationClick}
+          onProfileClick={handleProfileClick}
+          profile={
+            <Avatar
+              size={AVATAR.SIZE_SMALL}
+              initials={MOCK_USER.INITIALS}
+              colorScheme={MOCK_USER.AVATAR_COLOR}
+              className={styles.avatar}
+            />
+          }
+        />
+        {/* Help Button - positioned next to "Powered by SAP" */}
+        <button
+          onClick={handleHelpClick}
+          className={styles.helpButton}
+          title="Get help for this page"
+        >
+          <Icon name="sys-help" className={styles.helpIcon} />
+          <span>Help</span>
+        </button>
+      </div>
 
       {/* Profile Popover */}
       <Popover
@@ -201,6 +228,9 @@ function AppShell({ children }: AppShellProps) {
           </List>
         </div>
       </Popover>
+
+      {/* Help Dialog */}
+      <HelpDialog open={helpDialogOpen} onClose={handleHelpClose} content={helpContent} />
 
       {/* Main Content */}
       <div className={styles.content}>{children}</div>
