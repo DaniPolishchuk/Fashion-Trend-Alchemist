@@ -19,6 +19,8 @@ export interface ContextItem {
   velocityScore: number;
   enrichedAttributes: Record<string, string> | null;
   enrichmentError: string | null;
+  mismatchConfidence: number | null;
+  isExcluded: boolean;
   imageUrl: string;
 }
 
@@ -27,6 +29,12 @@ export interface Summary {
   successful: number;
   pending: number;
   failed: number;
+}
+
+export interface MismatchSummary {
+  flaggedCount: number;
+  excludedCount: number;
+  reviewCompleted: boolean;
 }
 
 export interface EnhancedTableTabProps {

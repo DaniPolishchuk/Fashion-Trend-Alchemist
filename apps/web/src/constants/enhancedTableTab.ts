@@ -19,6 +19,18 @@ export const FILTER_TYPES = {
 
 export type FilterType = (typeof FILTER_TYPES)[keyof typeof FILTER_TYPES];
 
+// ==================== CONFIDENCE FILTER TYPES ====================
+
+export const CONFIDENCE_FILTER_TYPES = {
+  ALL: 'all',
+  LIKELY_MATCH: 'likely_match',
+  POSSIBLE_MISMATCH: 'possible_mismatch',
+  LIKELY_MISMATCH: 'likely_mismatch',
+  VERY_LIKELY_MISMATCH: 'very_likely_mismatch',
+} as const;
+
+export type ConfidenceFilterType = (typeof CONFIDENCE_FILTER_TYPES)[keyof typeof CONFIDENCE_FILTER_TYPES];
+
 // ==================== SORT FIELDS ====================
 
 export const SORT_FIELDS = {
@@ -98,6 +110,13 @@ export const TEXT = {
   FILTER_PENDING: 'Pending',
   FILTER_FAILED: 'Failed',
 
+  // Confidence Filter Labels
+  CONFIDENCE_FILTER_ALL: 'All',
+  CONFIDENCE_FILTER_LIKELY_MATCH: 'Likely Match',
+  CONFIDENCE_FILTER_POSSIBLE_MISMATCH: 'Possible',
+  CONFIDENCE_FILTER_LIKELY_MISMATCH: 'Likely Mismatch',
+  CONFIDENCE_FILTER_VERY_LIKELY_MISMATCH: 'Very Likely',
+
   // Sort Labels
   SORT_VELOCITY: 'Velocity Score',
   SORT_ARTICLE: 'Article ID',
@@ -132,6 +151,8 @@ export const TEXT = {
   COL_STYLE_CONCEPT: 'Style Concept',
   COL_FABRIC_TYPE: 'Fabric Type',
   COL_STATUS: 'Status',
+  COL_INCLUDE: 'Include',
+  COL_MATCH_CONFIDENCE: 'Match Confidence',
 
   // Detail Labels
   LABEL_PRODUCT_GROUP: 'Product Group',
@@ -178,6 +199,8 @@ export const CSV_BASE_HEADERS = [
 export const API_ENDPOINTS = {
   CONTEXT_ITEMS: (projectId: string) => `/api/projects/${projectId}/context-items`,
   RETRY_ENRICHMENT: (projectId: string) => `/api/projects/${projectId}/retry-enrichment`,
+  EXCLUDE_ITEM: (projectId: string, articleId: string) =>
+    `/api/projects/${projectId}/context-items/${articleId}/exclude`,
 } as const;
 
 // ==================== IMAGE SIZES ====================

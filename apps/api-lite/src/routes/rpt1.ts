@@ -291,6 +291,7 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
       }
 
       // Fetch enriched context items with article data AND velocity score
+      // Filter out excluded articles
       const contextItems = await db
         .select({
           articleId: projectContextItems.articleId,
@@ -313,7 +314,8 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
         .where(
           and(
             eq(projectContextItems.projectId, projectId),
-            isNotNull(projectContextItems.enrichedAttributes)
+            isNotNull(projectContextItems.enrichedAttributes),
+            eq(projectContextItems.isExcluded, false) // Filter out excluded articles
           )
         );
 
@@ -633,6 +635,7 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
         targetSuccessScore,
         predictedAttributes,
         imageGenerationStatus: 'pending',
+        velocityScoresStale: project.velocityScoresStale, // Include warning if scores are stale
         rpt1Metadata: {
           predictionId: rpt1Result.id,
           metadata: rpt1Result.metadata,

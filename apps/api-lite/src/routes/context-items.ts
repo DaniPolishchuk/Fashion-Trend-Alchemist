@@ -82,6 +82,8 @@ export default async function contextItemsRoutes(fastify: FastifyInstance) {
           velocityScore: projectContextItems.velocityScore,
           enrichedAttributes: projectContextItems.enrichedAttributes,
           enrichmentError: projectContextItems.enrichmentError,
+          mismatchConfidence: projectContextItems.mismatchConfidence,
+          isExcluded: projectContextItems.isExcluded,
         })
         .from(projectContextItems)
         .innerJoin(articles, eq(projectContextItems.articleId, articles.articleId))
@@ -104,6 +106,8 @@ export default async function contextItemsRoutes(fastify: FastifyInstance) {
         velocityScore: parseFloat(item.velocityScore) || 0,
         enrichedAttributes: item.enrichedAttributes as Record<string, string> | null,
         enrichmentError: item.enrichmentError,
+        mismatchConfidence: item.mismatchConfidence,
+        isExcluded: item.isExcluded,
         imageUrl: getImageUrl(item.articleId),
       }));
 
@@ -112,6 +116,11 @@ export default async function contextItemsRoutes(fastify: FastifyInstance) {
       const successful = items.filter((item) => item.enrichedAttributes !== null).length;
       const failed = items.filter((item) => item.enrichmentError !== null).length;
       const pending = total - successful - failed;
+
+      // Calculate mismatch summary (items with confidence >= 80)
+      const flaggedItems = items.filter((item) => item.mismatchConfidence !== null && item.mismatchConfidence >= 80);
+      const flaggedCount = flaggedItems.length;
+      const excludedCount = items.filter((item) => item.isExcluded).length;
 
       // Extract ontology attributes from project schema
       const ontologySchema = project.ontologySchema as OntologySchema | null;
@@ -125,6 +134,12 @@ export default async function contextItemsRoutes(fastify: FastifyInstance) {
           pending,
           failed,
         },
+        mismatchSummary: {
+          flaggedCount,
+          excludedCount,
+          reviewCompleted: project.mismatchReviewCompleted,
+        },
+        velocityScoresStale: project.velocityScoresStale,
         ontologyAttributes,
         enrichmentStatus: project.enrichmentStatus,
         currentArticleId: project.enrichmentCurrentArticleId,

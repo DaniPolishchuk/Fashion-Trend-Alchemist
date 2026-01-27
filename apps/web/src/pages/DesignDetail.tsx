@@ -266,25 +266,6 @@ function DesignDetail() {
     }, 5000);
   };
 
-  // Handle save error (for future use)
-  const handleSaveError = (error: string) => {
-    setSaveNotification({
-      show: true,
-      success: false,
-      collectionName: '',
-      collectionId: '',
-      error,
-    });
-
-    // Set auto-dismiss timer (5 seconds)
-    if (dismissTimerRef.current) {
-      clearTimeout(dismissTimerRef.current);
-    }
-    dismissTimerRef.current = setTimeout(() => {
-      setSaveNotification(null);
-    }, 5000);
-  };
-
   // Handle notification dismiss
   const handleDismissNotification = () => {
     setSaveNotification(null);

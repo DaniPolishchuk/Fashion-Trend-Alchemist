@@ -3,7 +3,7 @@
  * Optimized with constants, CSS modules, custom hooks, and reusable components
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   BusyIndicator,
@@ -28,11 +28,16 @@ import DataAnalysisTab from './tabs/DataAnalysisTab';
 
 // Custom components and hooks
 import EnrichmentStatusCard from '../components/EnrichmentStatusCard';
+import MismatchReviewBadge from '../components/MismatchReviewBadge';
+import MismatchReviewDialog from '../components/MismatchReviewDialog';
+import VelocityRecalcIndicator from '../components/VelocityRecalcIndicator';
 import { useProjectData } from '../hooks/useProjectData';
 import { useEnrichmentSSE } from '../hooks/useEnrichmentSSE';
 
 // Constants and styles
 import { TABS, TEXT, API_ENDPOINTS, type TabType } from '../constants/projectHub';
+import { API_ENDPOINTS as TABLE_ENDPOINTS } from '../constants/enhancedTableTab';
+import type { MismatchSummary, ContextItem } from '../types/enhancedTableTab';
 import styles from '../styles/pages/ProjectHub.module.css';
 
 // Helper function to format creation date
@@ -50,6 +55,16 @@ function ProjectHub() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>('alchemist');
 
+  // Mismatch review state
+  const [mismatchSummary, setMismatchSummary] = useState<MismatchSummary>({
+    flaggedCount: 0,
+    excludedCount: 0,
+    reviewCompleted: false,
+  });
+  const [contextItems, setContextItems] = useState<ContextItem[]>([]);
+  const [velocityScoresStale, setVelocityScoresStale] = useState(false);
+  const [mismatchDialogOpen, setMismatchDialogOpen] = useState(false);
+
   // Use custom hook for project data
   const {
     project,
@@ -62,6 +77,41 @@ function ProjectHub() {
     setEnrichmentProgress,
     setCurrentArticleId,
   } = useProjectData(projectId);
+
+  // Fetch mismatch summary and context items
+  const fetchMismatchData = useCallback(async () => {
+    if (!projectId) return;
+
+    try {
+      const response = await fetch(TABLE_ENDPOINTS.CONTEXT_ITEMS(projectId));
+      if (response.ok) {
+        const data = await response.json();
+        setMismatchSummary(data.mismatchSummary || {
+          flaggedCount: 0,
+          excludedCount: 0,
+          reviewCompleted: false,
+        });
+        setContextItems(data.items || []);
+        setVelocityScoresStale(data.velocityScoresStale || false);
+      }
+    } catch (err) {
+      console.error('Failed to fetch mismatch data:', err);
+    }
+  }, [projectId]);
+
+  // Fetch mismatch data on mount and when enrichment completes
+  useEffect(() => {
+    if (projectId && enrichmentStatus === 'completed') {
+      fetchMismatchData();
+    }
+  }, [projectId, enrichmentStatus, fetchMismatchData]);
+
+  // Initial fetch
+  useEffect(() => {
+    if (projectId) {
+      fetchMismatchData();
+    }
+  }, [projectId, fetchMismatchData]);
 
   // Handle SSE updates
   const handleProgress = useCallback(
@@ -110,6 +160,17 @@ function ProjectHub() {
       console.error('Failed to start enrichment:', err);
     }
   };
+
+  // Handle mismatch review confirmation
+  const handleMismatchReviewConfirm = useCallback(() => {
+    fetchMismatchData(); // Refresh data after review
+  }, [fetchMismatchData]);
+
+  // Handle velocity recalculation
+  const handleVelocityRecalculated = useCallback(() => {
+    setVelocityScoresStale(false);
+    fetchMismatchData(); // Refresh data after recalculation
+  }, [fetchMismatchData]);
 
   // Render tab content
   const renderTabContent = () => {
@@ -191,8 +252,17 @@ function ProjectHub() {
           </Text>
         </div>
 
-        {/* Enrichment Status Card */}
+        {/* Enrichment Status Card and Mismatch Review */}
         <div className={styles.headerRight}>
+          <VelocityRecalcIndicator
+            projectId={projectId!}
+            isStale={velocityScoresStale}
+            onRecalculated={handleVelocityRecalculated}
+          />
+          <MismatchReviewBadge
+            mismatchSummary={mismatchSummary}
+            onClick={() => setMismatchDialogOpen(true)}
+          />
           <EnrichmentStatusCard
             status={enrichmentStatus}
             progress={enrichmentProgress}
@@ -202,6 +272,15 @@ function ProjectHub() {
           />
         </div>
       </div>
+
+      {/* Mismatch Review Dialog */}
+      <MismatchReviewDialog
+        open={mismatchDialogOpen}
+        projectId={projectId!}
+        items={contextItems}
+        onClose={() => setMismatchDialogOpen(false)}
+        onConfirm={handleMismatchReviewConfirm}
+      />
 
       {/* Tab Navigation */}
       <div className={styles.tabNavigation}>

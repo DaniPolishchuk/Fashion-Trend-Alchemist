@@ -18,6 +18,7 @@ import {
   Select,
   Option,
   Dialog,
+  CheckBox,
 } from '@ui5/webcomponents-react';
 import '@ui5/webcomponents-icons/dist/search.js';
 import '@ui5/webcomponents-icons/dist/download.js';
@@ -39,11 +40,13 @@ import {
   ITEMS_PER_PAGE,
   POLL_INTERVAL,
   FILTER_TYPES,
+  CONFIDENCE_FILTER_TYPES,
   SORT_FIELDS,
   ICONS,
   TEXT,
   API_ENDPOINTS,
   type FilterType,
+  type ConfidenceFilterType,
   type SortField,
 } from '../../constants/enhancedTableTab';
 import type { ContextItem, Summary, EnhancedTableTabProps } from '../../types/enhancedTableTab';
@@ -53,6 +56,7 @@ import {
   getStatusDisplay,
   exportToCSV,
 } from '../../utils/enhancedTableHelpers';
+import { getConfidenceLabel } from '../../constants/projectHub';
 import styles from '../../styles/pages/EnhancedTableTab.module.css';
 
 function EnhancedTableTab({
@@ -75,6 +79,7 @@ function EnhancedTableTab({
   // UI state
   const [controlPanelExpanded, setControlPanelExpanded] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterType>(FILTER_TYPES.ALL);
+  const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilterType>(CONFIDENCE_FILTER_TYPES.ALL);
   const [sortBy, setSortBy] = useState<SortField>(SORT_FIELDS.VELOCITY_SCORE);
   const [sortDesc, setSortDesc] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -156,6 +161,7 @@ function EnhancedTableTab({
   const filteredItems = useMemo(() => {
     let items = contextItems;
 
+    // Status filter
     if (activeFilter === FILTER_TYPES.SUCCESSFUL) {
       items = items.filter((item) => item.enrichedAttributes !== null);
     } else if (activeFilter === FILTER_TYPES.PENDING) {
@@ -166,6 +172,28 @@ function EnhancedTableTab({
       items = items.filter((item) => item.enrichmentError !== null);
     }
 
+    // Confidence filter
+    if (confidenceFilter !== CONFIDENCE_FILTER_TYPES.ALL) {
+      items = items.filter((item) => {
+        const conf = item.mismatchConfidence;
+        if (conf === null) return confidenceFilter === CONFIDENCE_FILTER_TYPES.LIKELY_MATCH;
+
+        switch (confidenceFilter) {
+          case CONFIDENCE_FILTER_TYPES.LIKELY_MATCH:
+            return conf < 60;
+          case CONFIDENCE_FILTER_TYPES.POSSIBLE_MISMATCH:
+            return conf >= 60 && conf < 80;
+          case CONFIDENCE_FILTER_TYPES.LIKELY_MISMATCH:
+            return conf >= 80 && conf < 90;
+          case CONFIDENCE_FILTER_TYPES.VERY_LIKELY_MISMATCH:
+            return conf >= 90;
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       items = items.filter((item) => {
@@ -195,7 +223,7 @@ function EnhancedTableTab({
     }
 
     return items;
-  }, [contextItems, activeFilter, searchQuery]);
+  }, [contextItems, activeFilter, confidenceFilter, searchQuery]);
 
   // Sort items
   const sortedItems = useMemo(() => {
@@ -221,10 +249,36 @@ function EnhancedTableTab({
     return sortedItems.slice(start, start + ITEMS_PER_PAGE);
   }, [sortedItems, currentPage]);
 
+  // Calculate confidence filter counts
+  const confidenceCounts = useMemo(() => {
+    const counts = {
+      [CONFIDENCE_FILTER_TYPES.ALL]: contextItems.length,
+      [CONFIDENCE_FILTER_TYPES.LIKELY_MATCH]: 0,
+      [CONFIDENCE_FILTER_TYPES.POSSIBLE_MISMATCH]: 0,
+      [CONFIDENCE_FILTER_TYPES.LIKELY_MISMATCH]: 0,
+      [CONFIDENCE_FILTER_TYPES.VERY_LIKELY_MISMATCH]: 0,
+    };
+
+    contextItems.forEach((item) => {
+      const conf = item.mismatchConfidence;
+      if (conf === null || conf < 60) {
+        counts[CONFIDENCE_FILTER_TYPES.LIKELY_MATCH]++;
+      } else if (conf < 80) {
+        counts[CONFIDENCE_FILTER_TYPES.POSSIBLE_MISMATCH]++;
+      } else if (conf < 90) {
+        counts[CONFIDENCE_FILTER_TYPES.LIKELY_MISMATCH]++;
+      } else {
+        counts[CONFIDENCE_FILTER_TYPES.VERY_LIKELY_MISMATCH]++;
+      }
+    });
+
+    return counts;
+  }, [contextItems]);
+
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeFilter, searchQuery]);
+  }, [activeFilter, confidenceFilter, searchQuery]);
 
   // Handlers
   const handlePreviousPage = () => {
@@ -283,6 +337,28 @@ function EnhancedTableTab({
 
   const handleExportCSV = () => {
     exportToCSV(sortedItems, ontologyAttributes, projectId);
+  };
+
+  // Handle exclusion toggle
+  const handleToggleExclusion = async (articleId: string, currentlyExcluded: boolean) => {
+    try {
+      const response = await fetch(API_ENDPOINTS.EXCLUDE_ITEM(projectId, articleId), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isExcluded: !currentlyExcluded }),
+      });
+
+      if (!response.ok) throw new Error('Failed to update exclusion');
+
+      // Update local state
+      setContextItems((prev) =>
+        prev.map((item) =>
+          item.articleId === articleId ? { ...item, isExcluded: !currentlyExcluded } : item
+        )
+      );
+    } catch (err) {
+      console.error('Error updating exclusion:', err);
+    }
   };
 
   const handleRowToggle = (articleId: string) => {
@@ -400,6 +476,42 @@ function EnhancedTableTab({
 
         <div className={styles.rightControls}>
           <Select
+            onChange={(e: any) => setConfidenceFilter(e.detail.selectedOption.dataset.value as ConfidenceFilterType)}
+            className={styles.confidenceSelect}
+          >
+            <Option
+              data-value={CONFIDENCE_FILTER_TYPES.ALL}
+              selected={confidenceFilter === CONFIDENCE_FILTER_TYPES.ALL}
+            >
+              {TEXT.CONFIDENCE_FILTER_ALL} ({confidenceCounts[CONFIDENCE_FILTER_TYPES.ALL]})
+            </Option>
+            <Option
+              data-value={CONFIDENCE_FILTER_TYPES.LIKELY_MATCH}
+              selected={confidenceFilter === CONFIDENCE_FILTER_TYPES.LIKELY_MATCH}
+            >
+              {TEXT.CONFIDENCE_FILTER_LIKELY_MATCH} ({confidenceCounts[CONFIDENCE_FILTER_TYPES.LIKELY_MATCH]})
+            </Option>
+            <Option
+              data-value={CONFIDENCE_FILTER_TYPES.POSSIBLE_MISMATCH}
+              selected={confidenceFilter === CONFIDENCE_FILTER_TYPES.POSSIBLE_MISMATCH}
+            >
+              {TEXT.CONFIDENCE_FILTER_POSSIBLE_MISMATCH} ({confidenceCounts[CONFIDENCE_FILTER_TYPES.POSSIBLE_MISMATCH]})
+            </Option>
+            <Option
+              data-value={CONFIDENCE_FILTER_TYPES.LIKELY_MISMATCH}
+              selected={confidenceFilter === CONFIDENCE_FILTER_TYPES.LIKELY_MISMATCH}
+            >
+              {TEXT.CONFIDENCE_FILTER_LIKELY_MISMATCH} ({confidenceCounts[CONFIDENCE_FILTER_TYPES.LIKELY_MISMATCH]})
+            </Option>
+            <Option
+              data-value={CONFIDENCE_FILTER_TYPES.VERY_LIKELY_MISMATCH}
+              selected={confidenceFilter === CONFIDENCE_FILTER_TYPES.VERY_LIKELY_MISMATCH}
+            >
+              {TEXT.CONFIDENCE_FILTER_VERY_LIKELY_MISMATCH} ({confidenceCounts[CONFIDENCE_FILTER_TYPES.VERY_LIKELY_MISMATCH]})
+            </Option>
+          </Select>
+
+          <Select
             onChange={(e: any) => setSortBy(e.detail.selectedOption.dataset.value as SortField)}
             className={styles.sortSelect}
           >
@@ -460,6 +572,9 @@ function EnhancedTableTab({
             <thead className={styles.tableHeader}>
               <tr>
                 <th className={styles.tableHeaderCellExpand}></th>
+                <th className={`${styles.tableHeaderCell} ${styles.tableHeaderCellInclude}`}>
+                  {TEXT.COL_INCLUDE}
+                </th>
                 <th className={`${styles.tableHeaderCell} ${styles.tableHeaderCellImage}`}>
                   {TEXT.COL_IMAGE}
                 </th>
@@ -467,6 +582,9 @@ function EnhancedTableTab({
                 <th className={styles.tableHeaderCell}>{TEXT.COL_PRODUCT_TYPE}</th>
                 <th className={`${styles.tableHeaderCell} ${styles.tableHeaderCellVelocity}`}>
                   {TEXT.COL_VELOCITY}
+                </th>
+                <th className={`${styles.tableHeaderCell} ${styles.tableHeaderCellConfidence}`}>
+                  {TEXT.COL_MATCH_CONFIDENCE}
                 </th>
                 <th className={styles.tableHeaderCell}>{TEXT.COL_PATTERN}</th>
                 <th className={styles.tableHeaderCell}>{TEXT.COL_COLOR_FAMILY}</th>
@@ -489,7 +607,7 @@ function EnhancedTableTab({
             <tbody>
               {paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={14 + ontologyAttributes.length} className={styles.emptyCell}>
+                  <td colSpan={16 + ontologyAttributes.length} className={styles.emptyCell}>
                     <Text className={styles.emptyText}>
                       {searchQuery ? TEXT.NO_MATCH : TEXT.NO_ITEMS}
                     </Text>
@@ -501,16 +619,27 @@ function EnhancedTableTab({
                   const isProcessing = currentArticleId === item.articleId;
                   const isRetrying = retryingItems.has(item.articleId);
                   const isExpanded = expandedRowId === item.articleId;
+                  const confidenceInfo = getConfidenceLabel(item.mismatchConfidence);
 
                   return (
                     <React.Fragment key={item.articleId}>
                       {/* Main Row */}
                       <tr
-                        className={`${styles.tableRow} ${isExpanded ? styles.tableRowExpanded : ''} ${isProcessing ? styles.tableRowProcessing : ''}`}
+                        className={`${styles.tableRow} ${isExpanded ? styles.tableRowExpanded : ''} ${isProcessing ? styles.tableRowProcessing : ''} ${item.isExcluded ? styles.tableRowExcluded : ''}`}
                         onClick={() => handleRowToggle(item.articleId)}
                       >
                         <td className={styles.tableCellExpand}>
                           <Icon name={isExpanded ? ICONS.ARROW_DOWN : ICONS.ARROW_RIGHT} />
+                        </td>
+
+                        <td
+                          className={styles.tableCellInclude}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <CheckBox
+                            checked={!item.isExcluded}
+                            onChange={() => handleToggleExclusion(item.articleId, item.isExcluded)}
+                          />
                         </td>
 
                         <td className={styles.tableCellImage}>
@@ -560,6 +689,14 @@ function EnhancedTableTab({
                               {item.velocityScore.toFixed(1)}
                             </Text>
                           </div>
+                        </td>
+
+                        <td className={styles.tableCellConfidence}>
+                          <Text
+                            style={{ color: confidenceInfo.color, fontWeight: 500 }}
+                          >
+                            {confidenceInfo.label}
+                          </Text>
                         </td>
 
                         <td className={styles.tableCell}>
@@ -618,7 +755,7 @@ function EnhancedTableTab({
                       {isExpanded && (
                         <tr className={styles.expandedRow}>
                           <td
-                            colSpan={14 + ontologyAttributes.length}
+                            colSpan={16 + ontologyAttributes.length}
                             className={styles.expandedContent}
                           >
                             <div className={styles.expandedLayout}>
