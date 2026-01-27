@@ -33,15 +33,22 @@ type EnrichmentItem = {
   detailDesc: string | null;
 };
 
+// Type for enrichment result including mismatch confidence
+type EnrichmentResult = {
+  attributes: Record<string, string>;
+  mismatchConfidence: number;
+};
+
 /**
  * Builds a JSON Schema from the ontology schema for structured LLM output
+ * Includes mismatchConfidence for product type verification
  */
 function buildDynamicSchema(ontologySchema: OntologySchema): {
   type: string;
-  properties: Record<string, { type: string; enum: string[]; description: string }>;
+  properties: Record<string, { type: string; enum?: string[]; description: string; minimum?: number; maximum?: number }>;
   required: string[];
 } {
-  const properties: Record<string, { type: string; enum: string[]; description: string }> = {};
+  const properties: Record<string, { type: string; enum?: string[]; description: string; minimum?: number; maximum?: number }> = {};
 
   for (const [productType, attributes] of Object.entries(ontologySchema)) {
     for (const [attrName, variants] of Object.entries(attributes)) {
@@ -52,6 +59,14 @@ function buildDynamicSchema(ontologySchema: OntologySchema): {
       };
     }
   }
+
+  // Add mismatchConfidence to detect product type mismatches
+  properties['mismatchConfidence'] = {
+    type: 'integer',
+    minimum: 0,
+    maximum: 100,
+    description: 'Confidence score (0-100) indicating likelihood that the image does NOT match the expected product type. 0-59: matches expected type, 60-79: questionable, 80-89: likely different, 90-100: clearly different category',
+  };
 
   return {
     type: 'object',
@@ -79,26 +94,39 @@ function sanitizeJsonResponse(content: string): string {
 
 /**
  * Calls the Vision LLM to extract attributes from a product image
+ * Also detects potential product type mismatches
  */
 async function callVisionLLM(
   base64Image: string,
   schema: ReturnType<typeof buildDynamicSchema>,
   articleData: { productType: string; detailDesc: string | null }
-): Promise<Record<string, string>> {
-  const schemaDescription = Object.entries(schema.properties)
-    .map(([key, val]) => `- ${key}: one of [${val.enum.join(', ')}]`)
+): Promise<EnrichmentResult> {
+  // Build schema description excluding mismatchConfidence (handled separately)
+  const attributeEntries = Object.entries(schema.properties).filter(([key]) => key !== 'mismatchConfidence');
+  const schemaDescription = attributeEntries
+    .map(([key, val]) => `- ${key}: one of [${val.enum?.join(', ') || 'any value'}]`)
     .join('\n');
 
   const prompt = `Analyze this fashion product image and extract attributes according to the schema below.
 
 CONTEXT:
-- Product Type: ${articleData.productType}
+- Expected Product Type: ${articleData.productType}
 - Description: ${articleData.detailDesc || 'No description available'}
 
 ATTRIBUTES TO EXTRACT:
 ${schemaDescription}
 
-Return a JSON object with exactly these attributes. Choose the most appropriate value from the allowed options for each attribute based on what you see in the image.`;
+MISMATCH DETECTION:
+Also assess whether the image matches the expected product type (${articleData.productType}).
+Provide a mismatchConfidence score (0-100):
+- 0-59: Image clearly shows the expected product type
+- 60-79: Questionable - could fit but uncertain
+- 80-89: Likely a different product type than expected
+- 90-100: Clearly a different product category (e.g., expecting "skirt" but seeing "pants")
+
+Return a JSON object with:
+1. All the attributes listed above with appropriate values
+2. A "mismatchConfidence" field with your confidence score (integer 0-100)`;
 
   const response = await openai.chat.completions.create({
     model: visionLlmConfig.model,
@@ -125,7 +153,17 @@ Return a JSON object with exactly these attributes. Choose the most appropriate 
 
   try {
     const sanitized = sanitizeJsonResponse(content);
-    return JSON.parse(sanitized);
+    const parsed = JSON.parse(sanitized);
+
+    // Extract mismatchConfidence and separate attributes
+    const { mismatchConfidence, ...attributes } = parsed;
+
+    return {
+      attributes,
+      mismatchConfidence: typeof mismatchConfidence === 'number'
+        ? Math.max(0, Math.min(100, Math.round(mismatchConfidence)))
+        : 0,
+    };
   } catch (parseError) {
     throw new Error(`Failed to parse LLM response as JSON. Content: ${content.slice(0, 200)}...`);
   }
@@ -160,16 +198,19 @@ async function getUnenrichedContextItems(projectId: string) {
 }
 
 /**
- * Update enriched attributes for a context item
+ * Update enriched attributes and mismatch confidence for a context item
  */
 async function updateEnrichedAttributes(
   projectId: string,
   articleId: string,
-  attributes: Record<string, string>
+  result: EnrichmentResult
 ) {
   await db
     .update(projectContextItems)
-    .set({ enrichedAttributes: attributes })
+    .set({
+      enrichedAttributes: result.attributes,
+      mismatchConfidence: result.mismatchConfidence,
+    })
     .where(
       and(
         eq(projectContextItems.projectId, projectId),
@@ -249,7 +290,7 @@ async function processItem(
   schema: ReturnType<typeof buildDynamicSchema>
 ): Promise<boolean> {
   try {
-    let result: Record<string, string> | null = null;
+    let result: EnrichmentResult | null = null;
 
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {

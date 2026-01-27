@@ -18,6 +18,7 @@ import {
   Select,
   Option,
   Dialog,
+  CheckBox,
 } from '@ui5/webcomponents-react';
 import '@ui5/webcomponents-icons/dist/search.js';
 import '@ui5/webcomponents-icons/dist/download.js';
@@ -53,6 +54,7 @@ import {
   getStatusDisplay,
   exportToCSV,
 } from '../../utils/enhancedTableHelpers';
+import { getConfidenceLabel } from '../../constants/projectHub';
 import styles from '../../styles/pages/EnhancedTableTab.module.css';
 
 function EnhancedTableTab({
@@ -156,6 +158,7 @@ function EnhancedTableTab({
   const filteredItems = useMemo(() => {
     let items = contextItems;
 
+    // Status filter
     if (activeFilter === FILTER_TYPES.SUCCESSFUL) {
       items = items.filter((item) => item.enrichedAttributes !== null);
     } else if (activeFilter === FILTER_TYPES.PENDING) {
@@ -166,6 +169,7 @@ function EnhancedTableTab({
       items = items.filter((item) => item.enrichmentError !== null);
     }
 
+    // Search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       items = items.filter((item) => {
@@ -208,6 +212,11 @@ function EnhancedTableTab({
         comparison = a.articleId.localeCompare(b.articleId);
       } else if (sortBy === SORT_FIELDS.PRODUCT_TYPE) {
         comparison = a.productType.localeCompare(b.productType);
+      } else if (sortBy === SORT_FIELDS.MATCH_CONFIDENCE) {
+        // Sort by mismatch confidence (null treated as 0 - likely match)
+        const confA = a.mismatchConfidence ?? 0;
+        const confB = b.mismatchConfidence ?? 0;
+        comparison = confA - confB;
       }
       return sortDesc ? -comparison : comparison;
     });
@@ -283,6 +292,28 @@ function EnhancedTableTab({
 
   const handleExportCSV = () => {
     exportToCSV(sortedItems, ontologyAttributes, projectId);
+  };
+
+  // Handle exclusion toggle
+  const handleToggleExclusion = async (articleId: string, currentlyExcluded: boolean) => {
+    try {
+      const response = await fetch(API_ENDPOINTS.EXCLUDE_ITEM(projectId, articleId), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isExcluded: !currentlyExcluded }),
+      });
+
+      if (!response.ok) throw new Error('Failed to update exclusion');
+
+      // Update local state
+      setContextItems((prev) =>
+        prev.map((item) =>
+          item.articleId === articleId ? { ...item, isExcluded: !currentlyExcluded } : item
+        )
+      );
+    } catch (err) {
+      console.error('Error updating exclusion:', err);
+    }
   };
 
   const handleRowToggle = (articleId: string) => {
@@ -421,6 +452,12 @@ function EnhancedTableTab({
             >
               {TEXT.SORT_PRODUCT}
             </Option>
+            <Option
+              data-value={SORT_FIELDS.MATCH_CONFIDENCE}
+              selected={sortBy === SORT_FIELDS.MATCH_CONFIDENCE}
+            >
+              {TEXT.SORT_MATCH_CONFIDENCE}
+            </Option>
           </Select>
 
           <Button
@@ -460,6 +497,9 @@ function EnhancedTableTab({
             <thead className={styles.tableHeader}>
               <tr>
                 <th className={styles.tableHeaderCellExpand}></th>
+                <th className={`${styles.tableHeaderCell} ${styles.tableHeaderCellInclude}`}>
+                  {TEXT.COL_INCLUDE}
+                </th>
                 <th className={`${styles.tableHeaderCell} ${styles.tableHeaderCellImage}`}>
                   {TEXT.COL_IMAGE}
                 </th>
@@ -467,6 +507,9 @@ function EnhancedTableTab({
                 <th className={styles.tableHeaderCell}>{TEXT.COL_PRODUCT_TYPE}</th>
                 <th className={`${styles.tableHeaderCell} ${styles.tableHeaderCellVelocity}`}>
                   {TEXT.COL_VELOCITY}
+                </th>
+                <th className={`${styles.tableHeaderCell} ${styles.tableHeaderCellConfidence}`}>
+                  {TEXT.COL_MATCH_CONFIDENCE}
                 </th>
                 <th className={styles.tableHeaderCell}>{TEXT.COL_PATTERN}</th>
                 <th className={styles.tableHeaderCell}>{TEXT.COL_COLOR_FAMILY}</th>
@@ -489,7 +532,7 @@ function EnhancedTableTab({
             <tbody>
               {paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={14 + ontologyAttributes.length} className={styles.emptyCell}>
+                  <td colSpan={16 + ontologyAttributes.length} className={styles.emptyCell}>
                     <Text className={styles.emptyText}>
                       {searchQuery ? TEXT.NO_MATCH : TEXT.NO_ITEMS}
                     </Text>
@@ -501,16 +544,27 @@ function EnhancedTableTab({
                   const isProcessing = currentArticleId === item.articleId;
                   const isRetrying = retryingItems.has(item.articleId);
                   const isExpanded = expandedRowId === item.articleId;
+                  const confidenceInfo = getConfidenceLabel(item.mismatchConfidence);
 
                   return (
                     <React.Fragment key={item.articleId}>
                       {/* Main Row */}
                       <tr
-                        className={`${styles.tableRow} ${isExpanded ? styles.tableRowExpanded : ''} ${isProcessing ? styles.tableRowProcessing : ''}`}
+                        className={`${styles.tableRow} ${isExpanded ? styles.tableRowExpanded : ''} ${isProcessing ? styles.tableRowProcessing : ''} ${item.isExcluded ? styles.tableRowExcluded : ''}`}
                         onClick={() => handleRowToggle(item.articleId)}
                       >
                         <td className={styles.tableCellExpand}>
                           <Icon name={isExpanded ? ICONS.ARROW_DOWN : ICONS.ARROW_RIGHT} />
+                        </td>
+
+                        <td
+                          className={styles.tableCellInclude}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <CheckBox
+                            checked={!item.isExcluded}
+                            onChange={() => handleToggleExclusion(item.articleId, item.isExcluded)}
+                          />
                         </td>
 
                         <td className={styles.tableCellImage}>
@@ -560,6 +614,14 @@ function EnhancedTableTab({
                               {item.velocityScore.toFixed(1)}
                             </Text>
                           </div>
+                        </td>
+
+                        <td className={styles.tableCellConfidence}>
+                          <Text
+                            style={{ color: confidenceInfo.color, fontWeight: 500 }}
+                          >
+                            {confidenceInfo.label}
+                          </Text>
                         </td>
 
                         <td className={styles.tableCell}>
@@ -618,7 +680,7 @@ function EnhancedTableTab({
                       {isExpanded && (
                         <tr className={styles.expandedRow}>
                           <td
-                            colSpan={14 + ontologyAttributes.length}
+                            colSpan={16 + ontologyAttributes.length}
                             className={styles.expandedContent}
                           >
                             <div className={styles.expandedLayout}>
