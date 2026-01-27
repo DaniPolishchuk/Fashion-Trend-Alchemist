@@ -75,7 +75,7 @@ This is a **pnpm workspace monorepo** with the following structure:
 - `public/` - Static assets (logo.svg)
 - `src/pages/` - Page components (Home, ProductSelection, ContextBuilder, ProjectHub, DesignDetail)
 - `src/pages/tabs/` - ProjectHub tab components (TheAlchemistTab, ResultOverviewTab, EnhancedTableTab, DataAnalysisTab)
-- `src/components/` - Reusable components (AppShell, AttributeGenerationDialog, AttributeSkeletonLoader, EnrichmentStatusCard, FilterCardItem)
+- `src/components/` - Reusable components (AppShell, AttributeGenerationDialog, AttributeSkeletonLoader, EnrichmentStatusCard, FilterCardItem, MismatchReviewBadge, MismatchReviewDialog, VelocityRecalcIndicator)
 - `src/constants/` - Centralized constants per feature (9 files for each page/component)
 - `src/hooks/` - Custom React hooks (13 files including useAttributeEditor, useContextFilters, useDateRange, useDebounce, useEnrichmentSSE, useFilterOptions, useOptionsManager, usePersistedSelection, useProducts, useProjectData, useTheme)
 - `src/services/api/` - API client layer (8 files: client, attributes, collections, filters, products, projects, taxonomy, transactions)
@@ -126,8 +126,8 @@ The application connects to a cloud-hosted PostgreSQL database. Typical workflow
 - **articles** - Static product catalog with attributes (article_id, product_type, product_group, color_family, pattern_style, etc.)
 - **transactions_train** - Sales data linking articles to customers and dates (t_date, customer_id, article_id, price)
 - **customers** - Customer demographics (customer_id, age)
-- **projects** - User projects with scope, status, and pinning support (draft/active, isPinned, pinnedAt)
-- **project_context_items** - Context articles per project: top 25 and worst 25 articles (by velocity score) when >50 total results, otherwise all matching articles (up to 50)
+- **projects** - User projects with scope, status, and pinning support (draft/active, isPinned, pinnedAt, mismatchReviewCompleted, velocityScoresStale)
+- **project_context_items** - Context articles per project: top 25 and worst 25 articles (by velocity score) when >50 total results, otherwise all matching articles (up to 50). Includes mismatch detection fields (mismatchConfidence, isExcluded)
 - **generated_designs** - AI-generated design outputs with multi-image support:
   - `project_id`, `name`, `input_constraints`, `predicted_attributes`
   - `generated_images` (JSONB) - Multi-view images: `{ front: { url, status }, back: { url, status }, model: { url, status } }`
@@ -149,8 +149,9 @@ The application connects to a cloud-hosted PostgreSQL database. Typical workflow
 1. **Product Selection Flow**: User selects product types from taxonomy → stored in localStorage → passed to ContextBuilder
 2. **Context Builder Flow**: Configure date/season filters + attribute filters → preview context with velocity calculation → generate ontology via LLM → lock context (creates project and saves top/worst performers)
 3. **Project Flow**: Project created in active status → navigate to ProjectHub
-4. **LLM Enrichment Flow**: Project context items are processed in parallel (configurable concurrency) → Vision LLM extracts attributes from product images → enriched attributes stored in DB with SSE progress updates
-5. **RPT-1 Generation Flow**: User configures locked/AI attributes → calls SAP AI Core → generates 3 images sequentially (front/back/model)
+4. **LLM Enrichment Flow**: Project context items are processed in parallel (configurable concurrency) → Vision LLM extracts attributes from product images AND detects product type mismatches → enriched attributes and mismatch confidence stored in DB with SSE progress updates
+5. **Mismatch Review Flow**: After enrichment, flagged items (mismatchConfidence >= 80) can be reviewed → users exclude mismatched articles → velocity scores recalculated for included items only
+6. **RPT-1 Generation Flow**: User configures locked/AI attributes → calls SAP AI Core → generates 3 images sequentially (front/back/model). Excluded articles are filtered out from context.
 
 ### API Structure
 
@@ -179,6 +180,9 @@ The API server uses Fastify with modular routes:
 - `DELETE /api/projects/:projectId/generated-designs/:designId` - Delete specific design and its images
 - `PATCH /api/projects/:projectId/generated-designs/:designId` - Update design (e.g., rename)
 - `GET /api/projects/:projectId/generated-designs/:designId/image-status` - Get multi-image generation status
+- `PATCH /api/projects/:id/mismatch-review` - Bulk update article exclusions and mark review complete
+- `PATCH /api/projects/:id/context-items/:articleId/exclude` - Toggle single article exclusion
+- `POST /api/projects/:id/recalculate-velocity` - Re-normalize velocity scores for included articles
 
 #### Enrichment Routes (`apps/api-lite/src/routes/enrichment.ts`)
 
@@ -189,12 +193,12 @@ The API server uses Fastify with modular routes:
 
 #### Context Items Routes (`apps/api-lite/src/routes/context-items.ts`)
 
-- `GET /api/projects/:id/context-items` - Get all context items with enrichment status for Enhanced Table
+- `GET /api/projects/:id/context-items` - Get all context items with enrichment status, mismatch confidence, exclusion status, and mismatch summary for Enhanced Table
 
 #### RPT-1 Routes (`apps/api-lite/src/routes/rpt1.ts`)
 
 - `GET /api/projects/:id/rpt1-preview` - Get context row counts for RPT-1 preview
-- `POST /api/projects/:id/rpt1-predict` - Execute RPT-1 prediction via SAP AI Core (generates 3 images: front/back/model)
+- `POST /api/projects/:id/rpt1-predict` - Execute RPT-1 prediction via SAP AI Core (generates 3 images: front/back/model). Excludes articles marked as excluded from context.
 
 #### Collections Routes (`apps/api-lite/src/routes/collections.ts`)
 
@@ -220,6 +224,9 @@ The frontend (`apps/web/src/`) uses:
 - `AttributeSkeletonLoader.tsx` - Loading skeleton for attribute cards
 - `EnrichmentStatusCard.tsx` - Status card for enrichment monitoring
 - `FilterCardItem.tsx` - Reusable filter card component
+- `MismatchReviewBadge.tsx` - Clickable badge showing flagged item count and review status (red=needs review, green=reviewed)
+- `MismatchReviewDialog.tsx` - Modal dialog for reviewing flagged articles with bulk include/exclude actions
+- `VelocityRecalcIndicator.tsx` - Warning indicator shown when velocity scores are stale after exclusion changes
 
 #### Key Pages (`src/pages/`)
 
@@ -240,7 +247,7 @@ The frontend (`apps/web/src/`) uses:
 
 The ProjectHub is the main workspace for working with a project after it's created. It features:
 
-- **Header**: Project name, status badge (ACTIVE), and enrichment progress indicator
+- **Header**: Project name, status badge (ACTIVE), enrichment progress indicator, mismatch review badge (when flagged items exist), and velocity recalculation indicator (when scores are stale)
 - **Tab Navigation**: Four tabs for different workflows
 
 **Tab Components** (located in `src/pages/tabs/`):
@@ -254,6 +261,7 @@ The ProjectHub is the main workspace for working with a project after it's creat
    - Success Score slider (0-100%) on the right panel to set target performance
    - "Preview Request" button shows context summary and query structure
    - "Transmute (Run RPT-1)" button calls SAP AI Core to generate predictions
+   - **Stale Velocity Warning**: Shows warning dialog if velocity scores are stale before transmutation
    - **Refine Design Flow**: Supports `?refineFrom=<designId>` URL parameter to pre-populate attributes from an existing design (locked attributes stay locked, predicted become AI variables)
 2. **ResultOverviewTab** - Generated designs display
    - Paginated list of generated designs with search
@@ -263,14 +271,17 @@ The ProjectHub is the main workspace for working with a project after it's creat
 3. **EnhancedTableTab** - Context items table with enrichment monitoring
    - Displays all project context items joined with article data
    - Shows enrichment status (successful/pending/failed) per item
+   - **Include checkbox column**: Toggle article inclusion/exclusion from RPT-1 context
+   - **Match Confidence column**: Shows mismatch likelihood (Likely match/Possible mismatch/Likely mismatch/Very likely mismatch) with color coding
    - Collapsible control panel with status summary and retry controls
    - Filter chips (All/Successful/Pending/Failed) for quick filtering
-   - Sortable columns (velocity score, article ID, product type) with "Failed first" option
+   - Sortable columns (velocity score, article ID, product type, match confidence)
    - Dynamic columns for LLM-enriched attributes from ontology schema
    - Image thumbnails with fallback placeholder on load error
    - Single item retry and bulk "Retry All Failed" functionality
    - CSV export with all base and enriched attributes
    - Processing row highlight animation during active enrichment
+   - **Excluded row styling**: Red tint and reduced opacity for excluded articles
    - Pagination (25 items per page)
    - **Expandable rows**: Click any row to expand and see full article details, larger image, all enriched attributes, and error messages (accordion behavior - only one row expanded at a time)
    - **Image modal**: Click zoom icon on expanded image to view full-size in dialog
@@ -333,6 +344,28 @@ The velocity score measures sales performance normalized across products:
 - Stored in `project_context_items.velocityScore`
 
 **Usage in RPT-1:** The normalized score is sent as `success_score` (first column) to RPT-1, allowing users to target specific performance levels when generating new designs.
+
+#### Product Type Mismatch Detection
+
+During Vision LLM enrichment, the system also detects potential product type mismatches:
+
+**Mismatch Confidence Scores (0-100):**
+- 0-59: "Likely match" - Image matches expected product type
+- 60-79: "Possible mismatch" - Questionable, could fit but uncertain
+- 80-89: "Likely mismatch" - Probably a different product type
+- 90-100: "Very likely mismatch" - Clearly different category
+
+**Review Workflow:**
+1. After enrichment completes, flagged items (confidence >= 80) trigger the mismatch review badge
+2. Users click the badge to open the review dialog showing all flagged items
+3. Users can include/exclude individual items or use bulk actions
+4. On confirm, exclusions are saved and velocity scores are automatically recalculated
+
+**Velocity Score Recalculation:**
+- When articles are excluded via the Enhanced Table checkbox, `velocityScoresStale` is set to true
+- The VelocityRecalcIndicator shows a warning with a "Recalculate" button
+- Recalculation re-normalizes velocity scores among included items only (does not re-query transactions)
+- TheAlchemistTab shows a warning dialog if trying to transmute with stale velocity scores
 
 #### Project Lifecycle
 
@@ -479,6 +512,15 @@ Current focus is on UI polish, collections implementation, and additional image 
 3. **Multi-Image Generation**: Designs now support 3 views (front/back/model) generated sequentially via SAP AI Core.
 4. **Design Management**: Users can delete and rename generated designs directly from ResultOverviewTab.
 5. **Modular API Routes**: API routes are now organized in separate files under `apps/api-lite/src/routes/` for better maintainability.
+6. **Product Type Mismatch Detection**: Vision LLM now detects potential product type mismatches during enrichment. Flagged items can be reviewed and excluded from the RPT-1 context. Features include:
+   - Mismatch confidence scoring (0-100) with labeled categories
+   - MismatchReviewBadge in ProjectHub header (red=needs review, green=reviewed)
+   - MismatchReviewDialog for bulk review of flagged items
+   - Include/exclude checkbox column in EnhancedTableTab
+   - Match Confidence column with color-coded labels
+   - Automatic velocity score recalculation when exclusions change
+   - VelocityRecalcIndicator for stale score warnings
+   - Stale velocity warning in TheAlchemistTab before transmutation
 
 ### Known Technical Debt
 
