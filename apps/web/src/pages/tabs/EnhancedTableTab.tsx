@@ -40,13 +40,11 @@ import {
   ITEMS_PER_PAGE,
   POLL_INTERVAL,
   FILTER_TYPES,
-  CONFIDENCE_FILTER_TYPES,
   SORT_FIELDS,
   ICONS,
   TEXT,
   API_ENDPOINTS,
   type FilterType,
-  type ConfidenceFilterType,
   type SortField,
 } from '../../constants/enhancedTableTab';
 import type { ContextItem, Summary, EnhancedTableTabProps } from '../../types/enhancedTableTab';
@@ -79,7 +77,6 @@ function EnhancedTableTab({
   // UI state
   const [controlPanelExpanded, setControlPanelExpanded] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterType>(FILTER_TYPES.ALL);
-  const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilterType>(CONFIDENCE_FILTER_TYPES.ALL);
   const [sortBy, setSortBy] = useState<SortField>(SORT_FIELDS.VELOCITY_SCORE);
   const [sortDesc, setSortDesc] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -172,27 +169,6 @@ function EnhancedTableTab({
       items = items.filter((item) => item.enrichmentError !== null);
     }
 
-    // Confidence filter
-    if (confidenceFilter !== CONFIDENCE_FILTER_TYPES.ALL) {
-      items = items.filter((item) => {
-        const conf = item.mismatchConfidence;
-        if (conf === null) return confidenceFilter === CONFIDENCE_FILTER_TYPES.LIKELY_MATCH;
-
-        switch (confidenceFilter) {
-          case CONFIDENCE_FILTER_TYPES.LIKELY_MATCH:
-            return conf < 60;
-          case CONFIDENCE_FILTER_TYPES.POSSIBLE_MISMATCH:
-            return conf >= 60 && conf < 80;
-          case CONFIDENCE_FILTER_TYPES.LIKELY_MISMATCH:
-            return conf >= 80 && conf < 90;
-          case CONFIDENCE_FILTER_TYPES.VERY_LIKELY_MISMATCH:
-            return conf >= 90;
-          default:
-            return true;
-        }
-      });
-    }
-
     // Search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -223,7 +199,7 @@ function EnhancedTableTab({
     }
 
     return items;
-  }, [contextItems, activeFilter, confidenceFilter, searchQuery]);
+  }, [contextItems, activeFilter, searchQuery]);
 
   // Sort items
   const sortedItems = useMemo(() => {
@@ -236,6 +212,11 @@ function EnhancedTableTab({
         comparison = a.articleId.localeCompare(b.articleId);
       } else if (sortBy === SORT_FIELDS.PRODUCT_TYPE) {
         comparison = a.productType.localeCompare(b.productType);
+      } else if (sortBy === SORT_FIELDS.MATCH_CONFIDENCE) {
+        // Sort by mismatch confidence (null treated as 0 - likely match)
+        const confA = a.mismatchConfidence ?? 0;
+        const confB = b.mismatchConfidence ?? 0;
+        comparison = confA - confB;
       }
       return sortDesc ? -comparison : comparison;
     });
@@ -249,36 +230,10 @@ function EnhancedTableTab({
     return sortedItems.slice(start, start + ITEMS_PER_PAGE);
   }, [sortedItems, currentPage]);
 
-  // Calculate confidence filter counts
-  const confidenceCounts = useMemo(() => {
-    const counts = {
-      [CONFIDENCE_FILTER_TYPES.ALL]: contextItems.length,
-      [CONFIDENCE_FILTER_TYPES.LIKELY_MATCH]: 0,
-      [CONFIDENCE_FILTER_TYPES.POSSIBLE_MISMATCH]: 0,
-      [CONFIDENCE_FILTER_TYPES.LIKELY_MISMATCH]: 0,
-      [CONFIDENCE_FILTER_TYPES.VERY_LIKELY_MISMATCH]: 0,
-    };
-
-    contextItems.forEach((item) => {
-      const conf = item.mismatchConfidence;
-      if (conf === null || conf < 60) {
-        counts[CONFIDENCE_FILTER_TYPES.LIKELY_MATCH]++;
-      } else if (conf < 80) {
-        counts[CONFIDENCE_FILTER_TYPES.POSSIBLE_MISMATCH]++;
-      } else if (conf < 90) {
-        counts[CONFIDENCE_FILTER_TYPES.LIKELY_MISMATCH]++;
-      } else {
-        counts[CONFIDENCE_FILTER_TYPES.VERY_LIKELY_MISMATCH]++;
-      }
-    });
-
-    return counts;
-  }, [contextItems]);
-
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeFilter, confidenceFilter, searchQuery]);
+  }, [activeFilter, searchQuery]);
 
   // Handlers
   const handlePreviousPage = () => {
@@ -476,42 +431,6 @@ function EnhancedTableTab({
 
         <div className={styles.rightControls}>
           <Select
-            onChange={(e: any) => setConfidenceFilter(e.detail.selectedOption.dataset.value as ConfidenceFilterType)}
-            className={styles.confidenceSelect}
-          >
-            <Option
-              data-value={CONFIDENCE_FILTER_TYPES.ALL}
-              selected={confidenceFilter === CONFIDENCE_FILTER_TYPES.ALL}
-            >
-              {TEXT.CONFIDENCE_FILTER_ALL} ({confidenceCounts[CONFIDENCE_FILTER_TYPES.ALL]})
-            </Option>
-            <Option
-              data-value={CONFIDENCE_FILTER_TYPES.LIKELY_MATCH}
-              selected={confidenceFilter === CONFIDENCE_FILTER_TYPES.LIKELY_MATCH}
-            >
-              {TEXT.CONFIDENCE_FILTER_LIKELY_MATCH} ({confidenceCounts[CONFIDENCE_FILTER_TYPES.LIKELY_MATCH]})
-            </Option>
-            <Option
-              data-value={CONFIDENCE_FILTER_TYPES.POSSIBLE_MISMATCH}
-              selected={confidenceFilter === CONFIDENCE_FILTER_TYPES.POSSIBLE_MISMATCH}
-            >
-              {TEXT.CONFIDENCE_FILTER_POSSIBLE_MISMATCH} ({confidenceCounts[CONFIDENCE_FILTER_TYPES.POSSIBLE_MISMATCH]})
-            </Option>
-            <Option
-              data-value={CONFIDENCE_FILTER_TYPES.LIKELY_MISMATCH}
-              selected={confidenceFilter === CONFIDENCE_FILTER_TYPES.LIKELY_MISMATCH}
-            >
-              {TEXT.CONFIDENCE_FILTER_LIKELY_MISMATCH} ({confidenceCounts[CONFIDENCE_FILTER_TYPES.LIKELY_MISMATCH]})
-            </Option>
-            <Option
-              data-value={CONFIDENCE_FILTER_TYPES.VERY_LIKELY_MISMATCH}
-              selected={confidenceFilter === CONFIDENCE_FILTER_TYPES.VERY_LIKELY_MISMATCH}
-            >
-              {TEXT.CONFIDENCE_FILTER_VERY_LIKELY_MISMATCH} ({confidenceCounts[CONFIDENCE_FILTER_TYPES.VERY_LIKELY_MISMATCH]})
-            </Option>
-          </Select>
-
-          <Select
             onChange={(e: any) => setSortBy(e.detail.selectedOption.dataset.value as SortField)}
             className={styles.sortSelect}
           >
@@ -532,6 +451,12 @@ function EnhancedTableTab({
               selected={sortBy === SORT_FIELDS.PRODUCT_TYPE}
             >
               {TEXT.SORT_PRODUCT}
+            </Option>
+            <Option
+              data-value={SORT_FIELDS.MATCH_CONFIDENCE}
+              selected={sortBy === SORT_FIELDS.MATCH_CONFIDENCE}
+            >
+              {TEXT.SORT_MATCH_CONFIDENCE}
             </Option>
           </Select>
 

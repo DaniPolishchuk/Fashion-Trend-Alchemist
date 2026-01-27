@@ -19,24 +19,13 @@ export const FILTER_TYPES = {
 
 export type FilterType = (typeof FILTER_TYPES)[keyof typeof FILTER_TYPES];
 
-// ==================== CONFIDENCE FILTER TYPES ====================
-
-export const CONFIDENCE_FILTER_TYPES = {
-  ALL: 'all',
-  LIKELY_MATCH: 'likely_match',
-  POSSIBLE_MISMATCH: 'possible_mismatch',
-  LIKELY_MISMATCH: 'likely_mismatch',
-  VERY_LIKELY_MISMATCH: 'very_likely_mismatch',
-} as const;
-
-export type ConfidenceFilterType = (typeof CONFIDENCE_FILTER_TYPES)[keyof typeof CONFIDENCE_FILTER_TYPES];
-
 // ==================== SORT FIELDS ====================
 
 export const SORT_FIELDS = {
   VELOCITY_SCORE: 'velocityScore',
   ARTICLE_ID: 'articleId',
   PRODUCT_TYPE: 'productType',
+  MATCH_CONFIDENCE: 'matchConfidence',
 } as const;
 
 export type SortField = (typeof SORT_FIELDS)[keyof typeof SORT_FIELDS];
@@ -110,17 +99,11 @@ export const TEXT = {
   FILTER_PENDING: 'Pending',
   FILTER_FAILED: 'Failed',
 
-  // Confidence Filter Labels
-  CONFIDENCE_FILTER_ALL: 'All',
-  CONFIDENCE_FILTER_LIKELY_MATCH: 'Likely Match',
-  CONFIDENCE_FILTER_POSSIBLE_MISMATCH: 'Possible',
-  CONFIDENCE_FILTER_LIKELY_MISMATCH: 'Likely Mismatch',
-  CONFIDENCE_FILTER_VERY_LIKELY_MISMATCH: 'Very Likely',
-
   // Sort Labels
   SORT_VELOCITY: 'Velocity Score',
   SORT_ARTICLE: 'Article ID',
   SORT_PRODUCT: 'Product Type',
+  SORT_MATCH_CONFIDENCE: 'Match Confidence',
   SORT_DESC: 'Descending',
   SORT_ASC: 'Ascending',
 
