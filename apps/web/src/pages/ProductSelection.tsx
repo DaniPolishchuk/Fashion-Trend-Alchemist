@@ -292,10 +292,6 @@ function ProductSelection() {
       <div className={styles.headerContainer}>
         <div className={styles.headerContent}>
           <div className={styles.headerLeft}>
-            <Title level="H2" className={styles.pageTitle}>
-              {LABELS.PAGE_TITLE}
-            </Title>
-            <Text className={styles.pageSubtitle}>{LABELS.PAGE_SUBTITLE}</Text>
             <div className={styles.projectNameContainer}>
               <Text className={styles.projectNameLabel}>{LABELS.PROJECT_NAME_LABEL}</Text>
               <Input
@@ -305,6 +301,10 @@ function ProductSelection() {
                 className={styles.projectNameInput}
               />
             </div>
+            <Title level="H2" className={styles.pageTitle}>
+              {LABELS.PAGE_TITLE}
+            </Title>
+            <Text className={styles.pageSubtitle}>{LABELS.PAGE_SUBTITLE}</Text>
           </div>
           <div className={styles.statsContainer}>
             {countLoading ? (

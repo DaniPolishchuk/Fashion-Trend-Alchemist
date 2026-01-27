@@ -372,7 +372,7 @@
 
 .modalTitle {
   margin: 0;
-  flex: 0;
+  flex: 1;
 }
 
 .modalCloseButton {

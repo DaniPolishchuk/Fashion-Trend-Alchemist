@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Page,
@@ -30,6 +30,11 @@ import '@ui5/webcomponents-icons/dist/activate.js';
 import '@ui5/webcomponents-icons/dist/accept.js';
 import '@ui5/webcomponents-icons/dist/lightbulb.js';
 import '@ui5/webcomponents-icons/dist/filter.js';
+import '@ui5/webcomponents-icons/dist/slim-arrow-down.js';
+import '@ui5/webcomponents-icons/dist/slim-arrow-right.js';
+import '@ui5/webcomponents-icons/dist/zoom-in.js';
+import '@ui5/webcomponents-icons/dist/decline.js';
+import '@ui5/webcomponents-icons/dist/product.js';
 import '@ui5/webcomponents-fiori/dist/illustrations/NoData.js';
 
 import type { FiltersResponse } from '@fashion/types';
@@ -64,6 +69,33 @@ interface ProjectData {
     productGroups: string[];
   };
 }
+
+// Attribute cache utilities
+const generateAttributeCacheKey = (productTypes: string[]): string => {
+  return `attributeSchema_${[...productTypes].sort().join('_')}`;
+};
+
+const getCachedAttributes = (productTypes: string[]) => {
+  try {
+    const key = generateAttributeCacheKey(productTypes);
+    const cached = sessionStorage.getItem(key);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+  } catch (e) {
+    console.error('Failed to read from cache:', e);
+  }
+  return null;
+};
+
+const setCachedAttributes = (productTypes: string[], data: any) => {
+  try {
+    const key = generateAttributeCacheKey(productTypes);
+    sessionStorage.setItem(key, JSON.stringify(data));
+  } catch (e) {
+    console.error('Failed to write to cache:', e);
+  }
+};
 
 function ContextBuilder() {
   const navigate = useNavigate();
@@ -105,6 +137,13 @@ function ContextBuilder() {
   const [errorDialogOpen, setErrorDialogOpen] = useState(false);
   const [errorDialogMessage, setErrorDialogMessage] = useState('');
 
+  // --- Expandable Row State ---
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+
+  // --- Image Modal State ---
+  const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [imageModalUrl, setImageModalUrl] = useState<string>('');
+
   // --- Initial Load ---
   useEffect(() => {
     const projectData = (location.state as any)?.projectData;
@@ -118,6 +157,16 @@ function ContextBuilder() {
     setProject(projectData);
     setLoading(false);
   }, [location.state]);
+
+  // --- Cleanup: Clear attribute cache when leaving page ---
+  useEffect(() => {
+    return () => {
+      if (project?.scopeConfig?.productTypes) {
+        const key = generateAttributeCacheKey(project.scopeConfig.productTypes);
+        sessionStorage.removeItem(key);
+      }
+    };
+  }, [project]);
 
   // --- Fetch Filters ---
   const fetchFilterOptions = useCallback(async () => {
@@ -295,10 +344,19 @@ function ContextBuilder() {
     setCurrentPage(1);
   }, [filters, dateRange]);
 
-  const openDialog = useCallback((filterKey: string, currentSelection: string[]) => {
-    setActiveDialog(filterKey);
-    setTempSelection([...currentSelection]);
-  }, []);
+  const openDialog = useCallback(
+    (filterKey: string, currentSelection: string[]) => {
+      setActiveDialog(filterKey);
+      // If no current selection, select all options by default
+      if (currentSelection.length === 0 && filterOptions) {
+        const allOptions = (filterOptions as any)[filterKey] || [];
+        setTempSelection([...allOptions]);
+      } else {
+        setTempSelection([...currentSelection]);
+      }
+    },
+    [filterOptions]
+  );
 
   const closeDialog = useCallback(() => {
     setActiveDialog(null);
@@ -311,6 +369,22 @@ function ContextBuilder() {
     setCurrentPage(1);
     closeDialog();
   }, [activeDialog, tempSelection, filters, closeDialog]);
+
+  const getDialogOptions = useCallback(() => {
+    if (!activeDialog || !filterOptions) return [];
+    return (filterOptions as any)[activeDialog] || [];
+  }, [activeDialog, filterOptions]);
+
+  const handleSelectDeselectAll = useCallback(() => {
+    const allOptions = getDialogOptions();
+    if (tempSelection.length === allOptions.length) {
+      // All selected, so deselect all
+      setTempSelection([]);
+    } else {
+      // Some or none selected, so select all
+      setTempSelection([...allOptions]);
+    }
+  }, [tempSelection, getDialogOptions]);
 
   // --- Handlers: Attribute Generation ---
   const generateAttributes = useCallback(
@@ -331,6 +405,14 @@ function ContextBuilder() {
           setGeneratedAttributes(result.data.attributeSet);
           setConversationHistory(result.data.conversationHistory || []);
           if (withFeedback) setFeedbackText('');
+
+          // Cache the generated attributes
+          setCachedAttributes(project.scopeConfig.productTypes, {
+            attributes: result.data.attributeSet,
+            conversationHistory: result.data.conversationHistory || [],
+            timestamp: Date.now(),
+            productTypes: project.scopeConfig.productTypes,
+          });
         }
       } catch (err) {
         console.error(ERROR_MESSAGES.GENERATE_ATTRIBUTES_FAILED, err);
@@ -342,12 +424,22 @@ function ContextBuilder() {
   );
 
   const handleOpenAttributeDialog = useCallback(() => {
+    if (!project?.scopeConfig?.productTypes) return;
+
     setAttributeDialogOpen(true);
     setFeedbackText('');
-    setConversationHistory([]);
-    setGeneratedAttributes(null);
-    generateAttributes();
-  }, [generateAttributes]);
+
+    // Check cache first
+    const cached = getCachedAttributes(project.scopeConfig.productTypes);
+    if (cached) {
+      setGeneratedAttributes(cached.attributes);
+      setConversationHistory(cached.conversationHistory || []);
+    } else {
+      setConversationHistory([]);
+      setGeneratedAttributes(null);
+      generateAttributes();
+    }
+  }, [project, generateAttributes]);
 
   const handleCloseAttributeDialog = useCallback(() => {
     setAttributeDialogOpen(false);
@@ -364,11 +456,24 @@ function ContextBuilder() {
     }
   }, [feedbackText, generateAttributes]);
 
-  const handleSaveAttributes = useCallback((attributes: any) => {
-    console.log('Saving attributes:', attributes);
-    setOntologySchema(attributes);
-    setAttributeDialogOpen(false);
-  }, []);
+  const handleSaveAttributes = useCallback(
+    (attributes: any) => {
+      if (!project?.scopeConfig?.productTypes) return;
+
+      setOntologySchema(attributes);
+
+      // Update cache with the final attributes (including manual edits)
+      setCachedAttributes(project.scopeConfig.productTypes, {
+        attributes,
+        conversationHistory,
+        timestamp: Date.now(),
+        productTypes: project.scopeConfig.productTypes,
+      });
+
+      setAttributeDialogOpen(false);
+    },
+    [project, conversationHistory]
+  );
 
   // --- Handler: Lock Context ---
   const handleLockContext = useCallback(async () => {
@@ -467,6 +572,23 @@ function ContextBuilder() {
     setCurrentPage((prev) => prev + 1);
   }, []);
 
+  // --- Handlers: Expandable Rows & Image Modal ---
+  const handleRowToggle = useCallback((articleId: string) => {
+    setExpandedRowId((prev) => (prev === articleId ? null : articleId));
+  }, []);
+
+  const handleImageClick = useCallback((imageUrl: string) => {
+    setImageModalUrl(imageUrl);
+    setImageModalOpen(true);
+  }, []);
+
+  const getImageUrl = useCallback((articleId: string) => {
+    const filerBaseUrl = import.meta.env.VITE_FILER_BASE_URL || 'http://localhost:8888';
+    const bucket = import.meta.env.VITE_FILER_BUCKET || 'images';
+    const first2Digits = articleId.substring(0, 2);
+    return `${filerBaseUrl}/${bucket}/${first2Digits}/${articleId}.jpg`;
+  }, []);
+
   // --- Memoized Computations ---
   const getPopularityLabel = useCallback(() => {
     if (dateRange.selectedSeason) {
@@ -488,11 +610,6 @@ function ContextBuilder() {
     }
     return LABELS.ALL_TIME;
   }, [dateRange]);
-
-  const getDialogOptions = useCallback(() => {
-    if (!activeDialog || !filterOptions) return [];
-    return (filterOptions as any)[activeDialog] || [];
-  }, [activeDialog, filterOptions]);
 
   const getVisibleKeys = useMemo(() => {
     if (products.length === 0) return [];
@@ -819,11 +936,15 @@ function ContextBuilder() {
                   {productsLoading ? (
                     <th className={styles.tableHeaderCell}>{LABELS.LOADING}</th>
                   ) : products.length > 0 ? (
-                    getVisibleKeys.map((key) => (
-                      <th key={key} className={styles.tableHeaderCell}>
-                        {key.replace(/_/g, ' ')}
-                      </th>
-                    ))
+                    <>
+                      <th className={styles.tableHeaderCellExpand}></th>
+                      <th className={styles.tableHeaderCellImage}>Image</th>
+                      {getVisibleKeys.map((key) => (
+                        <th key={key} className={styles.tableHeaderCell}>
+                          {key.replace(/_/g, ' ')}
+                        </th>
+                      ))}
+                    </>
                   ) : (
                     <th className={styles.tableHeaderCell}>{LABELS.NO_DATA}</th>
                   )}
@@ -832,32 +953,127 @@ function ContextBuilder() {
               <tbody>
                 {productsLoading ? (
                   <tr>
-                    <td colSpan={getVisibleKeys.length || 1} className={styles.tableCellCentered}>
+                    <td
+                      colSpan={getVisibleKeys.length + 2 || 1}
+                      className={styles.tableCellCentered}
+                    >
                       <BusyIndicator active size="M" />
                     </td>
                   </tr>
                 ) : products.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className={styles.tableCellCentered}>
+                    <td
+                      colSpan={getVisibleKeys.length + 2 || 1}
+                      className={styles.tableCellCentered}
+                    >
                       <IllustratedMessage name="NoData" titleText={LABELS.NO_ITEMS_FOUND} />
                     </td>
                   </tr>
                 ) : (
-                  products.map((product) => (
-                    <tr key={product.article_id} className={styles.tableRow}>
-                      {getVisibleKeys.map((key) => {
-                        const isDetailDesc = key.toLowerCase() === TABLE.DETAIL_DESC_COLUMN;
-                        return (
-                          <td
-                            key={`${product.article_id}-${key}`}
-                            className={isDetailDesc ? styles.tableCellDetailDesc : styles.tableCell}
-                          >
-                            {product[key]}
+                  products.map((product) => {
+                    const isExpanded = expandedRowId === product.article_id;
+                    const imageUrl = getImageUrl(product.article_id);
+
+                    return (
+                      <React.Fragment key={product.article_id}>
+                        {/* Main Row */}
+                        <tr
+                          className={`${styles.tableRow} ${isExpanded ? styles.tableRowExpanded : ''}`}
+                          onClick={() => handleRowToggle(product.article_id)}
+                        >
+                          <td className={styles.tableCellExpand}>
+                            <Icon name={isExpanded ? 'slim-arrow-down' : 'slim-arrow-right'} />
                           </td>
-                        );
-                      })}
-                    </tr>
-                  ))
+
+                          <td className={styles.tableCellImage}>
+                            <div className={styles.imageThumbnail}>
+                              <img
+                                src={imageUrl}
+                                alt={product.article_id}
+                                className={styles.imageThumbnailImg}
+                                onError={(e) => {
+                                  const target = e.currentTarget;
+                                  target.style.display = 'none';
+                                  const parent = target.parentElement;
+                                  if (parent && !parent.querySelector('ui5-icon')) {
+                                    const icon = document.createElement('ui5-icon');
+                                    icon.setAttribute('name', 'product');
+                                    icon.style.fontSize = '1.5rem';
+                                    parent.appendChild(icon);
+                                  }
+                                }}
+                              />
+                            </div>
+                          </td>
+
+                          {getVisibleKeys.map((key) => {
+                            const isDetailDesc = key.toLowerCase() === TABLE.DETAIL_DESC_COLUMN;
+                            return (
+                              <td
+                                key={`${product.article_id}-${key}`}
+                                className={
+                                  isDetailDesc ? styles.tableCellDetailDesc : styles.tableCell
+                                }
+                              >
+                                {product[key]}
+                              </td>
+                            );
+                          })}
+                        </tr>
+
+                        {/* Expanded Detail Row */}
+                        {isExpanded && (
+                          <tr key={`${product.article_id}-expanded`} className={styles.expandedRow}>
+                            <td
+                              colSpan={getVisibleKeys.length + 2}
+                              className={styles.expandedContent}
+                            >
+                              <div className={styles.expandedLayout}>
+                                <div
+                                  className={styles.imageDetail}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleImageClick(imageUrl);
+                                  }}
+                                >
+                                  <img
+                                    src={imageUrl}
+                                    alt={product.article_id}
+                                    className={styles.imageDetailImg}
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = 'none';
+                                    }}
+                                  />
+                                  <div className={styles.imageZoomIcon}>
+                                    <Icon name="zoom-in" className={styles.imageZoomIconSvg} />
+                                  </div>
+                                </div>
+
+                                <div className={styles.expandedDetails}>
+                                  <Title level="H5" className={styles.detailsTitle}>
+                                    Product Details
+                                  </Title>
+
+                                  <div className={styles.detailsGrid}>
+                                    {getVisibleKeys.map((key) => (
+                                      <div key={key}>
+                                        <Text className={styles.detailLabel}>
+                                          {key.replace(/_/g, ' ')}
+                                        </Text>
+                                        <Text className={styles.detailValue}>
+                                          {product[key] || '-'}
+                                        </Text>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -921,6 +1137,17 @@ function ContextBuilder() {
             <BusyIndicator active size="M" />
           ) : (
             <>
+              <div className={styles.dialogSelectAllContainer}>
+                <Button
+                  design="Transparent"
+                  onClick={handleSelectDeselectAll}
+                  style={{ width: '100%' }}
+                >
+                  {tempSelection.length === getDialogOptions().length
+                    ? 'Deselect All'
+                    : 'Select All'}
+                </Button>
+              </div>
               {getDialogOptions().map((opt: string) => {
                 const isChecked = tempSelection.includes(opt);
                 return (
@@ -990,6 +1217,29 @@ function ContextBuilder() {
             {errorDialogMessage}
           </MessageStrip>
           <Text>{ERROR_MESSAGES.PROJECT_CREATION_DIALOG_TEXT}</Text>
+        </div>
+      </Dialog>
+
+      {/* Image Modal */}
+      <Dialog
+        open={imageModalOpen}
+        onClose={() => setImageModalOpen(false)}
+        header={
+          <div className={styles.modalHeader}>
+            <Title level="H5" className={styles.modalTitle}>
+              Product Image
+            </Title>
+            <Button
+              design="Transparent"
+              icon="decline"
+              onClick={() => setImageModalOpen(false)}
+              className={styles.modalCloseButton}
+            />
+          </div>
+        }
+      >
+        <div className={styles.modalImageContainer}>
+          <img src={imageModalUrl} alt="Product" className={styles.modalImage} />
         </div>
       </Dialog>
     </Page>
