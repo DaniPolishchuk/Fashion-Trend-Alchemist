@@ -70,18 +70,27 @@ export function AttributeGenerationDialog({
   // Local state for managing attributes
   const [attributes, setAttributes] = useState<any>({});
   const [infoPopupOpen, setInfoPopupOpen] = useState(false);
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   // Custom hooks
   const defaultCategory = selectedTypes[0] || 'General';
   const attributeEditor = useAttributeEditor(attributes, setAttributes, defaultCategory);
   const optionsManager = useOptionsManager(attributes, setAttributes);
 
-  // Sync generated attributes to local state
+  // Sync generated attributes to local state ONLY ONCE when dialog opens
   useEffect(() => {
-    if (generatedAttributes) {
+    if (generatedAttributes && !hasInitialized) {
       setAttributes(generatedAttributes);
+      setHasInitialized(true);
     }
-  }, [generatedAttributes]);
+  }, [generatedAttributes, hasInitialized]);
+
+  // Reset initialization flag when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setHasInitialized(false);
+    }
+  }, [open]);
 
   // Get formatted attribute list
   const attributesList = flattenAttributes(attributes);

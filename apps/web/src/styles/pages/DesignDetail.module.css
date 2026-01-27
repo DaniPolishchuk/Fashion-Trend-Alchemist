@@ -1,0 +1,541 @@
+/**
+ * Design Detail Page Styles
+ * Extracted from 100+ inline style objects for better performance
+ */
+
+/* Page Layout */
+.pageContainer {
+  background: var(--sapBackgroundColor);
+  min-height: calc(100vh - 44px);
+}
+
+.loadingContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: calc(100vh - 44px);
+}
+
+.errorContainer {
+  padding: 2rem;
+}
+
+/* Breadcrumbs */
+.breadcrumbsContainer {
+  padding: 12px 2rem 0;
+}
+
+/* Header Section */
+.headerContainer {
+  padding: 1rem 2rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--sapList_BorderColor);
+  margin-bottom: 1.5rem;
+}
+
+.headerLeft {
+  flex: 1;
+}
+
+.headerTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.headerTitle {
+  margin: 0;
+  font-size: 30px;
+}
+
+.headerTitleInput {
+  width: 300px;
+}
+
+.headerMetadata {
+  color: var(--sapContent_LabelColor);
+  font-size: 0.75rem;
+}
+
+.statusBadgeContainer > * {
+  padding: 0.25rem 0.75rem !important;
+  font-size: 0.75rem !important;
+  border-radius: 1.5rem;
+}
+
+/* Main Content Grid */
+.contentGrid {
+  display: grid;
+  grid-template-columns: 640px 1fr;
+  gap: 1.5rem;
+  padding: 0 2rem 5rem;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .contentGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .contentGrid {
+    padding: 0 1rem 5rem;
+  }
+}
+
+/* Left Column - Attribute Panels */
+.attributePanelsColumn {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+/* Predicted Attributes Panel - AI Enhanced */
+.panelPredicted {
+  background: linear-gradient(135deg, rgba(233, 115, 12, 0.04) 0%, rgba(233, 115, 12, 0.01) 100%);
+  border: 1px solid rgba(233, 115, 12, 0.3);
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 6px rgba(233, 115, 12, 0.08);
+  transition: all 0.2s;
+  overflow: hidden;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+}
+
+.panelIconAI {
+  color: #e9730c;
+  font-size: 1.125rem;
+}
+
+.panelIcon {
+  color: var(--sapContent_LabelColor);
+  font-size: 1.125rem;
+}
+
+.panelTitleAI {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.8125rem;
+  letter-spacing: 0.5px;
+  color: #e9730c;
+}
+
+.panelTitle {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.8125rem;
+  letter-spacing: 0.5px;
+  color: var(--sapContent_LabelColor);
+}
+
+.panelContent {
+  padding: 0.5rem 1rem;
+  max-height: calc(10 * 60px);
+  overflow-y: auto;
+}
+
+/* Given Attributes Panel */
+.panelGiven {
+  background: var(--sapTile_Background);
+  border: 1px solid var(--sapList_BorderColor);
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Attribute Items */
+.attributeItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 0.75rem;
+  border-radius: 0.25rem;
+  transition: background 0.2s;
+  gap: 1rem;
+}
+
+.attributeItem:not(:last-child) {
+  border-bottom: 1px solid var(--sapList_BorderColor);
+}
+
+.attributeItemAI:not(:last-child) {
+  border-bottom: 1px solid rgba(233, 115, 12, 0.1);
+}
+
+.attributeItem:hover {
+  background: var(--sapList_Hover_Background);
+}
+
+.attributeItemAI:hover {
+  background: rgba(233, 115, 12, 0.05);
+}
+
+.attributeLabel {
+  font-size: 0.8125rem;
+  color: var(--sapContent_LabelColor);
+  text-transform: capitalize;
+}
+
+.attributeValue {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--sapTextColor);
+  text-align: right;
+  word-break: break-word;
+}
+
+.attributeValueAI {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #e9730c;
+  text-align: right;
+  word-break: break-word;
+}
+
+.emptyAttributesText {
+  color: var(--sapContent_LabelColor);
+  font-size: 0.875rem;
+}
+
+/* Right Column - Image Gallery */
+.galleryColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.galleryContainer {
+  background: var(--sapTile_Background);
+  border-radius: 0.5rem;
+  padding: 2rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+@media (max-width: 768px) {
+  .galleryContainer {
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+  }
+}
+
+/* Thumbnail List */
+.thumbnailList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  order: 1;
+}
+
+@media (max-width: 768px) {
+  .thumbnailList {
+    flex-direction: row;
+    justify-content: center;
+    order: 2;
+  }
+}
+
+.thumbnailItem {
+  width: 100px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.thumbnailItem:hover {
+  transform: scale(1.02);
+}
+
+.thumbnailItemSelected {
+  transform: scale(1.05);
+}
+
+@media (max-width: 768px) {
+  .thumbnailItem {
+    width: 80px;
+  }
+}
+
+.thumbnailBox {
+  width: 100px;
+  height: 100px;
+  border-radius: 0.375rem;
+  border: 2px solid var(--sapList_BorderColor);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8f8f8;
+  padding: 0.375rem;
+}
+
+.thumbnailBoxSelected {
+  border-color: var(--sapSelectedColor);
+  box-shadow:
+    0 0 0 1px var(--sapSelectedColor),
+    0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+@media (max-width: 768px) {
+  .thumbnailBox {
+    width: 80px;
+    height: 80px;
+  }
+}
+
+.thumbnailImage {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 0.125rem;
+}
+
+.thumbnailLoading,
+.thumbnailFailed,
+.thumbnailEmpty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thumbnailFailedIcon {
+  color: var(--sapNegativeColor);
+  font-size: 1.5rem;
+}
+
+.thumbnailEmptyIcon {
+  color: var(--sapContent_LabelColor);
+  font-size: 1.25rem;
+}
+
+.thumbnailLabel {
+  display: block;
+  text-align: center;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--sapContent_LabelColor);
+}
+
+.thumbnailLabelSelected {
+  font-weight: 600;
+  color: var(--sapSelectedColor);
+}
+
+@media (max-width: 768px) {
+  .thumbnailLabel {
+    font-size: 0.6875rem;
+  }
+}
+
+/* Main Image Stage */
+.imageStageContainer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  order: 2;
+}
+
+@media (max-width: 768px) {
+  .imageStageContainer {
+    order: 1;
+  }
+}
+
+.imageStage {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  aspect-ratio: 1/1;
+  background: #f8f8f8;
+  border-radius: 0.375rem;
+  border: 1px solid var(--sapList_BorderColor);
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+@media (max-width: 1024px) {
+  .imageStage {
+    max-width: 480px;
+  }
+}
+
+@media (max-width: 768px) {
+  .imageStage {
+    max-width: 400px;
+    padding: 1rem;
+  }
+}
+
+.navButton {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.navButtonLeft {
+  left: 0.5rem;
+}
+
+.navButtonRight {
+  right: 0.5rem;
+}
+
+.viewBadge > * {
+  padding: 0.5rem 1rem !important;
+  font-size: 1rem !important;
+  border-radius: 1.5rem;
+}
+
+.imageToolbar {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 3;
+  display: flex;
+  gap: 0.375rem;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 0.375rem;
+  padding: 0.25rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.mainImage {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.imageStatusContainer {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.imageStatusText {
+  color: var(--sapContent_LabelColor);
+  text-align: center;
+}
+
+.imageFailedIcon {
+  color: var(--sapNegativeColor);
+  font-size: 2rem;
+}
+
+.imageFailedText {
+  color: var(--sapNegativeColor);
+  text-align: center;
+}
+
+/* Bottom Action Bar */
+.actionBar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--sapPageFooter_Background, var(--sapBackgroundColor));
+  border-top: 1px solid var(--sapPageFooter_BorderColor, var(--sapList_BorderColor));
+  padding: 0.5rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.05);
+  z-index: 10;
+}
+
+.actionBarLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.actionBarIcon {
+  color: var(--sapContent_IconColor);
+}
+
+.actionBarText {
+  font-size: 0.8125rem;
+  color: var(--sapContent_LabelColor);
+}
+
+.actionBarRight {
+  display: flex;
+  gap: 0.75rem;
+}
+
+/* Notification */
+.notification {
+  position: fixed;
+  bottom: 64px;
+  right: 2rem;
+  width: 320px;
+  z-index: 11;
+}
+
+.notificationContent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.notificationText {
+  font-weight: 500;
+}
+
+/* Image Modal */
+.modalContent {
+  width: 90vw;
+  height: 90vh;
+}
+
+.modalImageContainer {
+  width: 100%;
+  height: calc(90vh - 120px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8f8f8;
+  border-radius: 0.375rem;
+}
+
+.modalImage {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.modalFooter {
+  display: flex;
+  gap: 0.5rem;
+}

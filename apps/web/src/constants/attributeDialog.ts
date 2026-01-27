@@ -32,7 +32,7 @@ export const TEXT = {
   // Main Dialog
   TITLE_REFINE: 'Refine Attribute Generation',
   TITLE_GENERATED: 'Generated Attributes',
-  BUTTON_PROCEED: 'Proceed with the Data Enrichment',
+  BUTTON_PROCEED: 'Save',
   BUTTON_CLOSE: 'Close',
   BUTTON_REGENERATE: 'Regenerate',
   BUTTON_ADD_ATTRIBUTE: 'Add Attribute',

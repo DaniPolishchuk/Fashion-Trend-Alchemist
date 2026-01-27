@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   BusyIndicator,
@@ -9,7 +9,6 @@ import {
   Icon,
   Breadcrumbs,
   BreadcrumbsItem,
-  Dialog,
   Input,
   Panel,
   ObjectStatus,
@@ -33,6 +32,19 @@ import '@ui5/webcomponents-icons/dist/ai.js';
 import '@ui5/webcomponents-icons/dist/camera.js';
 
 import SaveToCollectionPopover from '../components/SaveToCollectionPopover';
+import {
+  BREADCRUMBS,
+  LABELS,
+  BUTTONS,
+  ICONS,
+  ERROR_MESSAGES,
+  POLLING,
+  IMAGE_VIEW_ORDER,
+  OBJECT_STATUS_MAP,
+  ATTRIBUTE_PREFIX_REGEX,
+  type ImageView,
+} from '../constants/designDetail';
+import styles from '../styles/pages/DesignDetail.module.css';
 
 // Types for multi-image support
 type ImageViewStatus = 'pending' | 'generating' | 'completed' | 'failed';
@@ -60,8 +72,6 @@ interface GeneratedDesign {
   createdAt?: string;
 }
 
-type ImageView = 'front' | 'back' | 'model';
-
 function DesignDetail() {
   const { projectId, designId } = useParams<{ projectId: string; designId: string }>();
   const navigate = useNavigate();
@@ -79,7 +89,6 @@ function DesignDetail() {
   const [isGeneratingName, setIsGeneratingName] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImages | null>(null);
   const [overallStatus, setOverallStatus] = useState<string>('pending');
-  const [imageModalOpen, setImageModalOpen] = useState(false);
 
   // Save notification state
   const [saveNotification, setSaveNotification] = useState<{
@@ -92,55 +101,81 @@ function DesignDetail() {
 
   // Collapsible panel states
   const [predictedPanelCollapsed, setPredictedPanelCollapsed] = useState(false);
-  const [givenPanelCollapsed, setGivenPanelCollapsed] = useState(true);
+  const [givenPanelCollapsed, setGivenPanelCollapsed] = useState(false);
 
   // Polling ref
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   // Auto-dismiss timer ref
   const dismissTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Memoized computed values
+  const filteredPredicted = useMemo(() => {
+    const predictedAttributes = design?.predictedAttributes || {};
+    return Object.entries(predictedAttributes).filter(([key]) => !key.startsWith('_'));
+  }, [design?.predictedAttributes]);
+
+  const filteredConstraints = useMemo(() => {
+    const inputConstraints = design?.inputConstraints || {};
+    return Object.entries(inputConstraints).filter(([key]) => !key.startsWith('_'));
+  }, [design?.inputConstraints]);
+
+  // Format date with useCallback
+  const formatDate = useCallback((dateString?: string) => {
+    if (!dateString) return '';
+    try {
+      return new Date(dateString).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return '';
+    }
+  }, []);
+
+  // Get current view image
+  const currentViewImage = generatedImages?.[selectedView];
+
   // Handle keyboard navigation
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.target && (event.target as HTMLElement).tagName === 'INPUT') {
-        return; // Don't handle arrow keys when focused on input fields
+        return;
       }
 
-      const views: ImageView[] = ['front', 'back', 'model'];
-      const currentIndex = views.indexOf(selectedView);
+      const currentIndex = IMAGE_VIEW_ORDER.indexOf(selectedView);
 
       switch (event.key) {
         case 'ArrowLeft':
           event.preventDefault();
-          const prevIndex = currentIndex === 0 ? views.length - 1 : currentIndex - 1;
-          setSelectedView(views[prevIndex]);
+          const prevIndex = currentIndex === 0 ? IMAGE_VIEW_ORDER.length - 1 : currentIndex - 1;
+          setSelectedView(IMAGE_VIEW_ORDER[prevIndex]);
           break;
         case 'ArrowRight':
           event.preventDefault();
-          const nextIndex = currentIndex === views.length - 1 ? 0 : currentIndex + 1;
-          setSelectedView(views[nextIndex]);
+          const nextIndex = currentIndex === IMAGE_VIEW_ORDER.length - 1 ? 0 : currentIndex + 1;
+          setSelectedView(IMAGE_VIEW_ORDER[nextIndex]);
           break;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedView]);
 
   // Fetch design data
   useEffect(() => {
     const fetchDesign = async () => {
       if (!projectId || !designId) {
-        setError('Missing project or design ID');
+        setError(ERROR_MESSAGES.MISSING_IDS);
         setLoading(false);
         return;
       }
 
       try {
         setLoading(true);
-        // Fetch project and designs in parallel
         const [projectResponse, designsResponse] = await Promise.all([
           fetch(`/api/projects/${projectId}`),
           fetch(`/api/projects/${projectId}/generated-designs`),
@@ -152,25 +187,22 @@ function DesignDetail() {
         }
 
         if (!designsResponse.ok) {
-          throw new Error('Failed to fetch design');
+          throw new Error(ERROR_MESSAGES.FETCH_FAILED);
         }
 
         const designs: GeneratedDesign[] = await designsResponse.json();
-
         const currentDesign = designs.find((d) => d.id === designId);
+
         if (!currentDesign) {
-          throw new Error('Design not found');
+          throw new Error(ERROR_MESSAGES.DESIGN_NOT_FOUND);
         }
 
         setDesign(currentDesign);
         setOverallStatus(currentDesign.imageGenerationStatus || 'pending');
 
-        // Initialize generatedImages from design data or create default
         if (currentDesign.generatedImages) {
           setGeneratedImages(currentDesign.generatedImages);
         } else {
-          // Legacy: create from single URL
-          // Map overall status to individual view status (partial maps to completed for legacy single-image)
           const legacyStatus = currentDesign.imageGenerationStatus;
           const viewStatus: ImageViewStatus =
             legacyStatus === 'partial'
@@ -178,17 +210,14 @@ function DesignDetail() {
               : ((legacyStatus || 'pending') as ImageViewStatus);
 
           setGeneratedImages({
-            front: {
-              url: currentDesign.generatedImageUrl || null,
-              status: viewStatus,
-            },
+            front: { url: currentDesign.generatedImageUrl || null, status: viewStatus },
             back: { url: null, status: 'pending' },
             model: { url: null, status: 'pending' },
           });
         }
       } catch (err) {
-        console.error('Failed to fetch design:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load design');
+        console.error(ERROR_MESSAGES.FETCH_FAILED, err);
+        setError(err instanceof Error ? err.message : ERROR_MESSAGES.FETCH_FAILED);
       } finally {
         setLoading(false);
       }
@@ -197,19 +226,16 @@ function DesignDetail() {
     fetchDesign();
   }, [projectId, designId]);
 
-  // Poll for image status when any view is pending or generating
+  // Poll for image status
   useEffect(() => {
     if (!projectId || !designId) return;
 
-    // Check if any view needs polling
     const needsPolling =
       generatedImages &&
-      (generatedImages.front.status === 'pending' ||
-        generatedImages.front.status === 'generating' ||
-        generatedImages.back.status === 'pending' ||
-        generatedImages.back.status === 'generating' ||
-        generatedImages.model.status === 'pending' ||
-        generatedImages.model.status === 'generating');
+      IMAGE_VIEW_ORDER.some((view) => {
+        const status = generatedImages[view].status;
+        return status === 'pending' || status === 'generating';
+      });
 
     if (!needsPolling) {
       if (pollingRef.current) {
@@ -236,9 +262,7 @@ function DesignDetail() {
       }
     };
 
-    // Poll every 3 seconds
-    pollingRef.current = setInterval(pollImageStatus, 3000);
-
+    pollingRef.current = setInterval(pollImageStatus, POLLING.INTERVAL_MS);
     return () => {
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
@@ -247,86 +271,46 @@ function DesignDetail() {
     };
   }, [projectId, designId, generatedImages]);
 
-  // Handle save success
-  const handleSaveSuccess = (collectionName: string, collectionId: string) => {
-    // Show success notification
-    setSaveNotification({
-      show: true,
-      success: true,
-      collectionName,
-      collectionId,
-    });
-
-    // Set auto-dismiss timer (5 seconds)
-    if (dismissTimerRef.current) {
-      clearTimeout(dismissTimerRef.current);
-    }
-    dismissTimerRef.current = setTimeout(() => {
-      setSaveNotification(null);
-    }, 5000);
-  };
-
-  // Handle save error (for future use)
-  const handleSaveError = (error: string) => {
-    setSaveNotification({
-      show: true,
-      success: false,
-      collectionName: '',
-      collectionId: '',
-      error,
-    });
-
-    // Set auto-dismiss timer (5 seconds)
-    if (dismissTimerRef.current) {
-      clearTimeout(dismissTimerRef.current);
-    }
-    dismissTimerRef.current = setTimeout(() => {
-      setSaveNotification(null);
-    }, 5000);
-  };
-
-  // Handle notification dismiss
-  const handleDismissNotification = () => {
-    setSaveNotification(null);
-    if (dismissTimerRef.current) {
-      clearTimeout(dismissTimerRef.current);
-    }
-  };
-
-  // Handle view collection navigation
-  const handleViewCollection = () => {
-    if (saveNotification?.collectionId) {
-      // Navigate to home with collection ID to auto-open the dialog
-      navigate(`/?collection=${saveNotification.collectionId}`);
-    }
-  };
-
   // Cleanup timers on unmount
   useEffect(() => {
     return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-      }
-      if (dismissTimerRef.current) {
-        clearTimeout(dismissTimerRef.current);
-      }
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
     };
   }, []);
 
-  // Handle name editing
-  const handleStartEditName = () => {
+  // Handlers
+  const handleSaveSuccess = useCallback((collectionName: string, collectionId: string) => {
+    setSaveNotification({ show: true, success: true, collectionName, collectionId });
+
+    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+    dismissTimerRef.current = setTimeout(() => setSaveNotification(null), POLLING.AUTO_DISMISS_MS);
+  }, []);
+
+  const handleDismissNotification = useCallback(() => {
+    setSaveNotification(null);
+    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+  }, []);
+
+  const handleViewCollection = useCallback(() => {
+    if (saveNotification?.collectionId) {
+      navigate(`/?collection=${saveNotification.collectionId}`);
+    }
+  }, [saveNotification, navigate]);
+
+  const handleStartEditName = useCallback(() => {
     if (design) {
       setEditedName(design.name);
       setIsEditingName(true);
     }
-  };
+  }, [design]);
 
-  const handleCancelEditName = () => {
+  const handleCancelEditName = useCallback(() => {
     setIsEditingName(false);
     setEditedName('');
-  };
+  }, []);
 
-  const handleSaveName = async () => {
+  const handleSaveName = useCallback(async () => {
     if (!projectId || !designId || !editedName.trim()) return;
 
     try {
@@ -337,23 +321,21 @@ function DesignDetail() {
         body: JSON.stringify({ name: editedName.trim() }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to update name');
-      }
+      if (!response.ok) throw new Error(ERROR_MESSAGES.UPDATE_NAME_FAILED);
 
       setDesign((prev) => (prev ? { ...prev, name: editedName.trim() } : prev));
       setIsEditingName(false);
     } catch (err) {
-      console.error('Failed to update name:', err);
+      console.error(ERROR_MESSAGES.UPDATE_NAME_FAILED, err);
     } finally {
       setSavingName(false);
     }
-  };
+  }, [projectId, designId, editedName]);
 
-  // Handle magic name generation
-  const handleGenerateName = async () => {
+  const handleGenerateName = useCallback(async () => {
     if (!design) return;
     setIsGeneratingName(true);
+
     try {
       const response = await fetch('/api/generate-design-name', {
         method: 'POST',
@@ -367,77 +349,43 @@ function DesignDetail() {
           predictedAttributes: design.predictedAttributes || {},
         }),
       });
+
       if (response.ok) {
         const { suggestedName } = await response.json();
         setEditedName(suggestedName);
         setIsEditingName(true);
       }
     } catch (error) {
-      console.error('Failed to generate name:', error);
+      console.error(ERROR_MESSAGES.GENERATE_NAME_FAILED, error);
     } finally {
       setIsGeneratingName(false);
     }
-  };
+  }, [design]);
 
-  // Handle image download
-  const handleDownloadImage = async (view: ImageView) => {
-    const img = generatedImages?.[view];
-    if (!img?.url) return;
-
-    try {
-      // Fetch the image
-      const response = await fetch(img.url);
-      const blob = await response.blob();
-
-      // Create download link
-      const downloadUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = `${design?.name || 'design'}_${view}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(downloadUrl);
-    } catch (error) {
-      console.error('Failed to download image:', error);
-    }
-  };
-
-  // Handle refine design
-  const handleRefineDesign = () => {
+  const handleRefineDesign = useCallback(() => {
     if (!design || !projectId) return;
     navigate(`/project/${projectId}?tab=alchemist&refineFrom=${design.id}`);
-  };
+  }, [design, projectId, navigate]);
 
-  // Format date
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return '';
-    try {
-      return new Date(dateString).toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return '';
-    }
-  };
-
-  // Get current view image
-  const currentViewImage = generatedImages?.[selectedView];
+  const navigateView = useCallback(
+    (direction: 'prev' | 'next') => {
+      const currentIndex = IMAGE_VIEW_ORDER.indexOf(selectedView);
+      const newIndex =
+        direction === 'prev'
+          ? currentIndex === 0
+            ? IMAGE_VIEW_ORDER.length - 1
+            : currentIndex - 1
+          : currentIndex === IMAGE_VIEW_ORDER.length - 1
+            ? 0
+            : currentIndex + 1;
+      setSelectedView(IMAGE_VIEW_ORDER[newIndex]);
+    },
+    [selectedView]
+  );
 
   if (loading) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          height: 'calc(100vh - 44px)',
-        }}
-      >
+      <div className={styles.loadingContainer}>
         <BusyIndicator active size="L" />
       </div>
     );
@@ -445,123 +393,90 @@ function DesignDetail() {
 
   if (error || !design) {
     return (
-      <div style={{ padding: '2rem' }}>
+      <div className={styles.errorContainer}>
         <IllustratedMessage
           name="NoData"
-          titleText="Error Loading Design"
-          subtitleText={error || 'Design not found'}
+          titleText={LABELS.ERROR_LOADING}
+          subtitleText={error || LABELS.DESIGN_NOT_FOUND}
         >
           <Button design="Emphasized" onClick={() => navigate(`/project/${projectId}`)}>
-            Back to Project
+            {BUTTONS.BACK_TO_PROJECT}
           </Button>
         </IllustratedMessage>
       </div>
     );
   }
 
-  const predictedAttributes = design.predictedAttributes || {};
-  const inputConstraints = design.inputConstraints || {};
-
-  // Filter out internal keys
-  const filteredPredicted = Object.entries(predictedAttributes).filter(
-    ([key]) => !key.startsWith('_')
-  );
-  const filteredConstraints = Object.entries(inputConstraints).filter(
-    ([key]) => !key.startsWith('_')
-  );
-
   return (
-    <div style={{ background: 'var(--sapBackgroundColor)', minHeight: 'calc(100vh - 44px)' }}>
+    <div className={styles.pageContainer}>
       {/* Breadcrumbs */}
-      <div style={{ padding: '12px 2rem 0' }}>
+      <div className={styles.breadcrumbsContainer}>
         <Breadcrumbs
           onItemClick={(e: any) => {
             const text = e.detail.item.textContent?.trim();
-            if (text === 'Home') {
+            if (text === BREADCRUMBS.HOME) {
               navigate('/');
             } else if (text === projectName) {
               navigate(`/project/${projectId}`);
             }
           }}
         >
-          <BreadcrumbsItem>Home</BreadcrumbsItem>
+          <BreadcrumbsItem>{BREADCRUMBS.HOME}</BreadcrumbsItem>
           <BreadcrumbsItem>{projectName}</BreadcrumbsItem>
           <BreadcrumbsItem>{design.name}</BreadcrumbsItem>
         </Breadcrumbs>
       </div>
 
       {/* Page Header */}
-      <div
-        style={{
-          padding: '1rem 2rem 1.5rem',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          borderBottom: '1px solid var(--sapList_BorderColor)',
-          marginBottom: '1.5rem',
-        }}
-      >
-        <div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              marginBottom: '0.5rem',
-            }}
-          >
+      <div className={styles.headerContainer}>
+        <div className={styles.headerLeft}>
+          <div className={styles.headerTitleRow}>
             {isEditingName ? (
               <>
                 <Input
                   value={editedName}
                   onInput={(e: any) => setEditedName(e.target.value)}
-                  style={{ width: '300px' }}
+                  className={styles.headerTitleInput}
                   disabled={savingName}
                 />
                 <Button
-                  icon="accept"
+                  icon={ICONS.ACCEPT}
                   design="Positive"
-                  tooltip="Save name"
+                  tooltip={BUTTONS.SAVE_NAME}
                   onClick={handleSaveName}
                   disabled={savingName || !editedName.trim()}
                 />
                 <Button
-                  icon="decline"
+                  icon={ICONS.DECLINE}
                   design="Negative"
-                  tooltip="Cancel"
+                  tooltip={BUTTONS.CANCEL}
                   onClick={handleCancelEditName}
                   disabled={savingName}
                 />
               </>
             ) : (
               <>
-                <Title level="H2" style={{ margin: 0, fontSize: '30px' }}>
+                <Title level="H2" className={styles.headerTitle}>
                   {design.name}
                 </Title>
                 <Button
-                  icon="edit"
+                  icon={ICONS.EDIT}
                   design="Transparent"
-                  tooltip="Edit name"
+                  tooltip={BUTTONS.EDIT_NAME}
                   onClick={handleStartEditName}
                 />
                 <Button
-                  icon="ai"
+                  icon={ICONS.AI}
                   design="Transparent"
-                  tooltip="Generate creative name with AI"
+                  tooltip={BUTTONS.GENERATE_NAME}
                   onClick={handleGenerateName}
                   disabled={isGeneratingName}
                 />
-                {/* Status Badge */}
-                <div style={{ padding: '0.125rem' }}>
+                <div className={styles.statusBadgeContainer}>
                   <ObjectStatus
                     state={
-                      overallStatus === 'completed'
-                        ? 'Positive'
-                        : overallStatus === 'failed'
-                          ? 'Negative'
-                          : overallStatus === 'partial'
-                            ? 'Critical'
-                            : 'Information'
+                      OBJECT_STATUS_MAP[overallStatus as keyof typeof OBJECT_STATUS_MAP] ||
+                      'Information'
                     }
                     inverted
                   >
@@ -572,345 +487,114 @@ function DesignDetail() {
             )}
           </div>
           {design.createdAt && (
-            <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '0.75rem' }}>
-              Created {formatDate(design.createdAt)}
+            <Text className={styles.headerMetadata}>
+              {LABELS.CREATED} {formatDate(design.createdAt)}
             </Text>
           )}
         </div>
       </div>
 
-      {/* Main Content - Two Column Layout */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: window.innerWidth < 1024 ? '1fr' : '320px 1fr',
-          gap: '1.5rem',
-          padding: window.innerWidth < 768 ? '0 1rem 5rem' : '0 2rem 5rem',
-          alignItems: 'start',
-        }}
-      >
-        {/* Left Column - Collapsible Attribute Panels */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {/* Predicted Attributes Panel - Enhanced with AI styling */}
+      {/* Main Content Grid */}
+      <div className={styles.contentGrid}>
+        {/* Left Column - Attribute Panels */}
+        <div className={styles.attributePanelsColumn}>
+          {/* Predicted Attributes Panel */}
           <Panel
             header={
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  padding: '0.5rem 0',
-                }}
-              >
-                <Icon
-                  name="ai"
-                  style={{
-                    color: '#E9730C',
-                    fontSize: '1.125rem',
-                  }}
-                />
-                <Text
-                  style={{
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    fontSize: '0.8125rem',
-                    letterSpacing: '0.5px',
-                    color: '#E9730C',
-                  }}
-                >
-                  Predicted Attributes ({filteredPredicted.length})
+              <div className={styles.panelHeader}>
+                <Icon name={ICONS.AI} className={styles.panelIconAI} />
+                <Text className={styles.panelTitleAI}>
+                  {LABELS.PREDICTED_HEADER} ({filteredPredicted.length})
                 </Text>
               </div>
             }
             collapsed={predictedPanelCollapsed}
             onToggle={() => setPredictedPanelCollapsed(!predictedPanelCollapsed)}
-            style={{
-              background:
-                'linear-gradient(135deg, rgba(233, 115, 12, 0.04) 0%, rgba(233, 115, 12, 0.01) 100%)',
-              border: '1px solid rgba(233, 115, 12, 0.3)',
-              borderRadius: '0.5rem',
-              boxShadow: '0 2px 6px rgba(233, 115, 12, 0.08)',
-              transition: 'all 0.2s',
-              overflow: 'hidden',
-            }}
+            className={styles.panelPredicted}
           >
-            <div style={{ padding: '0.5rem 1rem' }}>
+            <div className={styles.panelContent}>
               {filteredPredicted.length > 0 ? (
-                filteredPredicted.map(([key, value], index) => (
-                  <div
-                    key={key}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '0.75rem 0.75rem',
-                      borderBottom:
-                        index < filteredPredicted.length - 1
-                          ? '1px solid rgba(233, 115, 12, 0.1)'
-                          : 'none',
-                      borderRadius: '0.25rem',
-                      transition: 'background 0.2s',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'rgba(233, 115, 12, 0.05)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'transparent';
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: '0.8125rem',
-                        color: 'var(--sapContent_LabelColor)',
-                        textTransform: 'capitalize',
-                      }}
-                    >
-                      {key.replace(/^(article_|ontology_\w+_)/, '').replace(/_/g, ' ')}
+                filteredPredicted.map(([key, value]) => (
+                  <div key={key} className={`${styles.attributeItem} ${styles.attributeItemAI}`}>
+                    <Text className={styles.attributeLabel}>
+                      {key.replace(ATTRIBUTE_PREFIX_REGEX, '').replace(/_/g, ' ')}
                     </Text>
-                    <Text
-                      style={{
-                        fontSize: '0.875rem',
-                        fontWeight: 500,
-                        color: '#E9730C',
-                      }}
-                    >
-                      {String(value)}
-                    </Text>
+                    <Text className={styles.attributeValueAI}>{String(value)}</Text>
                   </div>
                 ))
               ) : (
-                <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '0.875rem' }}>
-                  No predicted attributes
-                </Text>
+                <Text className={styles.emptyAttributesText}>{LABELS.NO_PREDICTED}</Text>
               )}
             </div>
           </Panel>
 
-          {/* Given Attributes Panel - Enhanced with subtle styling */}
+          {/* Given Attributes Panel */}
           <Panel
             header={
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  padding: '0.5rem 0',
-                }}
-              >
-                <Icon
-                  name="locked"
-                  style={{
-                    color: 'var(--sapContent_LabelColor)',
-                    fontSize: '1.125rem',
-                  }}
-                />
-                <Text
-                  style={{
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    fontSize: '0.8125rem',
-                    letterSpacing: '0.5px',
-                    color: 'var(--sapContent_LabelColor)',
-                  }}
-                >
-                  Given Attributes ({filteredConstraints.length})
+              <div className={styles.panelHeader}>
+                <Icon name={ICONS.LOCKED} className={styles.panelIcon} />
+                <Text className={styles.panelTitle}>
+                  {LABELS.GIVEN_HEADER} ({filteredConstraints.length})
                 </Text>
               </div>
             }
             collapsed={givenPanelCollapsed}
             onToggle={() => setGivenPanelCollapsed(!givenPanelCollapsed)}
-            style={{
-              background: 'var(--sapTile_Background)',
-              border: '1px solid var(--sapList_BorderColor)',
-              borderRadius: '0.5rem',
-              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
-            }}
+            className={styles.panelGiven}
           >
-            <div style={{ padding: '0.5rem 1rem' }}>
+            <div className={styles.panelContent}>
               {filteredConstraints.length > 0 ? (
-                filteredConstraints.map(([key, value], index) => (
-                  <div
-                    key={key}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '0.75rem 0.75rem',
-                      borderBottom:
-                        index < filteredConstraints.length - 1
-                          ? '1px solid var(--sapList_BorderColor)'
-                          : 'none',
-                      borderRadius: '0.25rem',
-                      transition: 'background 0.2s',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'var(--sapList_Hover_Background)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'transparent';
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: '0.8125rem',
-                        color: 'var(--sapContent_LabelColor)',
-                        textTransform: 'capitalize',
-                      }}
-                    >
-                      {key.replace(/^(article_|ontology_\w+_)/, '').replace(/_/g, ' ')}
+                filteredConstraints.map(([key, value]) => (
+                  <div key={key} className={styles.attributeItem}>
+                    <Text className={styles.attributeLabel}>
+                      {key.replace(ATTRIBUTE_PREFIX_REGEX, '').replace(/_/g, ' ')}
                     </Text>
-                    <Text
-                      style={{
-                        fontSize: '0.875rem',
-                        fontWeight: 500,
-                        color: 'var(--sapTextColor)',
-                      }}
-                    >
-                      {String(value)}
-                    </Text>
+                    <Text className={styles.attributeValue}>{String(value)}</Text>
                   </div>
                 ))
               ) : (
-                <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '0.875rem' }}>
-                  No given attributes
-                </Text>
+                <Text className={styles.emptyAttributesText}>{LABELS.NO_GIVEN}</Text>
               )}
             </div>
           </Panel>
         </div>
 
         {/* Right Column - Image Gallery */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          {/* Image Gallery Container - Horizontal Layout */}
-          <div
-            style={{
-              background: 'var(--sapTile_Background)',
-              borderRadius: '0.5rem',
-              padding: '2rem',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-              display: 'flex',
-              flexDirection: window.innerWidth < 768 ? 'column' : 'row',
-              gap: window.innerWidth < 768 ? '1.5rem' : '1rem',
-              alignItems: window.innerWidth < 768 ? 'center' : 'flex-start',
-            }}
-          >
-            {/* Thumbnail Column (Desktop) / Row (Mobile) */}
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: window.innerWidth < 768 ? 'row' : 'column',
-                gap: '0.75rem',
-                justifyContent: window.innerWidth < 768 ? 'center' : 'flex-start',
-                flexShrink: 0,
-                order: window.innerWidth < 768 ? 2 : 1,
-              }}
-            >
-              {(['front', 'back', 'model'] as const).map((view) => {
+        <div className={styles.galleryColumn}>
+          <div className={styles.galleryContainer}>
+            {/* Thumbnail List */}
+            <div className={styles.thumbnailList}>
+              {IMAGE_VIEW_ORDER.map((view) => {
                 const img = generatedImages?.[view];
                 const isSelected = selectedView === view;
+
                 return (
                   <div
                     key={view}
                     onClick={() => setSelectedView(view)}
-                    style={{
-                      width: window.innerWidth < 768 ? '80px' : '100px',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      transform: isSelected ? 'scale(1.05)' : 'scale(1)',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isSelected) {
-                        e.currentTarget.style.transform = 'scale(1.02)';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = isSelected ? 'scale(1.05)' : 'scale(1)';
-                    }}
+                    className={`${styles.thumbnailItem} ${isSelected ? styles.thumbnailItemSelected : ''}`}
                   >
                     <div
-                      style={{
-                        width: window.innerWidth < 768 ? '80px' : '100px',
-                        height: window.innerWidth < 768 ? '80px' : '100px',
-                        borderRadius: '0.375rem',
-                        border: `2px solid ${
-                          isSelected ? 'var(--sapSelectedColor)' : 'var(--sapList_BorderColor)'
-                        }`,
-                        boxShadow: isSelected
-                          ? '0 0 0 1px var(--sapSelectedColor), 0 2px 8px rgba(0, 0, 0, 0.12)'
-                          : '0 1px 3px rgba(0, 0, 0, 0.08)',
-                        overflow: 'hidden',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: '#f8f8f8',
-                        padding: '0.375rem',
-                      }}
+                      className={`${styles.thumbnailBox} ${isSelected ? styles.thumbnailBoxSelected : ''}`}
                     >
                       {img?.status === 'completed' && img.url ? (
-                        <img
-                          src={img.url}
-                          alt={view}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'contain',
-                            borderRadius: '0.125rem',
-                          }}
-                        />
+                        <img src={img.url} alt={view} className={styles.thumbnailImage} />
                       ) : img?.status === 'generating' ? (
-                        <div
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
+                        <div className={styles.thumbnailLoading}>
                           <BusyIndicator active size="S" />
                         </div>
                       ) : img?.status === 'failed' ? (
-                        <div
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <Icon
-                            name="sys-cancel"
-                            style={{ color: 'var(--sapNegativeColor)', fontSize: '1.5rem' }}
-                          />
+                        <div className={styles.thumbnailFailed}>
+                          <Icon name={ICONS.SYS_CANCEL} className={styles.thumbnailFailedIcon} />
                         </div>
                       ) : (
-                        <div
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'var(--sapContent_LabelColor)',
-                            fontSize: '0.75rem',
-                          }}
-                        >
-                          <Icon name="camera" style={{ fontSize: '1.25rem' }} />
+                        <div className={styles.thumbnailEmpty}>
+                          <Icon name={ICONS.CAMERA} className={styles.thumbnailEmptyIcon} />
                         </div>
                       )}
                     </div>
                     <Text
-                      style={{
-                        display: 'block',
-                        textAlign: 'center',
-                        marginTop: '0.5rem',
-                        fontSize: window.innerWidth < 768 ? '0.6875rem' : '0.75rem',
-                        fontWeight: isSelected ? 600 : 500,
-                        color: isSelected
-                          ? 'var(--sapSelectedColor)'
-                          : 'var(--sapContent_LabelColor)',
-                      }}
+                      className={`${styles.thumbnailLabel} ${isSelected ? styles.thumbnailLabelSelected : ''}`}
                     >
                       {view.charAt(0).toUpperCase() + view.slice(1)}
                     </Text>
@@ -919,245 +603,87 @@ function DesignDetail() {
               })}
             </div>
 
-            {/* Main Image Container */}
-            <div
-              style={{
-                flex: 1,
-                display: 'flex',
-                justifyContent: 'center',
-                order: window.innerWidth < 768 ? 1 : 2,
-              }}
-            >
-              {/* Image Stage Container */}
-              <div
-                style={{
-                  position: 'relative',
-                  width: '100%',
-                  maxWidth:
-                    window.innerWidth < 768
-                      ? '400px'
-                      : window.innerWidth < 1024
-                        ? '480px'
-                        : '520px',
-                  aspectRatio: '1/1',
-                  background: '#f8f8f8',
-                  borderRadius: '0.375rem',
-                  border: '1px solid var(--sapList_BorderColor)',
-                  padding: window.innerWidth < 768 ? '1rem' : '1.5rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  overflow: 'hidden',
-                }}
-              >
+            {/* Main Image Stage */}
+            <div className={styles.imageStageContainer}>
+              <div className={styles.imageStage}>
                 {/* Navigation Arrows */}
                 {generatedImages && (
                   <>
                     <Button
-                      icon="navigation-left-arrow"
+                      icon={ICONS.NAV_LEFT}
                       design="Transparent"
-                      tooltip="Previous view"
-                      onClick={() => {
-                        const views: ImageView[] = ['front', 'back', 'model'];
-                        const currentIndex = views.indexOf(selectedView);
-                        const prevIndex = currentIndex === 0 ? views.length - 1 : currentIndex - 1;
-                        setSelectedView(views[prevIndex]);
-                      }}
-                      style={{
-                        position: 'absolute',
-                        left: '0.5rem',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        zIndex: 2,
-                        background: 'rgba(255, 255, 255, 0.95)',
-                        borderRadius: '50%',
-                        width: '40px',
-                        height: '40px',
-                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-                      }}
+                      tooltip={BUTTONS.PREVIOUS_VIEW}
+                      onClick={() => navigateView('prev')}
+                      className={`${styles.navButton} ${styles.navButtonLeft}`}
                     />
                     <Button
-                      icon="navigation-right-arrow"
+                      icon={ICONS.NAV_RIGHT}
                       design="Transparent"
-                      tooltip="Next view"
-                      onClick={() => {
-                        const views: ImageView[] = ['front', 'back', 'model'];
-                        const currentIndex = views.indexOf(selectedView);
-                        const nextIndex = currentIndex === views.length - 1 ? 0 : currentIndex + 1;
-                        setSelectedView(views[nextIndex]);
-                      }}
-                      style={{
-                        position: 'absolute',
-                        right: '0.5rem',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        zIndex: 2,
-                        background: 'rgba(255, 255, 255, 0.95)',
-                        borderRadius: '50%',
-                        width: '40px',
-                        height: '40px',
-                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-                      }}
+                      tooltip={BUTTONS.NEXT_VIEW}
+                      onClick={() => navigateView('next')}
+                      className={`${styles.navButton} ${styles.navButtonRight}`}
                     />
                   </>
                 )}
 
-                {/* View Badge */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '1rem',
-                    left: '1rem',
-                    zIndex: 3,
-                    padding: '2px', // Adds breathing room
-                  }}
-                >
-                  <ObjectStatus state="Information" inverted>
-                    {selectedView.toUpperCase()} VIEW
-                  </ObjectStatus>
-                </div>
-
-                {/* Image action toolbar */}
-                {currentViewImage?.status === 'completed' && currentViewImage.url && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '1rem',
-                      right: '1rem',
-                      zIndex: 3,
-                      display: 'flex',
-                      gap: '0.375rem',
-                      background: 'rgba(255, 255, 255, 0.95)',
-                      borderRadius: '0.375rem',
-                      padding: '0.25rem',
-                      boxShadow: '0 1px 4px rgba(0, 0, 0, 0.1)',
-                    }}
-                  >
-                    <Button
-                      icon="zoom-in"
-                      design="Transparent"
-                      tooltip="View full size"
-                      onClick={() => setImageModalOpen(true)}
-                    />
-                    <Button
-                      icon="download"
-                      design="Transparent"
-                      tooltip={`Download ${selectedView} view`}
-                      onClick={() => handleDownloadImage(selectedView)}
-                    />
-                  </div>
-                )}
-
-                {/* Image or Status */}
+                {/* Image Content */}
                 {currentViewImage?.status === 'completed' && currentViewImage.url ? (
                   <img
                     src={currentViewImage.url}
                     alt={`${design.name} - ${selectedView} view`}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'contain',
-                    }}
+                    className={styles.mainImage}
                   />
                 ) : currentViewImage?.status === 'pending' ||
                   currentViewImage?.status === 'generating' ? (
-                  <div
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '1rem',
-                    }}
-                  >
+                  <div className={styles.imageStatusContainer}>
                     <BusyIndicator active size="L" />
-                    <Text style={{ color: 'var(--sapContent_LabelColor)', textAlign: 'center' }}>
+                    <Text className={styles.imageStatusText}>
                       {currentViewImage?.status === 'pending'
                         ? `Waiting to generate ${selectedView} view...`
                         : `Generating ${selectedView} view...`}
                     </Text>
                   </div>
                 ) : currentViewImage?.status === 'failed' ? (
-                  <div
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '0.5rem',
-                    }}
-                  >
-                    <Icon
-                      name="sys-cancel"
-                      style={{ color: 'var(--sapNegativeColor)', fontSize: '2rem' }}
-                    />
-                    <Text style={{ color: 'var(--sapNegativeColor)', textAlign: 'center' }}>
+                  <div className={styles.imageStatusContainer}>
+                    <Icon name={ICONS.SYS_CANCEL} className={styles.imageFailedIcon} />
+                    <Text className={styles.imageFailedText}>
                       {selectedView.charAt(0).toUpperCase() + selectedView.slice(1)} view generation
                       failed
                     </Text>
                   </div>
                 ) : (
-                  <div
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Text style={{ color: 'var(--sapContent_LabelColor)' }}>
-                      No image available
-                    </Text>
+                  <div className={styles.imageStatusContainer}>
+                    <Text className={styles.imageStatusText}>{LABELS.NO_IMAGE_AVAILABLE}</Text>
                   </div>
                 )}
+              </div>
+              {/* View Badge - Above Image */}
+              <div className={styles.viewBadge}>
+                <ObjectStatus state="Information" inverted>
+                  {selectedView.toUpperCase()} {LABELS.VIEW_BADGE_SUFFIX}
+                </ObjectStatus>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Success/Failure Notification - Above Bottom Action Bar */}
+      {/* Success Notification */}
       {saveNotification?.show && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: '64px', // Above the action bar (which is ~64px height)
-            right: '2rem', // Align with right side of action bar
-            width: '320px', // Approximate width of both buttons combined
-            zIndex: 11, // Above action bar (which has z-index 10)
-          }}
-        >
+        <div className={styles.notification}>
           <MessageStrip
             design={saveNotification.success ? 'Positive' : 'Negative'}
             onClose={handleDismissNotification}
           >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                width: '100%',
-              }}
-            >
-              <div>
-                {saveNotification.success ? (
-                  <Text style={{ fontWeight: '500' }}>
-                    Saved to "{saveNotification.collectionName}"
-                  </Text>
-                ) : (
-                  <Text style={{ fontWeight: '500' }}>
-                    Failed to save: {saveNotification.error}
-                  </Text>
-                )}
-              </div>
+            <div className={styles.notificationContent}>
+              <Text className={styles.notificationText}>
+                {saveNotification.success
+                  ? `Saved to "${saveNotification.collectionName}"`
+                  : `Failed to save: ${saveNotification.error}`}
+              </Text>
               {saveNotification.success && (
                 <Button design="Transparent" onClick={handleViewCollection}>
-                  View Collection
+                  {BUTTONS.VIEW_COLLECTION}
                 </Button>
               )}
             </div>
@@ -1166,38 +692,21 @@ function DesignDetail() {
       )}
 
       {/* Bottom Action Bar */}
-      <div
-        style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          background: 'var(--sapPageFooter_Background, var(--sapBackgroundColor))',
-          borderTop: '1px solid var(--sapPageFooter_BorderColor, var(--sapList_BorderColor))',
-          padding: '0.5rem 2rem',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          boxShadow: '0 -2px 4px rgba(0, 0, 0, 0.05)',
-          zIndex: 10,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Icon name="hint" style={{ color: 'var(--sapContent_IconColor)' }} />
-          <Text style={{ fontSize: '0.8125rem', color: 'var(--sapContent_LabelColor)' }}>
-            Select a view above to preview different angles of your design.
-          </Text>
+      <div className={styles.actionBar}>
+        <div className={styles.actionBarLeft}>
+          <Icon name={ICONS.HINT} className={styles.actionBarIcon} />
+          <Text className={styles.actionBarText}>{LABELS.HINT_TEXT}</Text>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <Button icon="synchronize" design="Default" onClick={handleRefineDesign}>
-            Refine Design
+        <div className={styles.actionBarRight}>
+          <Button icon={ICONS.SYNCHRONIZE} design="Default" onClick={handleRefineDesign}>
+            {BUTTONS.REFINE_DESIGN}
           </Button>
           <Button
             id="save-to-collection-btn"
             design="Emphasized"
             onClick={() => setSavePopoverOpen(true)}
           >
-            Save to Collection
+            {BUTTONS.SAVE_TO_COLLECTION}
           </Button>
         </div>
       </div>
@@ -1212,44 +721,6 @@ function DesignDetail() {
           onSaved={handleSaveSuccess}
         />
       )}
-
-      {/* Image Zoom Modal */}
-      <Dialog
-        open={imageModalOpen}
-        headerText={`${design.name} - ${selectedView.charAt(0).toUpperCase() + selectedView.slice(1)} View`}
-        onClose={() => setImageModalOpen(false)}
-        style={{ width: '90vw', height: '90vh' }}
-        footer={
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <Button icon="download" onClick={() => handleDownloadImage(selectedView)}>
-              Download
-            </Button>
-            <Button design="Emphasized" onClick={() => setImageModalOpen(false)}>
-              Close
-            </Button>
-          </div>
-        }
-      >
-        {currentViewImage?.url && (
-          <div
-            style={{
-              width: '100%',
-              height: 'calc(90vh - 120px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: '#f8f8f8',
-              borderRadius: '0.375rem',
-            }}
-          >
-            <img
-              src={currentViewImage.url}
-              alt={`${design.name} - ${selectedView} view`}
-              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-            />
-          </div>
-        )}
-      </Dialog>
     </div>
   );
 }
