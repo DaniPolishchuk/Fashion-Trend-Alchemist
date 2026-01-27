@@ -1,0 +1,189 @@
+/**
+ * Mismatch Review Dialog Styles
+ */
+
+.dialog {
+  min-width: 700px;
+  max-width: 90vw;
+}
+
+.dialogContent {
+  padding: 1rem;
+}
+
+.footerButtons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.summaryText {
+  color: var(--sapContent_LabelColor);
+  font-size: 0.875rem;
+}
+
+.errorStrip {
+  margin-bottom: 1rem;
+}
+
+.description {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background-color: var(--sapInformationBackground);
+  border-radius: var(--sapElement_BorderCornerRadius);
+  border-left: 3px solid var(--sapInformationBorderColor);
+}
+
+.bulkActions {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.tableContainer {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--sapList_BorderColor);
+  border-radius: var(--sapElement_BorderCornerRadius);
+}
+
+/* Table Styles */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.tableHead {
+  background: var(--sapList_HeaderBackground);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.tableHead th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: var(--sapList_HeaderTextColor);
+  border-bottom: 1px solid var(--sapList_BorderColor);
+}
+
+.thInclude {
+  width: 70px;
+  text-align: center !important;
+}
+
+.thImage {
+  width: 70px;
+}
+
+.thArticleId {
+  width: 120px;
+}
+
+.thProductType {
+  /* flex */
+}
+
+.thConfidence {
+  width: 160px;
+}
+
+/* Table Rows */
+.tableRow {
+  border-bottom: 1px solid var(--sapList_BorderColor);
+  transition: background-color 0.15s ease;
+}
+
+.tableRow:hover {
+  background-color: var(--sapList_Hover_Background);
+}
+
+.tableRow:last-child {
+  border-bottom: none;
+}
+
+.rowExcluded {
+  opacity: 0.6;
+  background-color: rgba(187, 0, 0, 0.04);
+}
+
+.rowExcluded:hover {
+  background-color: rgba(187, 0, 0, 0.08);
+}
+
+/* Table Cells */
+.tableRow td {
+  padding: 0.625rem 1rem;
+  vertical-align: middle;
+}
+
+.tdInclude {
+  text-align: center;
+}
+
+.tdImage {
+  padding: 0.5rem 1rem;
+}
+
+.thumbnailContainer {
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sapList_Background);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fallbackIcon {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sapContent_LabelColor);
+  font-size: 1.25rem;
+}
+
+.articleIdText {
+  font-weight: 500;
+}
+
+.confidenceBadge {
+  display: inline-block;
+  padding: 0.25rem 0.625rem;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.emptyState {
+  padding: 2rem;
+  text-align: center;
+  color: var(--sapContent_LabelColor);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 700px) {
+  .dialog {
+    min-width: auto;
+    width: 95vw;
+  }
+
+  .tableContainer {
+    max-height: 300px;
+  }
+
+  .thConfidence,
+  .tdConfidence {
+    display: none;
+  }
+}

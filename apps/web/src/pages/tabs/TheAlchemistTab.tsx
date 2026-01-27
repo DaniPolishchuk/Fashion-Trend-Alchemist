@@ -69,6 +69,8 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
   const [designName, setDesignName] = useState<string>('');
   const [transmutingError, setTransmutingError] = useState<string | null>(null);
   const [successScore, setSuccessScore] = useState(SUCCESS_SCORE_CONFIG.DEFAULT);
+  const [velocityScoresStale, setVelocityScoresStale] = useState(false);
+  const [staleWarningDialogOpen, setStaleWarningDialogOpen] = useState(false);
 
   // Memoize stable keys to prevent unnecessary refetches
   const productTypesKey = useMemo(
@@ -122,6 +124,23 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
     project.ontologySchema,
     attributes,
   ]);
+
+  // Fetch velocity stale status on mount
+  useEffect(() => {
+    const fetchVelocityStatus = async () => {
+      try {
+        const response = await fetch(`/api/projects/${project.id}/context-items`);
+        if (response.ok) {
+          const data = await response.json();
+          setVelocityScoresStale(data.velocityScoresStale || false);
+        }
+      } catch (err) {
+        console.error('Failed to fetch velocity status:', err);
+      }
+    };
+
+    fetchVelocityStatus();
+  }, [project.id]);
 
   // Attribute movement handlers
   const handleMoveToLocked = useCallback((key: string) => {
@@ -212,8 +231,18 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
     await fetchPreviewData();
   };
 
+  // Handle transmutation request (may show stale warning first)
+  const handleTransmuteRequest = () => {
+    if (velocityScoresStale) {
+      setStaleWarningDialogOpen(true);
+    } else {
+      handleTransmute();
+    }
+  };
+
   // Handle transmutation
   const handleTransmute = async () => {
+    setStaleWarningDialogOpen(false);
     setTransmuting(true);
     setTransmutingDialogOpen(true);
     setPreviewDialogOpen(false);
@@ -668,7 +697,7 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
                 </Button>
                 <Button
                   design="Emphasized"
-                  onClick={handleTransmute}
+                  onClick={handleTransmuteRequest}
                   disabled={!canTransmute || previewLoading || previewData?.contextRowCount === 0}
                 >
                   Transmute
@@ -781,6 +810,34 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
             </details>
           </div>
         ) : null}
+      </Dialog>
+
+      {/* Stale Velocity Warning Dialog */}
+      <Dialog
+        open={staleWarningDialogOpen}
+        headerText="Context Has Changed"
+        footer={
+          <Bar
+            endContent={
+              <>
+                <Button onClick={() => setStaleWarningDialogOpen(false)}>Cancel</Button>
+                <Button design="Attention" onClick={handleTransmute}>
+                  Continue Anyway
+                </Button>
+              </>
+            }
+          />
+        }
+      >
+        <div style={{ padding: '1rem' }}>
+          <MessageStrip design="Negative" hideCloseButton style={{ marginBottom: '1rem' }}>
+            Your context has changed since velocity scores were last calculated.
+          </MessageStrip>
+          <Text>
+            Results may not reflect current selection. It is recommended to recalculate
+            velocity scores before running the transmutation.
+          </Text>
+        </div>
       </Dialog>
     </div>
   );

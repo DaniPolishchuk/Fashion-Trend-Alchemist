@@ -214,3 +214,52 @@
 .tabContent {
   padding: 1.5rem 2rem;
 }
+
+/* ==================== MISMATCH REVIEW BADGE ==================== */
+
+.mismatchBadgeNeedsReview {
+  border: 1px solid #bb0000;
+  background: linear-gradient(135deg, rgba(187, 0, 0, 0.08) 0%, rgba(187, 0, 0, 0.03) 100%);
+}
+
+.mismatchBadgeReviewed {
+  border: 1px solid #107e3e;
+  background: linear-gradient(135deg, rgba(16, 126, 62, 0.08) 0%, rgba(16, 126, 62, 0.03) 100%);
+}
+
+.mismatchBadgeTitleNeedsReview {
+  color: #bb0000;
+}
+
+.mismatchBadgeTitleReviewed {
+  color: #107e3e;
+}
+
+.mismatchBadgeIconNeedsReview {
+  color: #bb0000;
+}
+
+.mismatchBadgeIconReviewed {
+  color: #107e3e;
+}
+
+/* ==================== VELOCITY RECALC INDICATOR ==================== */
+
+.velocityRecalcIndicator {
+  min-width: 250px;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid #e9730c;
+  background: linear-gradient(135deg, rgba(233, 115, 12, 0.08) 0%, rgba(233, 115, 12, 0.03) 100%);
+}
+
+.velocityRecalcTitle {
+  color: #e9730c;
+}
+
+.velocityRecalcIcon {
+  color: #e9730c;
+}

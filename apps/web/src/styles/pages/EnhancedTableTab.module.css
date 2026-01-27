@@ -158,6 +158,15 @@
   width: 100px;
 }
 
+.tableHeaderCellInclude {
+  width: 70px;
+  text-align: center;
+}
+
+.tableHeaderCellConfidence {
+  width: 150px;
+}
+
 /* ==================== TABLE ROWS ==================== */
 
 .tableRow {
@@ -178,6 +187,15 @@
   animation: pulse 2s ease-in-out infinite;
 }
 
+.tableRowExcluded {
+  opacity: 0.6;
+  background-color: rgba(187, 0, 0, 0.05);
+}
+
+.tableRowExcluded:hover {
+  background-color: rgba(187, 0, 0, 0.1);
+}
+
 .tableCell {
   padding: 0.75rem 1rem;
 }
@@ -193,6 +211,15 @@
 
 .tableCellImage {
   padding: 0.5rem 1rem;
+}
+
+.tableCellInclude {
+  padding: 0.5rem;
+  text-align: center;
+}
+
+.tableCellConfidence {
+  padding: 0.75rem 1rem;
 }
 
 /* ==================== EXPANDED DETAIL ROW ==================== */

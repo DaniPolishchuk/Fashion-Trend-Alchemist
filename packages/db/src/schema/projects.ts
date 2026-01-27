@@ -52,6 +52,9 @@ export const projects = pgTable('projects', {
   // Pinning columns
   isPinned: boolean('is_pinned').notNull().default(false),
   pinnedAt: timestamp('pinned_at'),
+  // Mismatch review columns
+  mismatchReviewCompleted: boolean('mismatch_review_completed').notNull().default(false),
+  velocityScoresStale: boolean('velocity_scores_stale').notNull().default(false),
 });
 
 export type Project = typeof projects.$inferSelect;

@@ -29,6 +29,54 @@ import { API_LIMITS } from '../constants.js';
 
 const HARDCODED_USER_ID = '00000000-0000-0000-0000-000000000000';
 
+/**
+ * Re-normalize velocity scores for all included (non-excluded) articles
+ * Takes existing raw velocity scores and re-normalizes to 0-100 among included items only
+ */
+async function recalculateVelocityScores(projectId: string): Promise<void> {
+  // Get all context items for the project
+  const items = await db
+    .select({
+      articleId: projectContextItems.articleId,
+      velocityScore: projectContextItems.velocityScore,
+      isExcluded: projectContextItems.isExcluded,
+    })
+    .from(projectContextItems)
+    .where(eq(projectContextItems.projectId, projectId));
+
+  // Filter to only included items
+  const includedItems = items.filter((item) => !item.isExcluded);
+
+  if (includedItems.length === 0) {
+    return; // No included items to normalize
+  }
+
+  // Get min and max velocity scores among included items
+  const velocityScores = includedItems.map((item) => parseFloat(item.velocityScore) || 0);
+  const minVelocity = Math.min(...velocityScores);
+  const maxVelocity = Math.max(...velocityScores);
+  const velocityRange = maxVelocity - minVelocity;
+
+  // Re-normalize all included items
+  for (const item of includedItems) {
+    const rawVelocity = parseFloat(item.velocityScore) || 0;
+    const normalizedVelocity =
+      velocityRange === 0
+        ? 100
+        : ((rawVelocity - minVelocity) / velocityRange) * 100;
+
+    await db
+      .update(projectContextItems)
+      .set({ velocityScore: normalizedVelocity.toFixed(2) })
+      .where(
+        and(
+          eq(projectContextItems.projectId, projectId),
+          eq(projectContextItems.articleId, item.articleId)
+        )
+      );
+  }
+}
+
 export default async function projectRoutes(fastify: FastifyInstance) {
   /**
    * POST /api/projects
@@ -730,6 +778,179 @@ export default async function projectRoutes(fastify: FastifyInstance) {
         });
       } catch (error: any) {
         fastify.log.error({ error }, 'Failed to fetch image status');
+        return reply.status(500).send({ error: 'Internal Server Error' });
+      }
+    }
+  );
+
+  /**
+   * PATCH /api/projects/:id/mismatch-review
+   * Update exclusions for multiple articles and mark review as completed
+   * Auto-triggers velocity recalculation
+   */
+  fastify.patch<{
+    Params: { id: string };
+    Body: { exclusions: Array<{ articleId: string; isExcluded: boolean }> };
+  }>('/projects/:id/mismatch-review', async (request, reply) => {
+    try {
+      const { id: projectId } = request.params;
+      const { exclusions } = request.body;
+
+      // Verify project exists
+      const project = await db.query.projects.findFirst({
+        where: eq(projects.id, projectId),
+      });
+
+      if (!project) {
+        return reply.status(404).send({ error: 'Project not found' });
+      }
+
+      // Update exclusions in transaction
+      await db.transaction(async (tx) => {
+        // Update each article's exclusion status
+        for (const { articleId, isExcluded } of exclusions) {
+          await tx
+            .update(projectContextItems)
+            .set({ isExcluded })
+            .where(
+              and(
+                eq(projectContextItems.projectId, projectId),
+                eq(projectContextItems.articleId, articleId)
+              )
+            );
+        }
+
+        // Mark mismatch review as completed
+        await tx
+          .update(projects)
+          .set({
+            mismatchReviewCompleted: true,
+            velocityScoresStale: false, // Will recalculate below
+          })
+          .where(eq(projects.id, projectId));
+      });
+
+      // Recalculate velocity scores for included items
+      await recalculateVelocityScores(projectId);
+
+      fastify.log.info(
+        { projectId, exclusionCount: exclusions.length },
+        'Mismatch review completed'
+      );
+
+      return reply.status(200).send({
+        success: true,
+        exclusionsUpdated: exclusions.length,
+      });
+    } catch (error: any) {
+      fastify.log.error({ error }, 'Failed to update mismatch review');
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
+  /**
+   * PATCH /api/projects/:id/context-items/:articleId/exclude
+   * Toggle single article exclusion
+   */
+  fastify.patch<{
+    Params: { id: string; articleId: string };
+    Body: { isExcluded: boolean };
+  }>('/projects/:id/context-items/:articleId/exclude', async (request, reply) => {
+    try {
+      const { id: projectId, articleId } = request.params;
+      const { isExcluded } = request.body;
+
+      // Verify project exists
+      const project = await db.query.projects.findFirst({
+        where: eq(projects.id, projectId),
+      });
+
+      if (!project) {
+        return reply.status(404).send({ error: 'Project not found' });
+      }
+
+      // Verify context item exists
+      const [contextItem] = await db
+        .select()
+        .from(projectContextItems)
+        .where(
+          and(
+            eq(projectContextItems.projectId, projectId),
+            eq(projectContextItems.articleId, articleId)
+          )
+        );
+
+      if (!contextItem) {
+        return reply.status(404).send({ error: 'Context item not found' });
+      }
+
+      // Update exclusion status and mark velocity scores as stale
+      await db.transaction(async (tx) => {
+        await tx
+          .update(projectContextItems)
+          .set({ isExcluded })
+          .where(
+            and(
+              eq(projectContextItems.projectId, projectId),
+              eq(projectContextItems.articleId, articleId)
+            )
+          );
+
+        await tx
+          .update(projects)
+          .set({ velocityScoresStale: true })
+          .where(eq(projects.id, projectId));
+      });
+
+      fastify.log.info({ projectId, articleId, isExcluded }, 'Article exclusion updated');
+
+      return reply.status(200).send({
+        success: true,
+        articleId,
+        isExcluded,
+      });
+    } catch (error: any) {
+      fastify.log.error({ error }, 'Failed to update article exclusion');
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
+  /**
+   * POST /api/projects/:id/recalculate-velocity
+   * Re-normalize velocity scores for all included articles
+   * Does NOT re-query transactions, just re-normalizes existing scores
+   */
+  fastify.post<{ Params: { id: string } }>(
+    '/projects/:id/recalculate-velocity',
+    async (request, reply) => {
+      try {
+        const { id: projectId } = request.params;
+
+        // Verify project exists
+        const project = await db.query.projects.findFirst({
+          where: eq(projects.id, projectId),
+        });
+
+        if (!project) {
+          return reply.status(404).send({ error: 'Project not found' });
+        }
+
+        await recalculateVelocityScores(projectId);
+
+        // Mark velocity scores as no longer stale
+        await db
+          .update(projects)
+          .set({ velocityScoresStale: false })
+          .where(eq(projects.id, projectId));
+
+        fastify.log.info({ projectId }, 'Velocity scores recalculated');
+
+        return reply.status(200).send({
+          success: true,
+          message: 'Velocity scores recalculated successfully',
+        });
+      } catch (error: any) {
+        fastify.log.error({ error }, 'Failed to recalculate velocity scores');
         return reply.status(500).send({ error: 'Internal Server Error' });
       }
     }

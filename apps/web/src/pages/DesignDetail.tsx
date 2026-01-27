@@ -279,6 +279,7 @@ function DesignDetail() {
     };
   }, []);
 
+
   // Handlers
   const handleSaveSuccess = useCallback((collectionName: string, collectionId: string) => {
     setSaveNotification({ show: true, success: true, collectionName, collectionId });

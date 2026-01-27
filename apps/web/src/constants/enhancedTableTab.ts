@@ -25,6 +25,7 @@ export const SORT_FIELDS = {
   VELOCITY_SCORE: 'velocityScore',
   ARTICLE_ID: 'articleId',
   PRODUCT_TYPE: 'productType',
+  MATCH_CONFIDENCE: 'matchConfidence',
 } as const;
 
 export type SortField = (typeof SORT_FIELDS)[keyof typeof SORT_FIELDS];
@@ -102,6 +103,7 @@ export const TEXT = {
   SORT_VELOCITY: 'Velocity Score',
   SORT_ARTICLE: 'Article ID',
   SORT_PRODUCT: 'Product Type',
+  SORT_MATCH_CONFIDENCE: 'Match Confidence',
   SORT_DESC: 'Descending',
   SORT_ASC: 'Ascending',
 
@@ -132,6 +134,8 @@ export const TEXT = {
   COL_STYLE_CONCEPT: 'Style Concept',
   COL_FABRIC_TYPE: 'Fabric Type',
   COL_STATUS: 'Status',
+  COL_INCLUDE: 'Include',
+  COL_MATCH_CONFIDENCE: 'Match Confidence',
 
   // Detail Labels
   LABEL_PRODUCT_GROUP: 'Product Group',
@@ -178,6 +182,8 @@ export const CSV_BASE_HEADERS = [
 export const API_ENDPOINTS = {
   CONTEXT_ITEMS: (projectId: string) => `/api/projects/${projectId}/context-items`,
   RETRY_ENRICHMENT: (projectId: string) => `/api/projects/${projectId}/retry-enrichment`,
+  EXCLUDE_ITEM: (projectId: string, articleId: string) =>
+    `/api/projects/${projectId}/context-items/${articleId}/exclude`,
 } as const;
 
 // ==================== IMAGE SIZES ====================
