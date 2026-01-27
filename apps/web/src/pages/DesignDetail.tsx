@@ -13,6 +13,7 @@ import {
   Input,
   Panel,
   ObjectStatus,
+  MessageStrip,
 } from '@ui5/webcomponents-react';
 import '@ui5/webcomponents-icons/dist/download.js';
 import '@ui5/webcomponents-icons/dist/zoom-in.js';
@@ -80,12 +81,23 @@ function DesignDetail() {
   const [overallStatus, setOverallStatus] = useState<string>('pending');
   const [imageModalOpen, setImageModalOpen] = useState(false);
 
+  // Save notification state
+  const [saveNotification, setSaveNotification] = useState<{
+    show: boolean;
+    success: boolean;
+    collectionName: string;
+    collectionId: string;
+    error?: string;
+  } | null>(null);
+
   // Collapsible panel states
   const [predictedPanelCollapsed, setPredictedPanelCollapsed] = useState(false);
   const [givenPanelCollapsed, setGivenPanelCollapsed] = useState(true);
 
   // Polling ref
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  // Auto-dismiss timer ref
+  const dismissTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -236,10 +248,70 @@ function DesignDetail() {
   }, [projectId, designId, generatedImages]);
 
   // Handle save success
-  const handleSaveSuccess = (collectionName: string) => {
-    console.log(`Successfully saved to collection: ${collectionName}`);
-    // TODO: Show toast notification
+  const handleSaveSuccess = (collectionName: string, collectionId: string) => {
+    // Show success notification
+    setSaveNotification({
+      show: true,
+      success: true,
+      collectionName,
+      collectionId,
+    });
+
+    // Set auto-dismiss timer (5 seconds)
+    if (dismissTimerRef.current) {
+      clearTimeout(dismissTimerRef.current);
+    }
+    dismissTimerRef.current = setTimeout(() => {
+      setSaveNotification(null);
+    }, 5000);
   };
+
+  // Handle save error (for future use)
+  const handleSaveError = (error: string) => {
+    setSaveNotification({
+      show: true,
+      success: false,
+      collectionName: '',
+      collectionId: '',
+      error,
+    });
+
+    // Set auto-dismiss timer (5 seconds)
+    if (dismissTimerRef.current) {
+      clearTimeout(dismissTimerRef.current);
+    }
+    dismissTimerRef.current = setTimeout(() => {
+      setSaveNotification(null);
+    }, 5000);
+  };
+
+  // Handle notification dismiss
+  const handleDismissNotification = () => {
+    setSaveNotification(null);
+    if (dismissTimerRef.current) {
+      clearTimeout(dismissTimerRef.current);
+    }
+  };
+
+  // Handle view collection navigation
+  const handleViewCollection = () => {
+    if (saveNotification?.collectionId) {
+      // Navigate to home with collection ID to auto-open the dialog
+      navigate(`/?collection=${saveNotification.collectionId}`);
+    }
+  };
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+      }
+      if (dismissTimerRef.current) {
+        clearTimeout(dismissTimerRef.current);
+      }
+    };
+  }, []);
 
   // Handle name editing
   const handleStartEditName = () => {
@@ -1048,6 +1120,50 @@ function DesignDetail() {
           </div>
         </div>
       </div>
+
+      {/* Success/Failure Notification - Above Bottom Action Bar */}
+      {saveNotification?.show && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '64px', // Above the action bar (which is ~64px height)
+            right: '2rem', // Align with right side of action bar
+            width: '320px', // Approximate width of both buttons combined
+            zIndex: 11, // Above action bar (which has z-index 10)
+          }}
+        >
+          <MessageStrip
+            design={saveNotification.success ? 'Positive' : 'Negative'}
+            onClose={handleDismissNotification}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+              }}
+            >
+              <div>
+                {saveNotification.success ? (
+                  <Text style={{ fontWeight: '500' }}>
+                    Saved to "{saveNotification.collectionName}"
+                  </Text>
+                ) : (
+                  <Text style={{ fontWeight: '500' }}>
+                    Failed to save: {saveNotification.error}
+                  </Text>
+                )}
+              </div>
+              {saveNotification.success && (
+                <Button design="Transparent" onClick={handleViewCollection}>
+                  View Collection
+                </Button>
+              )}
+            </div>
+          </MessageStrip>
+        </div>
+      )}
 
       {/* Bottom Action Bar */}
       <div

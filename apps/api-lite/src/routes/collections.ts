@@ -4,7 +4,16 @@
  */
 
 import { FastifyInstance } from 'fastify';
-import { db, collections, collectionItems, generatedDesigns, eq, sql, desc } from '@fashion/db';
+import {
+  db,
+  collections,
+  collectionItems,
+  generatedDesigns,
+  eq,
+  sql,
+  desc,
+  and,
+} from '@fashion/db';
 
 const HARDCODED_USER_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -103,7 +112,7 @@ export default async function collectionRoutes(fastify: FastifyInstance) {
           createdAt: collections.createdAt,
         })
         .from(collections)
-        .where(eq(collections.id, id) && eq(collections.userId, HARDCODED_USER_ID));
+        .where(and(eq(collections.id, id), eq(collections.userId, HARDCODED_USER_ID)));
 
       if (!collection) {
         return reply.status(404).send({ error: 'Collection not found' });
@@ -154,7 +163,7 @@ export default async function collectionRoutes(fastify: FastifyInstance) {
       const [existingCollection] = await db
         .select({ id: collections.id })
         .from(collections)
-        .where(eq(collections.id, id) && eq(collections.userId, HARDCODED_USER_ID));
+        .where(and(eq(collections.id, id), eq(collections.userId, HARDCODED_USER_ID)));
 
       if (!existingCollection) {
         return reply.status(404).send({ error: 'Collection not found' });
@@ -186,7 +195,7 @@ export default async function collectionRoutes(fastify: FastifyInstance) {
       const [existingCollection] = await db
         .select({ id: collections.id, name: collections.name })
         .from(collections)
-        .where(eq(collections.id, id) && eq(collections.userId, HARDCODED_USER_ID));
+        .where(and(eq(collections.id, id), eq(collections.userId, HARDCODED_USER_ID)));
 
       if (!existingCollection) {
         return reply.status(404).send({ error: 'Collection not found' });
@@ -217,7 +226,7 @@ export default async function collectionRoutes(fastify: FastifyInstance) {
       const [collection] = await db
         .select({ id: collections.id })
         .from(collections)
-        .where(eq(collections.id, id) && eq(collections.userId, HARDCODED_USER_ID));
+        .where(and(eq(collections.id, id), eq(collections.userId, HARDCODED_USER_ID)));
 
       if (!collection) {
         return reply.status(404).send({ error: 'Collection not found' });
@@ -227,7 +236,7 @@ export default async function collectionRoutes(fastify: FastifyInstance) {
       await db
         .delete(collectionItems)
         .where(
-          eq(collectionItems.collectionId, id) && eq(collectionItems.generatedDesignId, designId)
+          and(eq(collectionItems.collectionId, id), eq(collectionItems.generatedDesignId, designId))
         );
 
       return reply.status(200).send({ message: 'Design removed from collection successfully' });
@@ -254,7 +263,7 @@ export default async function collectionRoutes(fastify: FastifyInstance) {
       const [collection] = await db
         .select({ id: collections.id })
         .from(collections)
-        .where(eq(collections.id, id) && eq(collections.userId, HARDCODED_USER_ID));
+        .where(and(eq(collections.id, id), eq(collections.userId, HARDCODED_USER_ID)));
 
       if (!collection) {
         return reply.status(404).send({ error: 'Collection not found' });

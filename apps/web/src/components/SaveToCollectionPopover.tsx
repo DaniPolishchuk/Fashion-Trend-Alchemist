@@ -22,7 +22,7 @@ interface SaveToCollectionPopoverProps {
   opener?: string; // ID of the opener element
   designId: string;
   onClose: () => void;
-  onSaved?: (collectionName: string) => void;
+  onSaved?: (collectionName: string, collectionId: string) => void;
 }
 
 function SaveToCollectionPopover({
@@ -83,7 +83,7 @@ function SaveToCollectionPopover({
         if (result.error) {
           setError(result.error);
         } else {
-          onSaved?.(collectionName);
+          onSaved?.(collectionName, collectionId);
           onClose();
         }
       } catch (err) {
@@ -136,7 +136,7 @@ function SaveToCollectionPopover({
 
       setCollections((prev) => [newCollectionItem, ...prev]);
 
-      onSaved?.(newCollection.name);
+      onSaved?.(newCollection.name, newCollection.id);
       onClose();
     } catch (err) {
       setError('Failed to create collection');
@@ -215,7 +215,6 @@ function SaveToCollectionPopover({
             value={searchQuery}
             onInput={handleSearchInput}
             showClearIcon
-            icon={<Icon name="search" />}
             style={{ width: '100%' }}
           />
         </div>

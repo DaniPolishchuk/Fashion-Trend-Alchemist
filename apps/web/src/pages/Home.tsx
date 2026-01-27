@@ -558,7 +558,6 @@ function Home() {
               <Button icon="add" onClick={handleCreateCollectionClick}>
                 Create Collection
               </Button>
-              <Button design="Transparent">View All</Button>
             </FlexBox>
           </FlexBox>
 
