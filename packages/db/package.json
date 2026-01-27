@@ -17,8 +17,7 @@
     "migrate": "drizzle-kit migrate",
     "migrate:custom": "tsx scripts/apply-migration.ts",
     "studio": "drizzle-kit studio",
-    "push": "drizzle-kit push",
-    "seed:collections": "tsx src/seeds/collections.seed.ts"
+    "push": "drizzle-kit push"
   },
   "dependencies": {
     "@fashion/config": "workspace:*",

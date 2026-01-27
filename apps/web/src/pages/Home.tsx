@@ -26,6 +26,7 @@ import '@ui5/webcomponents-icons/dist/product.js';
 import '@ui5/webcomponents-icons/dist/pushpin-off.js';
 import '@ui5/webcomponents-icons/dist/pushpin-on.js';
 import '@ui5/webcomponents-icons/dist/slim-arrow-right.js';
+import '@ui5/webcomponents-icons/dist/decline.js';
 import '@ui5/webcomponents-fiori/dist/illustrations/NoData.js';
 
 import type { ProjectListItem, CollectionListItem } from '@fashion/types';
@@ -35,6 +36,8 @@ import { useDebounce } from '../hooks/useDebounce';
 import { PAGINATION, COLLECTIONS, NOTIFICATION, SEARCH } from '../constants/home';
 import type { ProjectFromAPI } from '../types/api';
 import styles from '../styles/pages/Home.module.css';
+import CollectionPreviewDialog from '../components/CollectionPreviewDialog';
+import CreateCollectionDialog from '../components/CreateCollectionDialog';
 
 function Home() {
   const navigate = useNavigate();
@@ -58,6 +61,18 @@ function Home() {
   // Pin notification state
   const [pinMessage, setPinMessage] = useState<string | null>(null);
   const [pinningId, setPinningId] = useState<string | null>(null);
+
+  // Collection dialog state
+  const [collectionDialogOpen, setCollectionDialogOpen] = useState(false);
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
+
+  // Create collection dialog state
+  const [createCollectionDialogOpen, setCreateCollectionDialogOpen] = useState(false);
+
+  // Delete collection dialog state
+  const [deleteCollectionDialogOpen, setDeleteCollectionDialogOpen] = useState(false);
+  const [collectionToDelete, setCollectionToDelete] = useState<CollectionListItem | null>(null);
+  const [deletingCollection, setDeletingCollection] = useState(false);
 
   // Debounced search for performance
   const debouncedSearchQuery = useDebounce(searchQuery, SEARCH.DEBOUNCE_MS);
@@ -239,6 +254,101 @@ function Home() {
   // Image error handler (React way!)
   const handleImageError = useCallback((collectionId: string, index: number) => {
     setImageErrors((prev) => new Set(prev).add(`${collectionId}-${index}`));
+  }, []);
+
+  // Collection click handler
+  const handleCollectionClick = useCallback((collectionId: string) => {
+    setSelectedCollectionId(collectionId);
+    setCollectionDialogOpen(true);
+  }, []);
+
+  const handleCollectionDialogClose = useCallback(() => {
+    setCollectionDialogOpen(false);
+    setSelectedCollectionId(null);
+  }, []);
+
+  // Create collection handlers
+  const handleCreateCollectionClick = useCallback(() => {
+    setCreateCollectionDialogOpen(true);
+  }, []);
+
+  const handleCreateCollectionDialogClose = useCallback(() => {
+    setCreateCollectionDialogOpen(false);
+  }, []);
+
+  const handleCollectionCreated = useCallback(
+    (newCollection: { id: string; name: string; createdAt: string }) => {
+      // Add the new collection to the list
+      setCollections((prev) => [
+        {
+          ...newCollection,
+          itemCount: 0,
+          imageUrls: [],
+        },
+        ...prev,
+      ]);
+    },
+    []
+  );
+
+  // Delete collection handlers
+  const handleDeleteCollectionClick = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>, collection: CollectionListItem) => {
+      e.stopPropagation(); // Prevent collection click
+      setCollectionToDelete(collection);
+      setDeleteCollectionDialogOpen(true);
+    },
+    []
+  );
+
+  const handleDeleteCollectionConfirm = useCallback(async () => {
+    if (!collectionToDelete) return;
+
+    try {
+      setDeletingCollection(true);
+      const result = await api.collections.delete(collectionToDelete.id);
+
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      // Remove from local state
+      setCollections((prev) => prev.filter((c) => c.id !== collectionToDelete.id));
+      setDeleteCollectionDialogOpen(false);
+      setCollectionToDelete(null);
+    } catch (err) {
+      console.error('Delete collection failed:', err);
+      setError('Failed to delete collection. Please try again.');
+      setTimeout(() => setError(null), NOTIFICATION.DURATION_MS);
+    } finally {
+      setDeletingCollection(false);
+    }
+  }, [collectionToDelete]);
+
+  const handleDeleteCollectionCancel = useCallback(() => {
+    setDeleteCollectionDialogOpen(false);
+    setCollectionToDelete(null);
+  }, []);
+
+  // Format date helper
+  const formatDate = useCallback((dateString: string): string => {
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffTime = Math.abs(now.getTime() - date.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays === 1) return 'Created yesterday';
+      if (diffDays <= 7) return `Created ${diffDays} days ago`;
+
+      return `Created ${date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })}`;
+    } catch {
+      return 'Created recently';
+    }
   }, []);
 
   // Reset to page 1 when search changes
@@ -436,18 +546,34 @@ function Home() {
           )}
         </Card>
 
-        {/* Collections Section - Only show if collections exist */}
-        {collections.length > 0 && (
-          <div style={{ marginBottom: '2rem' }}>
-            <FlexBox
-              justifyContent="SpaceBetween"
-              alignItems="Center"
-              className={styles.sectionHeader}
-            >
-              <Title level="H4">Collections</Title>
-              <Button design="Transparent">View All</Button>
+        {/* Collections Section */}
+        <div style={{ marginBottom: '2rem' }}>
+          <FlexBox
+            justifyContent="SpaceBetween"
+            alignItems="Center"
+            className={styles.sectionHeader}
+          >
+            <Title level="H4">Collections ({collections.length})</Title>
+            <FlexBox alignItems="Center" style={{ gap: '0.5rem' }}>
+              <Button icon="add" onClick={handleCreateCollectionClick}>
+                Create Collection
+              </Button>
             </FlexBox>
+          </FlexBox>
 
+          {collections.length === 0 ? (
+            <div className={styles.illustratedMessageContainer}>
+              <IllustratedMessage
+                name="NoData"
+                titleText="No Collections Yet"
+                subtitleText="Create your first collection to organize your generated designs"
+              >
+                <Button design="Emphasized" icon="add" onClick={handleCreateCollectionClick}>
+                  Create Your First Collection
+                </Button>
+              </IllustratedMessage>
+            </div>
+          ) : (
             <div className={styles.collectionsGrid}>
               {collections.slice(0, COLLECTIONS.MAX_PREVIEW_COUNT).map((collection) => (
                 <Card
@@ -458,9 +584,28 @@ function Home() {
                       titleText={collection.name}
                       subtitleText={`${collection.itemCount} Items`}
                       interactive
+                      action={
+                        <Button
+                          icon="decline"
+                          design="Transparent"
+                          onClick={(e: any) => handleDeleteCollectionClick(e, collection)}
+                          tooltip="Delete collection"
+                          style={{
+                            color: 'var(--sapNegativeColor)',
+                            opacity: 0.7,
+                            transition: 'opacity 0.2s',
+                          }}
+                          onMouseEnter={(e: any) => {
+                            e.target.style.opacity = '1';
+                          }}
+                          onMouseLeave={(e: any) => {
+                            e.target.style.opacity = '0.7';
+                          }}
+                        />
+                      }
                     />
                   }
-                  onClick={() => console.log('View collection:', collection.id)}
+                  onClick={() => handleCollectionClick(collection.id)}
                 >
                   <div className={styles.collectionCardContent}>
                     <div className={styles.collectionImagesGrid}>
@@ -486,15 +631,17 @@ function Home() {
                       })}
                     </div>
                     <div className={styles.collectionFooter}>
-                      <Text className={styles.collectionDateText}>Created 2 days ago</Text>
+                      <Text className={styles.collectionDateText}>
+                        {formatDate(collection.createdAt)}
+                      </Text>
                       <Icon name="slim-arrow-right" className={styles.collectionArrowIcon} />
                     </div>
                   </div>
                 </Card>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Delete Confirmation Dialog */}
         <Dialog
@@ -521,6 +668,56 @@ function Home() {
               This will also delete all{' '}
               <strong>{projectToDelete?.generatedProductsCount || 0}</strong> generated products
               associated with this project.
+            </Text>
+            <br />
+            <br />
+            <Text className={styles.deleteWarningText}>This action cannot be undone.</Text>
+          </div>
+        </Dialog>
+
+        {/* Collection Preview Dialog */}
+        <CollectionPreviewDialog
+          open={collectionDialogOpen}
+          collectionId={selectedCollectionId}
+          onClose={handleCollectionDialogClose}
+          onCollectionUpdated={fetchData} // Refresh collections when items are removed
+        />
+
+        {/* Create Collection Dialog */}
+        <CreateCollectionDialog
+          open={createCollectionDialogOpen}
+          onClose={handleCreateCollectionDialogClose}
+          onCollectionCreated={handleCollectionCreated}
+        />
+
+        {/* Delete Collection Confirmation Dialog */}
+        <Dialog
+          open={deleteCollectionDialogOpen}
+          headerText="Delete Collection?"
+          footer={
+            <div className={styles.dialogFooter}>
+              <Button onClick={handleDeleteCollectionCancel} disabled={deletingCollection}>
+                Cancel
+              </Button>
+              <Button
+                design="Negative"
+                onClick={handleDeleteCollectionConfirm}
+                disabled={deletingCollection}
+              >
+                {deletingCollection ? 'Deleting...' : 'Delete'}
+              </Button>
+            </div>
+          }
+        >
+          <div className={styles.dialogContent}>
+            <Text>
+              Are you sure you want to delete <strong>"{collectionToDelete?.name}"</strong>?
+            </Text>
+            <br />
+            <br />
+            <Text>
+              This will remove <strong>{collectionToDelete?.itemCount || 0}</strong> designs from
+              this collection.
             </Text>
             <br />
             <br />

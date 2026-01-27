@@ -11,4 +11,5 @@ export interface CollectionListItem {
   name: string;
   itemCount: number;
   imageUrls: string[]; // Up to 4 URLs for thumbnail grid
+  createdAt: string;
 }

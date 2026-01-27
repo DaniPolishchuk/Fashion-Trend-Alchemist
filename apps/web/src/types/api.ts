@@ -28,6 +28,24 @@ export interface CollectionFromAPI {
   name: string;
   itemCount: number;
   imageUrls: string[];
+  createdAt: string;
+}
+
+export interface CollectionDetailsFromAPI {
+  id: string;
+  name: string;
+  createdAt: string;
+  itemCount: number;
+  designs: {
+    id: string;
+    name: string;
+    projectId: string;
+    generatedImageUrl: string;
+    generatedImages: string[] | null;
+    predictedAttributes: Record<string, any>;
+    inputConstraints: Record<string, any>;
+    createdAt: string;
+  }[];
 }
 
 export interface ProductGroupTaxonomy {
