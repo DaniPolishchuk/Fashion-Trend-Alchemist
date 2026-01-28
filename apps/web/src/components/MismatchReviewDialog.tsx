@@ -38,10 +38,7 @@ const MismatchReviewDialog: React.FC<MismatchReviewDialogProps> = ({
 }) => {
   // Filter to only flagged items (confidence >= 80)
   const flaggedItems = useMemo(
-    () =>
-      items.filter(
-        (item) => item.mismatchConfidence !== null && item.mismatchConfidence >= 80
-      ),
+    () => items.filter((item) => item.mismatchConfidence !== null && item.mismatchConfidence >= 80),
     [items]
   );
 
@@ -109,8 +106,7 @@ const MismatchReviewDialog: React.FC<MismatchReviewDialogProps> = ({
       onConfirm();
       onClose();
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Failed to save exclusions';
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save exclusions';
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -132,11 +128,7 @@ const MismatchReviewDialog: React.FC<MismatchReviewDialogProps> = ({
               <Button onClick={onClose} disabled={loading}>
                 Cancel
               </Button>
-              <Button
-                design="Emphasized"
-                onClick={handleConfirm}
-                disabled={loading}
-              >
+              <Button design="Emphasized" onClick={handleConfirm} disabled={loading}>
                 {loading ? (
                   <>
                     <BusyIndicator active size="S" />
@@ -164,9 +156,9 @@ const MismatchReviewDialog: React.FC<MismatchReviewDialogProps> = ({
         )}
 
         <div className={styles.description}>
-          <Text>
-            The following articles may not match the expected product type. Review and
-            decide which to include in your analysis context.
+          <Text className={styles.descriptionText}>
+            The following articles may not match the expected product type. Review and decide which
+            to include in your analysis context.
           </Text>
         </div>
 
@@ -181,7 +173,7 @@ const MismatchReviewDialog: React.FC<MismatchReviewDialogProps> = ({
 
         {flaggedItems.length === 0 ? (
           <div className={styles.emptyState}>
-            <Text>No flagged articles to review.</Text>
+            <Text className={styles.emptyStateText}>No flagged articles to review.</Text>
           </div>
         ) : (
           <div className={styles.tableContainer}>
@@ -238,7 +230,10 @@ const MismatchReviewDialog: React.FC<MismatchReviewDialogProps> = ({
                       <td className={styles.tdConfidence}>
                         <span
                           className={styles.confidenceBadge}
-                          style={{ backgroundColor: `${confidenceInfo.color}15`, color: confidenceInfo.color }}
+                          style={{
+                            backgroundColor: `${confidenceInfo.color}15`,
+                            color: confidenceInfo.color,
+                          }}
                         >
                           {confidenceInfo.label}
                         </span>
