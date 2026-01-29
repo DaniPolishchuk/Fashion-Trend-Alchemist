@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { API_ENDPOINTS, type EnrichmentStatus } from '../constants/projectHub';
+import { fetchAPI } from '../services/api/client';
 
 export interface ProjectData {
   id: string;
@@ -54,23 +55,28 @@ export function useProjectData(projectId: string | undefined): UseProjectDataRet
         setLoading(true);
 
         // Fetch project data and enrichment status in parallel
-        const [projectResponse, statusResponse] = await Promise.all([
-          fetch(API_ENDPOINTS.PROJECT(projectId)),
-          fetch(API_ENDPOINTS.ENRICHMENT_STATUS(projectId)),
+        const [projectResult, statusResult] = await Promise.all([
+          fetchAPI<ProjectData>(API_ENDPOINTS.PROJECT(projectId)),
+          fetchAPI<{
+            status: EnrichmentStatus;
+            progress: { processed: number; total: number };
+            currentArticleId: string | null;
+          }>(API_ENDPOINTS.ENRICHMENT_STATUS(projectId)).catch(() => ({
+            error: 'Failed to fetch status',
+          })),
         ]);
 
-        if (!projectResponse.ok) {
-          throw new Error('Failed to fetch project');
+        if (projectResult.error) {
+          throw new Error(projectResult.error);
         }
-        const data = await projectResponse.json();
-        setProject(data);
+
+        setProject(projectResult.data!);
 
         // Set enrichment status if available
-        if (statusResponse.ok) {
-          const statusData = await statusResponse.json();
-          setEnrichmentStatus(statusData.status || 'idle');
-          setEnrichmentProgress(statusData.progress || { processed: 0, total: 0 });
-          setCurrentArticleId(statusData.currentArticleId || null);
+        if ('data' in statusResult && statusResult.data) {
+          setEnrichmentStatus(statusResult.data.status || 'idle');
+          setEnrichmentProgress(statusResult.data.progress || { processed: 0, total: 0 });
+          setCurrentArticleId(statusResult.data.currentArticleId || null);
         }
       } catch (err) {
         console.error('Failed to fetch project:', err);

@@ -15,6 +15,7 @@ import '@ui5/webcomponents-icons/dist/decline.js';
 import '@ui5/webcomponents-fiori/dist/illustrations/NoData.js';
 
 import { api } from '../services/api';
+import { fetchAPI } from '../services/api/client';
 
 interface Design {
   id: string;
@@ -76,17 +77,16 @@ function CollectionPreviewDialog({
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`/api/collections/${collectionId}`);
+      const result = await fetchAPI<CollectionDetail>(`/api/collections/${collectionId}`);
 
-      if (!response.ok) {
-        if (response.status === 404) {
+      if (result.error) {
+        if (result.error.includes('404')) {
           throw new Error('Collection not found');
         }
-        throw new Error('Failed to load collection');
+        throw new Error(result.error);
       }
 
-      const data: CollectionDetail = await response.json();
-      setCollection(data);
+      setCollection(result.data!);
     } catch (err) {
       console.error('Failed to fetch collection details:', err);
       setError(err instanceof Error ? err.message : 'Failed to load collection');

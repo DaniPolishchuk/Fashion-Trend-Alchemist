@@ -583,7 +583,8 @@ function ContextBuilder() {
   }, []);
 
   const getImageUrl = useCallback((articleId: string) => {
-    const filerBaseUrl = import.meta.env.VITE_FILER_BASE_URL || 'http://localhost:8888';
+    const filerBaseUrl =
+      import.meta.env.VITE_FILER_BASE_URL || 'https://seaweedfs.a549aaa.kyma.ondemand.com';
     const bucket = import.meta.env.VITE_FILER_BUCKET || 'images';
     const first2Digits = articleId.substring(0, 2);
     return `${filerBaseUrl}/${bucket}/${first2Digits}/${articleId}.jpg`;

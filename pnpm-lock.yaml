@@ -38,9 +38,15 @@ importers:
       '@fastify/cors':
         specifier: ^10.0.1
         version: 10.1.0
+      '@sap/xssec':
+        specifier: ^4.2.5
+        version: 4.12.2
       fastify:
         specifier: ^5.2.0
         version: 5.7.1
+      fastify-plugin:
+        specifier: ^5.0.1
+        version: 5.1.0
       ioredis:
         specifier: ^5.9.2
         version: 5.9.2
@@ -1200,6 +1206,10 @@ packages:
   '@sap-theming/theming-base-content@11.29.3':
     resolution: {integrity: sha512-0LVCUYqoTQGcKmgPShbxQLBoF8469ZojUrYtVm1k3op/1pgLA/FMN//bvgGEm7HTBJBu3gW2Ad2f4ASqEzLolA==}
 
+  '@sap/xssec@4.12.2':
+    resolution: {integrity: sha512-T4yy/lXZerAREJnb2Yte3oL4iDJOKlmWrMwMLXY5/U33tuKDVzIVO3VQqfLTGTIJABk4msE+km0YWpds+fSv3w==}
+    engines: {node: '>=18'}
+
   '@smithy/abort-controller@4.2.8':
     resolution: {integrity: sha512-peuVfkYHAmS5ybKxWcfraK7WBBP0J+rkfUcbHJJKQ4ir3UAUNQI+Y4Vt/PqSzGqgloJ5O1dk7+WzNL8wcCSXbw==}
     engines: {node: '>=18.0.0'}
@@ -1920,6 +1930,10 @@ packages:
     resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
     engines: {node: '>=6'}
     hasBin: true
+
+  jwt-decode@4.0.0:
+    resolution: {integrity: sha512-+KJGIyHgkGuIq3IEBNftfhW/LfWhXUIY6OmyVWjliu5KH1y0fw7VQ8YndE2O4qZdMSd9SqbnC8GOcZEy0Om7sA==}
+    engines: {node: '>=18'}
 
   light-my-request@6.6.0:
     resolution: {integrity: sha512-CHYbu8RtboSIoVsHZ6Ye4cj4Aw/yg2oAFimlF7mNvfDV192LR7nDiKtSIfCuLT7KokPSTn/9kfVLm5OGN0A28A==}
@@ -3366,6 +3380,13 @@ snapshots:
 
   '@sap-theming/theming-base-content@11.29.3': {}
 
+  '@sap/xssec@4.12.2':
+    dependencies:
+      debug: 4.4.3
+      jwt-decode: 4.0.0
+    transitivePeerDependencies:
+      - supports-color
+
   '@smithy/abort-controller@4.2.8':
     dependencies:
       '@smithy/types': 4.12.0
@@ -4284,6 +4305,8 @@ snapshots:
   json-schema-traverse@1.0.0: {}
 
   json5@2.2.3: {}
+
+  jwt-decode@4.0.0: {}
 
   light-my-request@6.6.0:
     dependencies:

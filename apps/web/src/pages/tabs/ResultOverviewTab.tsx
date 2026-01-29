@@ -33,6 +33,7 @@ import {
 } from '../../constants/resultOverviewTab';
 import type { GeneratedDesign, ResultOverviewTabProps } from '../../types/resultOverviewTab';
 import { getDisplayInfo, getPrimaryImageUrl } from '../../utils/resultOverviewHelpers';
+import { fetchAPI } from '../../services/api/client';
 import styles from '../../styles/pages/ResultOverviewTab.module.css';
 
 function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
@@ -58,14 +59,15 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch(API_ENDPOINTS.GENERATED_DESIGNS(projectId));
+        const result = await fetchAPI<GeneratedDesign[]>(
+          API_ENDPOINTS.GENERATED_DESIGNS(projectId)
+        );
 
-        if (!response.ok) {
-          throw new Error(`Failed to fetch designs: ${response.statusText}`);
+        if (result.error) {
+          throw new Error(result.error);
         }
 
-        const data = await response.json();
-        setDesigns(data);
+        setDesigns(result.data || []);
       } catch (err) {
         console.error('Error fetching generated designs:', err);
         setError(err instanceof Error ? err.message : 'Failed to load generated designs');
@@ -125,12 +127,12 @@ function ResultOverviewTab({ projectId }: ResultOverviewTabProps) {
 
     try {
       setDeleting(true);
-      const response = await fetch(API_ENDPOINTS.DELETE_DESIGN(projectId, designToDelete.id), {
+      const result = await fetchAPI(API_ENDPOINTS.DELETE_DESIGN(projectId, designToDelete.id), {
         method: 'DELETE',
       });
 
-      if (!response.ok) {
-        throw new Error(`Failed to delete design: ${response.statusText}`);
+      if (result.error) {
+        throw new Error(result.error);
       }
 
       setDesigns((prev) => prev.filter((d) => d.id !== designToDelete.id));

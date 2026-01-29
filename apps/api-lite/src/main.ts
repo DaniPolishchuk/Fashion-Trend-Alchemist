@@ -16,7 +16,7 @@ import rpt1Routes from './routes/rpt1.js';
 import contextItemsRoutes from './routes/context-items.js';
 import designNameRoutes from './routes/design-name.js';
 
-import { llmConfig } from '@fashion/config';
+import { visionLlmConfig } from '@fashion/config';
 import OpenAI from 'openai';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
@@ -554,8 +554,8 @@ fastify.post<{
 
     // Initialize OpenAI client
     const openai = new OpenAI({
-      apiKey: llmConfig.apiKey,
-      baseURL: llmConfig.apiUrl,
+      apiKey: visionLlmConfig.apiKey,
+      baseURL: visionLlmConfig.proxyUrl,
     });
 
     // Build initial messages array
@@ -595,7 +595,7 @@ Please generate a comprehensive attribute schema following the format in the exa
         console.log(`⏳ Calling LLM (attempt ${attempt}/${MAX_RETRIES})...`);
 
         const completion = await openai.chat.completions.create({
-          model: llmConfig.model,
+          model: visionLlmConfig.model,
           messages: messages,
           temperature: 0.7,
         });

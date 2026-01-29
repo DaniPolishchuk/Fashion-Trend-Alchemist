@@ -3,6 +3,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import type { ProductsResponse } from '@fashion/types';
+import { fetchAPI } from '../services/api/client';
 
 interface UseProductsParams {
   types: string[];
@@ -60,13 +61,13 @@ async function fetchProducts(params: UseProductsParams): Promise<ProductsRespons
     });
   }
 
-  const response = await fetch(`/api/products?${searchParams}`);
+  const result = await fetchAPI<ProductsResponse>(`/api/products?${searchParams}`);
 
-  if (!response.ok) {
-    throw new Error('Failed to fetch products');
+  if (result.error) {
+    throw new Error(result.error);
   }
 
-  return response.json();
+  return result.data!;
 }
 
 export function useProducts(params: UseProductsParams) {

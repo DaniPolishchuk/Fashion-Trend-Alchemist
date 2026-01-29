@@ -5,7 +5,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { db, projects, projectContextItems, articles, eq } from '@fashion/db';
-import { imageStrategy, filerConfig } from '@fashion/config';
+import { filerConfig } from '@fashion/config';
 
 // Type for ontology schema structure
 type OntologySchema = Record<string, Record<string, string[]>>;
@@ -17,15 +17,7 @@ type OntologySchema = Record<string, Record<string, string[]>>;
  */
 function getImageUrl(articleId: string): string {
   const folder = articleId.slice(0, 2);
-
-  if (imageStrategy === 'filer') {
-    // Direct HTTP URL through Filer
-    return `${filerConfig.baseUrl}/${filerConfig.bucket}/${folder}/${articleId}.jpg`;
-  } else {
-    // For S3 strategy, we still provide a filer-style URL for frontend
-    // The frontend will handle image loading errors gracefully
-    return `${filerConfig.baseUrl}/${filerConfig.bucket}/${folder}/${articleId}.jpg`;
-  }
+  return `${filerConfig.baseUrl}/${filerConfig.bucket}/${folder}/${articleId}.jpg`;
 }
 
 /**
@@ -118,7 +110,9 @@ export default async function contextItemsRoutes(fastify: FastifyInstance) {
       const pending = total - successful - failed;
 
       // Calculate mismatch summary (items with confidence >= 80)
-      const flaggedItems = items.filter((item) => item.mismatchConfidence !== null && item.mismatchConfidence >= 80);
+      const flaggedItems = items.filter(
+        (item) => item.mismatchConfidence !== null && item.mismatchConfidence >= 80
+      );
       const flaggedCount = flaggedItems.length;
       const excludedCount = items.filter((item) => item.isExcluded).length;
 

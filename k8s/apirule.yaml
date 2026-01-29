@@ -1,0 +1,21 @@
+apiVersion: gateway.kyma-project.io/v2alpha1
+kind: APIRule
+metadata:
+  name: fashion-alchemist-web
+  namespace: danispace
+  labels:
+    app: fashion-alchemist
+    app.kubernetes.io/name: fashion-alchemist-web
+    app.kubernetes.io/component: api-gateway
+spec:
+  gateway: kyma-system/kyma-gateway
+  hosts:
+    - fashion-alchemist.a549aaa.kyma.ondemand.com
+  service:
+    name: fashion-alchemist-pod
+    port: 5000
+  rules:
+    # All traffic goes through approuter - it handles authentication
+    - path: /{**}
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
+      noAuth: true

@@ -1,0 +1,21 @@
+apiVersion: gateway.kyma-project.io/v2alpha1
+kind: APIRule
+metadata:
+  name: seaweedfs-filer
+  namespace: danispace
+  labels:
+    app: seaweedfs
+    app.kubernetes.io/name: seaweedfs-apirule
+    app.kubernetes.io/component: api-gateway
+spec:
+  gateway: kyma-system/kyma-gateway
+  hosts:
+    - seaweedfs.a549aaa.kyma.ondemand.com
+  service:
+    name: seaweedfs-filer
+    port: 8888
+  rules:
+    # Public access to all SeaweedFS endpoints
+    - path: /{**}
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'HEAD', 'OPTIONS']
+      noAuth: true

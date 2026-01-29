@@ -38,6 +38,7 @@ import { useEnrichmentSSE } from '../hooks/useEnrichmentSSE';
 import { TABS, TEXT, API_ENDPOINTS, type TabType } from '../constants/projectHub';
 import { API_ENDPOINTS as TABLE_ENDPOINTS } from '../constants/enhancedTableTab';
 import type { MismatchSummary, ContextItem } from '../types/enhancedTableTab';
+import { fetchAPI } from '../services/api/client';
 import styles from '../styles/pages/ProjectHub.module.css';
 
 // Helper function to format creation date
@@ -83,16 +84,22 @@ function ProjectHub() {
     if (!projectId) return;
 
     try {
-      const response = await fetch(TABLE_ENDPOINTS.CONTEXT_ITEMS(projectId));
-      if (response.ok) {
-        const data = await response.json();
-        setMismatchSummary(data.mismatchSummary || {
-          flaggedCount: 0,
-          excludedCount: 0,
-          reviewCompleted: false,
-        });
-        setContextItems(data.items || []);
-        setVelocityScoresStale(data.velocityScoresStale || false);
+      const result = await fetchAPI<{
+        mismatchSummary: MismatchSummary;
+        items: ContextItem[];
+        velocityScoresStale: boolean;
+      }>(TABLE_ENDPOINTS.CONTEXT_ITEMS(projectId));
+
+      if (result.data) {
+        setMismatchSummary(
+          result.data.mismatchSummary || {
+            flaggedCount: 0,
+            excludedCount: 0,
+            reviewCompleted: false,
+          }
+        );
+        setContextItems(result.data.items || []);
+        setVelocityScoresStale(result.data.velocityScoresStale || false);
       }
     } catch (err) {
       console.error('Failed to fetch mismatch data:', err);
@@ -146,15 +153,14 @@ function ProjectHub() {
     if (!projectId) return;
 
     try {
-      const response = await fetch(API_ENDPOINTS.START_ENRICHMENT(projectId), {
+      const result = await fetchAPI(API_ENDPOINTS.START_ENRICHMENT(projectId), {
         method: 'POST',
       });
 
-      if (response.ok) {
-        setEnrichmentStatus('running');
+      if (result.error) {
+        console.error('Failed to start enrichment:', result.error);
       } else {
-        const data = await response.json();
-        console.error('Failed to start enrichment:', data.error);
+        setEnrichmentStatus('running');
       }
     } catch (err) {
       console.error('Failed to start enrichment:', err);

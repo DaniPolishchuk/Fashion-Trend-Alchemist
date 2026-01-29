@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: approuter-destinations
+  namespace: danispace
+  labels:
+    app: fashion-alchemist
+    app.kubernetes.io/name: fashion-alchemist-approuter
+    app.kubernetes.io/component: configuration
+data:
+  destinations: |
+    [
+      {
+        "name": "backend-api",
+        "url": "http://localhost:3001",
+        "forwardAuthToken": true
+      },
+      {
+        "name": "app-frontend",
+        "url": "http://localhost:80"
+      }
+    ]

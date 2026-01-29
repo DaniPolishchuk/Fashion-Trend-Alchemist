@@ -32,6 +32,7 @@ import '@ui5/webcomponents-icons/dist/ai.js';
 import '@ui5/webcomponents-icons/dist/camera.js';
 
 import SaveToCollectionPopover from '../components/SaveToCollectionPopover';
+import { fetchAPI } from '../services/api/client';
 import {
   BREADCRUMBS,
   LABELS,
@@ -176,21 +177,20 @@ function DesignDetail() {
 
       try {
         setLoading(true);
-        const [projectResponse, designsResponse] = await Promise.all([
-          fetch(`/api/projects/${projectId}`),
-          fetch(`/api/projects/${projectId}/generated-designs`),
+        const [projectResult, designsResult] = await Promise.all([
+          fetchAPI<{ name: string }>(`/api/projects/${projectId}`),
+          fetchAPI<GeneratedDesign[]>(`/api/projects/${projectId}/generated-designs`),
         ]);
 
-        if (projectResponse.ok) {
-          const projectData = await projectResponse.json();
-          setProjectName(projectData.name || 'Project');
+        if (projectResult.data) {
+          setProjectName(projectResult.data.name || 'Project');
         }
 
-        if (!designsResponse.ok) {
-          throw new Error(ERROR_MESSAGES.FETCH_FAILED);
+        if (designsResult.error) {
+          throw new Error(designsResult.error);
         }
 
-        const designs: GeneratedDesign[] = await designsResponse.json();
+        const designs = designsResult.data!;
         const currentDesign = designs.find((d) => d.id === designId);
 
         if (!currentDesign) {
@@ -247,14 +247,15 @@ function DesignDetail() {
 
     const pollImageStatus = async () => {
       try {
-        const response = await fetch(
-          `/api/projects/${projectId}/generated-designs/${designId}/image-status`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setOverallStatus(data.status);
-          if (data.generatedImages) {
-            setGeneratedImages(data.generatedImages);
+        const result = await fetchAPI<{
+          status: string;
+          generatedImages?: GeneratedImages;
+        }>(`/api/projects/${projectId}/generated-designs/${designId}/image-status`);
+
+        if (result.data) {
+          setOverallStatus(result.data.status);
+          if (result.data.generatedImages) {
+            setGeneratedImages(result.data.generatedImages);
           }
         }
       } catch (err) {
@@ -278,7 +279,6 @@ function DesignDetail() {
       if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
     };
   }, []);
-
 
   // Handlers
   const handleSaveSuccess = useCallback((collectionName: string, collectionId: string) => {
@@ -316,13 +316,12 @@ function DesignDetail() {
 
     try {
       setSavingName(true);
-      const response = await fetch(`/api/projects/${projectId}/generated-designs/${designId}`, {
+      const result = await fetchAPI(`/api/projects/${projectId}/generated-designs/${designId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editedName.trim() }),
       });
 
-      if (!response.ok) throw new Error(ERROR_MESSAGES.UPDATE_NAME_FAILED);
+      if (result.error) throw new Error(result.error);
 
       setDesign((prev) => (prev ? { ...prev, name: editedName.trim() } : prev));
       setIsEditingName(false);
@@ -338,9 +337,8 @@ function DesignDetail() {
     setIsGeneratingName(true);
 
     try {
-      const response = await fetch('/api/generate-design-name', {
+      const result = await fetchAPI<{ suggestedName: string }>('/api/generate-design-name', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           productType:
             (design.inputConstraints as any)?.article_product_type ||
@@ -351,9 +349,8 @@ function DesignDetail() {
         }),
       });
 
-      if (response.ok) {
-        const { suggestedName } = await response.json();
-        setEditedName(suggestedName);
+      if (result.data) {
+        setEditedName(result.data.suggestedName);
         setIsEditingName(true);
       }
     } catch (error) {

@@ -55,6 +55,7 @@ import {
   exportToCSV,
 } from '../../utils/enhancedTableHelpers';
 import { getConfidenceLabel } from '../../constants/projectHub';
+import { fetchAPI } from '../../services/api/client';
 import styles from '../../styles/pages/EnhancedTableTab.module.css';
 
 function EnhancedTableTab({
@@ -98,16 +99,21 @@ function EnhancedTableTab({
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(API_ENDPOINTS.CONTEXT_ITEMS(projectId));
+      const result = await fetchAPI<{
+        items: ContextItem[];
+        summary: Summary;
+        ontologyAttributes: string[];
+      }>(API_ENDPOINTS.CONTEXT_ITEMS(projectId));
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch context items: ${response.statusText}`);
+      if (result.error) {
+        throw new Error(result.error);
       }
 
-      const data = await response.json();
-      setContextItems(data.items);
-      setSummary(data.summary);
-      setOntologyAttributes(data.ontologyAttributes);
+      if (result.data) {
+        setContextItems(result.data.items);
+        setSummary(result.data.summary);
+        setOntologyAttributes(result.data.ontologyAttributes);
+      }
     } catch (err) {
       console.error('Error fetching context items:', err);
       setError(err instanceof Error ? err.message : 'Failed to load context items');
@@ -138,16 +144,23 @@ function EnhancedTableTab({
   useEffect(() => {
     if (enrichmentStatus !== 'running') return;
 
-    const pollInterval = setInterval(() => {
+    const pollInterval = setInterval(async () => {
       if (document.visibilityState === 'visible') {
-        fetch(API_ENDPOINTS.CONTEXT_ITEMS(projectId))
-          .then((res) => res.json())
-          .then((data) => {
-            setContextItems(data.items);
-            setSummary(data.summary);
-            setOntologyAttributes(data.ontologyAttributes);
-          })
-          .catch((err) => console.error('Polling error:', err));
+        try {
+          const result = await fetchAPI<{
+            items: ContextItem[];
+            summary: Summary;
+            ontologyAttributes: string[];
+          }>(API_ENDPOINTS.CONTEXT_ITEMS(projectId));
+
+          if (result.data) {
+            setContextItems(result.data.items);
+            setSummary(result.data.summary);
+            setOntologyAttributes(result.data.ontologyAttributes);
+          }
+        } catch (err) {
+          console.error('Polling error:', err);
+        }
       }
     }, POLL_INTERVAL);
 
@@ -250,13 +263,12 @@ function EnhancedTableTab({
     setRetryingItems((prev) => new Set(prev).add(articleId));
 
     try {
-      const response = await fetch(API_ENDPOINTS.RETRY_ENRICHMENT(projectId), {
+      const result = await fetchAPI(API_ENDPOINTS.RETRY_ENRICHMENT(projectId), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ articleIds: [articleId] }),
       });
 
-      if (!response.ok) throw new Error('Failed to retry enrichment');
+      if (result.error) throw new Error(result.error);
       setTimeout(fetchContextItems, 1000);
     } catch (err) {
       console.error('Error retrying enrichment:', err);
@@ -275,13 +287,12 @@ function EnhancedTableTab({
     setRetryingAll(true);
 
     try {
-      const response = await fetch(API_ENDPOINTS.RETRY_ENRICHMENT(projectId), {
+      const result = await fetchAPI(API_ENDPOINTS.RETRY_ENRICHMENT(projectId), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       });
 
-      if (!response.ok) throw new Error('Failed to retry enrichment');
+      if (result.error) throw new Error(result.error);
       setTimeout(fetchContextItems, 1000);
     } catch (err) {
       console.error('Error retrying all failed:', err);
@@ -297,13 +308,12 @@ function EnhancedTableTab({
   // Handle exclusion toggle
   const handleToggleExclusion = async (articleId: string, currentlyExcluded: boolean) => {
     try {
-      const response = await fetch(API_ENDPOINTS.EXCLUDE_ITEM(projectId, articleId), {
+      const result = await fetchAPI(API_ENDPOINTS.EXCLUDE_ITEM(projectId, articleId), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isExcluded: !currentlyExcluded }),
       });
 
-      if (!response.ok) throw new Error('Failed to update exclusion');
+      if (result.error) throw new Error(result.error);
 
       // Update local state
       setContextItems((prev) =>
@@ -617,9 +627,7 @@ function EnhancedTableTab({
                         </td>
 
                         <td className={styles.tableCellConfidence}>
-                          <Text
-                            style={{ color: confidenceInfo.color, fontWeight: 500 }}
-                          >
+                          <Text style={{ color: confidenceInfo.color, fontWeight: 500 }}>
                             {confidenceInfo.label}
                           </Text>
                         </td>

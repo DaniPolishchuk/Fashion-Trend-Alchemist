@@ -1,6 +1,7 @@
 /**
  * API Client Base
  * Core HTTP client with error handling
+ * Authentication is handled by SAP Approuter via session cookies
  */
 
 import type { ApiResponse } from '../../types/api';
@@ -16,7 +17,7 @@ export async function fetchAPI<T>(
   options?: RequestInit
 ): Promise<ApiResponse<T>> {
   try {
-    // Only set Content-Type header if there's a body to send
+    // Build headers
     const headers: HeadersInit = {
       ...options?.headers,
     };
@@ -27,6 +28,7 @@ export async function fetchAPI<T>(
     }
 
     const response = await fetch(`${API_BASE}${endpoint}`, {
+      credentials: 'include', // Important: send session cookies to approuter
       headers,
       ...options,
     });

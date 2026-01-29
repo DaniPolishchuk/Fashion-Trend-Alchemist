@@ -3,6 +3,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import type { FiltersResponse } from '@fashion/types';
+import { fetchAPI } from '../services/api/client';
 
 interface UseFilterOptionsParams {
   types: string[];
@@ -26,13 +27,13 @@ async function fetchFilterOptions(params: UseFilterOptionsParams): Promise<Filte
     searchParams.append('mdTo', params.mdTo);
   }
 
-  const response = await fetch(`/api/filters/attributes?${searchParams}`);
+  const result = await fetchAPI<FiltersResponse>(`/api/filters/attributes?${searchParams}`);
 
-  if (!response.ok) {
-    throw new Error('Failed to fetch filter options');
+  if (result.error) {
+    throw new Error(result.error);
   }
 
-  return response.json();
+  return result.data!;
 }
 
 export function useFilterOptions(params: UseFilterOptionsParams) {

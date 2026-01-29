@@ -4,7 +4,7 @@
  */
 
 import { FastifyInstance } from 'fastify';
-import { llmConfig } from '@fashion/config';
+import { visionLlmConfig } from '@fashion/config';
 import OpenAI from 'openai';
 
 interface GenerateNameRequestBody {
@@ -70,12 +70,12 @@ Return ONLY the name, nothing else. No quotes, no explanation.`;
 
         // Initialize OpenAI client
         const openai = new OpenAI({
-          apiKey: llmConfig.apiKey,
-          baseURL: llmConfig.apiUrl,
+          apiKey: visionLlmConfig.apiKey,
+          baseURL: visionLlmConfig.proxyUrl,
         });
 
         const completion = await openai.chat.completions.create({
-          model: llmConfig.model,
+          model: visionLlmConfig.model,
           messages: [
             {
               role: 'system',

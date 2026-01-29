@@ -39,8 +39,8 @@ import {
   getSuccessScoreLabel,
   MAX_AI_VARIABLES,
   API_ENDPOINTS,
-  getErrorMessage,
 } from '../../constants/theAlchemistTab';
+import { fetchAPI } from '../../services/api/client';
 import type {
   AttributeConfig,
   PreviewData,
@@ -129,10 +129,11 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
   useEffect(() => {
     const fetchVelocityStatus = async () => {
       try {
-        const response = await fetch(`/api/projects/${project.id}/context-items`);
-        if (response.ok) {
-          const data = await response.json();
-          setVelocityScoresStale(data.velocityScoresStale || false);
+        const result = await fetchAPI<{ velocityScoresStale?: boolean }>(
+          `/api/projects/${project.id}/context-items`
+        );
+        if (result.data) {
+          setVelocityScoresStale(result.data.velocityScoresStale || false);
         }
       } catch (err) {
         console.error('Failed to fetch velocity status:', err);
@@ -187,10 +188,12 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
   const fetchPreviewData = useCallback(async () => {
     setPreviewLoading(true);
     try {
-      const response = await fetch(API_ENDPOINTS.RPT1_PREVIEW(project.id));
-      if (!response.ok) throw new Error('Failed to fetch preview data');
+      const result = await fetchAPI<{ enrichedCount?: number; totalCount?: number }>(
+        API_ENDPOINTS.RPT1_PREVIEW(project.id)
+      );
+      if (result.error) throw new Error(result.error);
 
-      const contextData = await response.json();
+      const contextData = result.data!;
       const lockedAttrs = attributes
         .filter((attr) => attr.category === ATTRIBUTE_CATEGORIES.LOCKED)
         .map((attr) => ({
@@ -250,23 +253,23 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
     setTransmutingError(null);
 
     try {
-      const response = await fetch(API_ENDPOINTS.RPT1_PREDICT(project.id), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lockedAttributes: buildLockedAttributes(attributes),
-          aiVariables: buildAIVariables(attributes),
-          successScore,
-        }),
-      });
+      const result = await fetchAPI<{ designName: string; details?: string }>(
+        API_ENDPOINTS.RPT1_PREDICT(project.id),
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            lockedAttributes: buildLockedAttributes(attributes),
+            aiVariables: buildAIVariables(attributes),
+            successScore,
+          }),
+        }
+      );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        setTransmutingError(getErrorMessage(response.status, result.details));
+      if (result.error) {
+        setTransmutingError(result.error);
         setTransmuting(false);
       } else {
-        setDesignName(result.designName);
+        setDesignName(result.data!.designName);
         setTransmuting(false);
       }
     } catch (error) {
@@ -834,8 +837,8 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
             Your context has changed since velocity scores were last calculated.
           </MessageStrip>
           <Text>
-            Results may not reflect current selection. It is recommended to recalculate
-            velocity scores before running the transmutation.
+            Results may not reflect current selection. It is recommended to recalculate velocity
+            scores before running the transmutation.
           </Text>
         </div>
       </Dialog>

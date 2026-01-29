@@ -1,0 +1,14 @@
+apiVersion: services.cloud.sap.com/v1
+kind: ServiceBinding
+metadata:
+  name: fashion-alchemist-xsuaa-binding
+  namespace: danispace
+  labels:
+    app: fashion-alchemist
+    app.kubernetes.io/name: fashion-alchemist-xsuaa-binding
+    app.kubernetes.io/component: security
+spec:
+  serviceInstanceName: fashion-alchemist-xsuaa-instance
+  secretName: fashion-alchemist-xsuaa-credentials
+  parameters:
+    credential-type: binding-secret

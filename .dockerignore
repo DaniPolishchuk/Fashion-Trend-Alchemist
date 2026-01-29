@@ -1,0 +1,64 @@
+# Dependencies (will be installed fresh in container)
+node_modules
+.pnpm-store
+**/node_modules
+**/pnpm-lock.yaml
+
+# Build outputs (will be rebuilt in container)
+dist
+build
+**/dist
+**/build
+*.tsbuildinfo
+
+# Environment files (secrets managed via k8s)
+.env
+.env.local
+.env.*.local
+.env.example
+
+# Git
+.git
+.gitignore
+.github
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# IDE
+.vscode
+.idea
+.claude
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage
+.nyc_output
+**/*.test.ts
+**/*.spec.ts
+**/__tests__
+
+# Kubernetes manifests (not needed in image)
+k8s/
+
+# Images and logos (not needed in backend/build)
+ImagesAndLogos/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+pnpm-debug.log*
+
+# Misc
+.prettierrc
+temp/
+tmp/

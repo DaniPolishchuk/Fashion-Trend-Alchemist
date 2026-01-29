@@ -1,0 +1,146 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: # Allow manual trigger from GitHub UI
+
+env:
+  REGISTRY: danylopolishchuk884
+
+jobs:
+  build-and-push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & Push Approuter
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/approuter/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.REGISTRY }}/fashion-alchemist-approuter:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & Push Backend (API)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/api-lite/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.REGISTRY }}/fashion-alchemist-api:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & Push Frontend (Web)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            VITE_FILER_BASE_URL=${{ secrets.VITE_FILER_BASE_URL }}
+            VITE_FILER_BUCKET=${{ secrets.VITE_FILER_BUCKET }}
+            VITE_FILER_GENERATED_BUCKET=${{ secrets.VITE_FILER_GENERATED_BUCKET }}
+          tags: ${{ env.REGISTRY }}/fashion-alchemist-web:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Summary
+        run: |
+          echo "## 🐳 Docker Images Built & Pushed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | Registry | Tag |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|----------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| Approuter | ${{ env.REGISTRY }} | \`latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| API | ${{ env.REGISTRY }} | \`latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Web | ${{ env.REGISTRY }} | \`latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ All images successfully pushed to Docker Hub" >> $GITHUB_STEP_SUMMARY
+
+  deploy-to-kyma:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    # Only deploy on push to main (not on PRs)
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Configure Kubernetes
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_BASE64 }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Verify cluster connection
+        run: |
+          echo "## 🔌 Cluster Connection" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Connected to Kubernetes cluster" >> $GITHUB_STEP_SUMMARY
+          kubectl cluster-info >> $GITHUB_STEP_SUMMARY 2>&1 || true
+
+      - name: Restart Application Pods
+        run: |
+          echo "Restarting fashion-alchemist deployment to pull new images..."
+          kubectl rollout restart deployment/fashion-alchemist-pod -n danispace
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Deployment Restarted" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Deployment \`fashion-alchemist-pod\` in namespace \`danispace\` has been restarted to pull latest images." >> $GITHUB_STEP_SUMMARY
+
+      - name: Wait for rollout
+        run: |
+          echo "Waiting for new pods to be ready..."
+          kubectl rollout status deployment/fashion-alchemist-pod -n danispace --timeout=5m
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Rollout completed successfully" >> $GITHUB_STEP_SUMMARY
+
+      - name: Verify deployment
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Deployment Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pods:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          kubectl get pods -n danispace -l app=fashion-alchemist >> $GITHUB_STEP_SUMMARY 2>&1 || true
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🌐 Application URL:" >> $GITHUB_STEP_SUMMARY
+          echo "https://fashion-alchemist.a549aaa.kyma.ondemand.com" >> $GITHUB_STEP_SUMMARY
+
+      - name: Get Pod Logs (Last 50 lines)
+        if: always()
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📋 Recent Backend Logs" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          kubectl logs -n danispace -l app=fashion-alchemist -c backend --tail=50 >> $GITHUB_STEP_SUMMARY 2>&1 || echo "No logs available yet" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

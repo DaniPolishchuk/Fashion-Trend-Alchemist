@@ -12,6 +12,7 @@ import {
   type AttributeCategory,
 } from '../constants/theAlchemistTab';
 import type { AttributeConfig } from '../types/theAlchemistTab';
+import { fetchAPI } from '../services/api/client';
 
 /**
  * Format attribute name: convert snake_case to Title Case
@@ -97,20 +98,29 @@ export const fetchArticleAttributes = async (
 
   try {
     const typesParam = productTypes.join(',');
-    const response = await fetch(API_ENDPOINTS.ATTRIBUTES(typesParam));
+    const result = await fetchAPI<{
+      productGroup?: string[];
+      productFamily?: string[];
+      patternStyle?: string[];
+      specificColor?: string[];
+      colorIntensity?: string[];
+      colorFamily?: string[];
+      customerSegment?: string[];
+      styleConcept?: string[];
+      fabricTypeBase?: string[];
+    }>(API_ENDPOINTS.ATTRIBUTES(typesParam));
 
-    if (response.ok) {
-      const data = await response.json();
+    if (result.data) {
       return {
-        product_group: data.productGroup || [],
-        product_family: data.productFamily || [],
-        pattern_style: data.patternStyle || [],
-        specific_color: data.specificColor || [],
-        color_intensity: data.colorIntensity || [],
-        color_family: data.colorFamily || [],
-        customer_segment: data.customerSegment || [],
-        style_concept: data.styleConcept || [],
-        fabric_type_base: data.fabricTypeBase || [],
+        product_group: result.data.productGroup || [],
+        product_family: result.data.productFamily || [],
+        pattern_style: result.data.patternStyle || [],
+        specific_color: result.data.specificColor || [],
+        color_intensity: result.data.colorIntensity || [],
+        color_family: result.data.colorFamily || [],
+        customer_segment: result.data.customerSegment || [],
+        style_concept: result.data.styleConcept || [],
+        fabric_type_base: result.data.fabricTypeBase || [],
         product_type: productTypes,
       };
     }

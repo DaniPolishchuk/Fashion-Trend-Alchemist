@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fashion-alchemist-app-config
+  namespace: danispace
+  labels:
+    app: fashion-alchemist
+    app.kubernetes.io/name: fashion-alchemist-config
+    app.kubernetes.io/component: configuration
+data:
+  # Application Configuration
+  NODE_ENV: "production"
+  API_PORT: "3001"
+  API_HOST: "0.0.0.0"
+  LOG_LEVEL: "info"
+
+  # Image Storage Configuration
+  IMAGE_STRATEGY: "filer"
+  IMAGE_URL_EXPIRATION: "3600"
+
+  # Enrichment Processing Configuration
+  ENRICHMENT_CONCURRENCY: "5"
+  ENRICHMENT_PROGRESS_INTERVAL_MS: "500"
+
+  # Image Generation Size
+  IMAGE_GEN_WIDTH: "1024"
+  IMAGE_GEN_HEIGHT: "1024"
+
+  # SAP AI Core Resource Group
+  RESOURCE_GROUP: "generative-ai"

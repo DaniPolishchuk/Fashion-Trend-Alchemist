@@ -13,7 +13,6 @@ build/
 .env.*.local
 
 # Logs
-logs/
 *.log
 npm-debug.log*
 pnpm-debug.log*
@@ -40,8 +39,12 @@ packages/db/drizzle/
 
 # Misc
 *.local
-.cache/
-temp/
-tmp/
 
+# Helm
 values.yaml
+
+# Kubernetes secrets (NEVER commit these!)
+k8s/secrets.yaml
+k8s/vcap-services-job.yaml
+*.kubeconfig
+kubeconfig*

@@ -27,30 +27,13 @@ export const dbConfig = {
 } as const;
 
 /**
- * Image storage strategy: 's3' (presigned URLs) or 'filer' (direct HTTP)
- */
-export const imageStrategy = (process.env.IMAGE_STRATEGY || 's3') as 's3' | 'filer';
-
-/**
- * S3/SeaweedFS S3 Gateway configuration (when IMAGE_STRATEGY=s3)
- */
-export const s3Config = {
-  endpoint: process.env.S3_ENDPOINT || 'http://localhost:8333',
-  region: process.env.S3_REGION || 'us-east-1',
-  accessKeyId: process.env.S3_ACCESS_KEY_ID || 'admin',
-  secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || 'admin',
-  bucket: process.env.S3_BUCKET || 'images',
-  forcePathStyle: true,
-} as const;
-
-/**
  * SeaweedFS Filer HTTP configuration (when IMAGE_STRATEGY=filer)
  * For direct URLs via /images/... path
  */
 export const filerConfig = {
-  baseUrl: process.env.FILER_BASE_URL || 'http://localhost:8888',
-  generatedBucket: process.env.FILER_GENERATED_BUCKET || 'generatedProducts',
-  bucket: process.env.FILER_BUCKET || 'images',
+  baseUrl: process.env.VITE_FILER_BASE_URL || 'https://seaweedfs.a549aaa.kyma.ondemand.com',
+  generatedBucket: process.env.VITE_FILER_GENERATED_BUCKET || 'generatedProducts',
+  bucket: process.env.VITE_FILER_BUCKET || 'images',
 } as const;
 
 /**
@@ -61,22 +44,6 @@ export const appConfig = {
   apiPort: parseInt(process.env.API_PORT || '3000', 10),
   apiHost: process.env.API_HOST || '0.0.0.0',
   logLevel: process.env.LOG_LEVEL || 'info',
-} as const;
-
-/**
- * Image presigned URL configuration
- */
-export const imageConfig = {
-  urlExpirationSeconds: parseInt(process.env.IMAGE_URL_EXPIRATION || '3600', 10),
-} as const;
-
-/**
- * LLM API configuration
- */
-export const llmConfig = {
-  apiUrl: process.env.LLM_API_URL || 'https://api.openai.com/v1',
-  apiKey: process.env.LLM_API_KEY || '',
-  model: process.env.LLM_MODEL || 'gpt-4',
 } as const;
 
 /**

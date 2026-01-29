@@ -1,0 +1,24 @@
+apiVersion: services.cloud.sap.com/v1
+kind: ServiceInstance
+metadata:
+  name: fashion-alchemist-xsuaa-instance
+  namespace: danispace
+  labels:
+    app: fashion-alchemist
+    app.kubernetes.io/name: fashion-alchemist-xsuaa
+    app.kubernetes.io/component: security
+spec:
+  serviceOfferingName: xsuaa
+  servicePlanName: application
+  parameters:
+    xsappname: fashion-alchemist-app
+    tenant-mode: dedicated
+    oauth2-configuration:
+      grant-types:
+        - authorization_code
+        - refresh_token
+        - client_credentials
+      redirect-uris:
+        - https://fashion-alchemist.a549aaa.kyma.ondemand.com/**
+        - https://fashion-alchemist.a549aaa.kyma.ondemand.com/oauth2/callback
+        - http://localhost:*/**
