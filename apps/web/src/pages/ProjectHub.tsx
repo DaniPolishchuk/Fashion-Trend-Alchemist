@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   BusyIndicator,
   IllustratedMessage,
@@ -54,7 +54,26 @@ const formatCreationDate = (createdAt: string): string => {
 function ProjectHub() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TabType>('enhanced-table');
+  const [searchParams] = useSearchParams();
+
+  // Get tab from URL or default to 'enhanced-table'
+  const getInitialTab = (): TabType => {
+    const tabParam = searchParams.get('tab');
+    const validTabs = TABS.map((t) => t.id);
+    return tabParam && validTabs.includes(tabParam as TabType)
+      ? (tabParam as TabType)
+      : 'enhanced-table';
+  };
+
+  const [activeTab, setActiveTab] = useState<TabType>(getInitialTab());
+
+  // Update active tab when URL parameter changes
+  useEffect(() => {
+    const newTab = getInitialTab();
+    if (newTab !== activeTab) {
+      setActiveTab(newTab);
+    }
+  }, [searchParams]);
 
   // Mismatch review state
   const [mismatchSummary, setMismatchSummary] = useState<MismatchSummary>({
@@ -65,6 +84,7 @@ function ProjectHub() {
   const [contextItems, setContextItems] = useState<ContextItem[]>([]);
   const [velocityScoresStale, setVelocityScoresStale] = useState(false);
   const [mismatchDialogOpen, setMismatchDialogOpen] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Use custom hook for project data
   const {
@@ -170,12 +190,17 @@ function ProjectHub() {
   // Handle mismatch review confirmation
   const handleMismatchReviewConfirm = useCallback(() => {
     fetchMismatchData(); // Refresh data after review
+    setVelocityScoresStale(false); // Backend auto-recalculates, so clear warning
+    setRefreshTrigger((prev) => prev + 1); // Force table refresh
   }, [fetchMismatchData]);
 
   // Handle velocity recalculation
   const handleVelocityRecalculated = useCallback(() => {
     setVelocityScoresStale(false);
-    fetchMismatchData(); // Refresh data after recalculation
+    // Refresh all data after recalculation to show updated velocity scores
+    fetchMismatchData();
+    // Increment refresh trigger to force EnhancedTableTab to re-fetch
+    setRefreshTrigger((prev) => prev + 1);
   }, [fetchMismatchData]);
 
   // Render tab content
@@ -191,6 +216,8 @@ function ProjectHub() {
             projectId={project.id}
             enrichmentStatus={enrichmentStatus}
             currentArticleId={currentArticleId}
+            onContextChange={fetchMismatchData}
+            refreshTrigger={refreshTrigger}
           />
         );
       case 'result-overview':
@@ -293,7 +320,10 @@ function ProjectHub() {
         {TABS.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              setActiveTab(tab.id);
+              navigate(`/project/${projectId}?tab=${tab.id}`, { replace: true });
+            }}
             className={`${styles.tab} ${activeTab === tab.id ? styles.tabActive : ''}`}
           >
             <Icon

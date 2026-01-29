@@ -3,7 +3,16 @@
  * Links projects to selected articles with calculated velocity scores
  */
 
-import { pgTable, uuid, varchar, numeric, jsonb, primaryKey, integer, boolean } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  varchar,
+  numeric,
+  jsonb,
+  primaryKey,
+  integer,
+  boolean,
+} from 'drizzle-orm/pg-core';
 import { projects } from './projects.js';
 import { articles } from './articles.js';
 
@@ -21,10 +30,12 @@ export const projectContextItems = pgTable(
       .notNull()
       .references(() => articles.articleId),
     velocityScore: numeric('velocity_score', { precision: 10, scale: 2 }).notNull(),
+    rawVelocityScore: numeric('raw_velocity_score', { precision: 10, scale: 2 }).notNull(),
     enrichedAttributes: jsonb('enriched_attributes'),
     enrichmentError: varchar('enrichment_error', { length: 1000 }), // Error message if enrichment failed
     mismatchConfidence: integer('mismatch_confidence'), // 0-100, likelihood of product type mismatch
     isExcluded: boolean('is_excluded').notNull().default(false), // Whether article is excluded from RPT-1 context
+    originalIsExcluded: boolean('original_is_excluded').notNull().default(false), // Original inclusion state when context was locked
   },
   (table) => ({
     // Composite primary key to ensure no duplicate articles per project

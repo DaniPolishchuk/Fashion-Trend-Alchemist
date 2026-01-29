@@ -27,6 +27,7 @@ import '@ui5/webcomponents-icons/dist/weather-proofing.js';
 import '@ui5/webcomponents-icons/dist/lightbulb.js';
 
 import { useTheme } from '../hooks/useTheme';
+import { useUser } from '../hooks/useUser';
 import {
   BRANDING,
   MOCK_USER,
@@ -48,6 +49,14 @@ function AppShell({ children }: AppShellProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { isDarkTheme, toggleTheme, themeIcon, themeLabel } = useTheme();
+  const { user } = useUser();
+
+  // Use authenticated user data if available, otherwise fall back to mock data
+  const displayUser = user || {
+    name: MOCK_USER.NAME,
+    email: MOCK_USER.EMAIL,
+    initials: MOCK_USER.INITIALS,
+  };
 
   // Popover state management
   const [profilePopoverOpen, setProfilePopoverOpen] = useState(false);
@@ -132,7 +141,7 @@ function AppShell({ children }: AppShellProps) {
           profile={
             <Avatar
               size={AVATAR.SIZE_SMALL}
-              initials={MOCK_USER.INITIALS}
+              initials={displayUser.initials}
               colorScheme={MOCK_USER.AVATAR_COLOR}
               className={styles.avatar}
             />
@@ -161,12 +170,12 @@ function AppShell({ children }: AppShellProps) {
           <div className={styles.profileInfo}>
             <Avatar
               size={AVATAR.SIZE_MEDIUM}
-              initials={MOCK_USER.INITIALS}
+              initials={displayUser.initials}
               colorScheme={MOCK_USER.AVATAR_COLOR}
             />
             <div className={styles.profileDetails}>
-              <Text className={styles.profileName}>{MOCK_USER.NAME}</Text>
-              <Label>{MOCK_USER.EMAIL}</Label>
+              <Text className={styles.profileName}>{displayUser.name}</Text>
+              <Label>{displayUser.email}</Label>
             </div>
           </div>
         </div>

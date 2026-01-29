@@ -31,14 +31,14 @@ const HARDCODED_USER_ID = '00000000-0000-0000-0000-000000000000';
 
 /**
  * Re-normalize velocity scores for all included (non-excluded) articles
- * Takes existing raw velocity scores and re-normalizes to 0-100 among included items only
+ * Uses raw velocity scores to properly re-normalize when the included set changes
  */
 async function recalculateVelocityScores(projectId: string): Promise<void> {
-  // Get all context items for the project
+  // Get all context items for the project with their RAW velocity scores
   const items = await db
     .select({
       articleId: projectContextItems.articleId,
-      velocityScore: projectContextItems.velocityScore,
+      rawVelocityScore: projectContextItems.rawVelocityScore,
       isExcluded: projectContextItems.isExcluded,
     })
     .from(projectContextItems)
@@ -51,19 +51,22 @@ async function recalculateVelocityScores(projectId: string): Promise<void> {
     return; // No included items to normalize
   }
 
-  // Get min and max velocity scores among included items
-  const velocityScores = includedItems.map((item) => parseFloat(item.velocityScore) || 0);
-  const minVelocity = Math.min(...velocityScores);
-  const maxVelocity = Math.max(...velocityScores);
+  // Get min and max RAW velocity scores among included items
+  const rawVelocityScores = includedItems.map((item) => parseFloat(item.rawVelocityScore) || 0);
+  const minVelocity = Math.min(...rawVelocityScores);
+  const maxVelocity = Math.max(...rawVelocityScores);
   const velocityRange = maxVelocity - minVelocity;
 
-  // Re-normalize all included items
-  for (const item of includedItems) {
-    const rawVelocity = parseFloat(item.velocityScore) || 0;
-    const normalizedVelocity =
-      velocityRange === 0
-        ? 100
-        : ((rawVelocity - minVelocity) / velocityRange) * 100;
+  // Re-normalize ALL items (both included and excluded) based on included items' range
+  // This ensures that when you re-include an item, it gets the correct normalized score
+  // Cap at 100 to handle excluded items with higher raw scores than included max
+  for (const item of items) {
+    const rawVelocity = parseFloat(item.rawVelocityScore) || 0;
+    const calculatedScore =
+      velocityRange === 0 ? 100 : ((rawVelocity - minVelocity) / velocityRange) * 100;
+
+    // Cap at 100 to prevent excluded items from exceeding the scale
+    const normalizedVelocity = Math.min(100, calculatedScore);
 
     await db
       .update(projectContextItems)
@@ -329,7 +332,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
         const maxVelocity = Math.max(...velocityScores);
         const velocityRange = maxVelocity - minVelocity;
 
-        // Bulk insert context items with normalized velocity scores
+        // Bulk insert context items with both raw and normalized velocity scores
         const contextItems = validatedInput.articles.map((article) => {
           // Normalize to 0-100 scale
           // If all articles have the same velocity, assign 100 to all
@@ -342,7 +345,9 @@ export default async function projectRoutes(fastify: FastifyInstance) {
             projectId,
             articleId: article.article_id,
             velocityScore: normalizedVelocity.toFixed(2), // Store normalized 0-100 score
+            rawVelocityScore: article.velocity_score.toFixed(2), // Store original raw score for re-normalization
             enrichedAttributes: null,
+            originalIsExcluded: false, // Track original state - all items start as included
           };
         });
 
@@ -884,8 +889,9 @@ export default async function projectRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'Context item not found' });
       }
 
-      // Update exclusion status and mark velocity scores as stale
+      // Update exclusion status and check if all items are back to original state
       await db.transaction(async (tx) => {
+        // Update the article's exclusion status
         await tx
           .update(projectContextItems)
           .set({ isExcluded })
@@ -896,9 +902,22 @@ export default async function projectRoutes(fastify: FastifyInstance) {
             )
           );
 
+        // Check if ALL items are back to their original state
+        const allItems = await tx
+          .select({
+            isExcluded: projectContextItems.isExcluded,
+            originalIsExcluded: projectContextItems.originalIsExcluded,
+          })
+          .from(projectContextItems)
+          .where(eq(projectContextItems.projectId, projectId));
+
+        // Determine if any item differs from its original state
+        const hasChanges = allItems.some((item) => item.isExcluded !== item.originalIsExcluded);
+
+        // Update velocity stale flag based on whether changes exist
         await tx
           .update(projects)
-          .set({ velocityScoresStale: true })
+          .set({ velocityScoresStale: hasChanges })
           .where(eq(projects.id, projectId));
       });
 
@@ -919,6 +938,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
    * POST /api/projects/:id/recalculate-velocity
    * Re-normalize velocity scores for all included articles
    * Does NOT re-query transactions, just re-normalizes existing scores
+   * Also resets originalIsExcluded to current state, establishing new baseline
    */
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/recalculate-velocity',
@@ -937,13 +957,36 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
         await recalculateVelocityScores(projectId);
 
+        // Reset originalIsExcluded to current isExcluded state
+        // This establishes a NEW baseline after recalculation
+        const allItems = await db
+          .select({
+            articleId: projectContextItems.articleId,
+            isExcluded: projectContextItems.isExcluded,
+          })
+          .from(projectContextItems)
+          .where(eq(projectContextItems.projectId, projectId));
+
+        // Update each item's originalIsExcluded to match current isExcluded
+        for (const item of allItems) {
+          await db
+            .update(projectContextItems)
+            .set({ originalIsExcluded: item.isExcluded })
+            .where(
+              and(
+                eq(projectContextItems.projectId, projectId),
+                eq(projectContextItems.articleId, item.articleId)
+              )
+            );
+        }
+
         // Mark velocity scores as no longer stale
         await db
           .update(projects)
           .set({ velocityScoresStale: false })
           .where(eq(projects.id, projectId));
 
-        fastify.log.info({ projectId }, 'Velocity scores recalculated');
+        fastify.log.info({ projectId }, 'Velocity scores recalculated and baseline reset');
 
         return reply.status(200).send({
           success: true,

@@ -39,8 +39,10 @@ export interface MismatchSummary {
 
 export interface EnhancedTableTabProps {
   projectId: string;
-  enrichmentStatus: 'idle' | 'running' | 'completed' | 'failed';
+  enrichmentStatus: string;
   currentArticleId: string | null;
+  onContextChange?: () => void;
+  refreshTrigger?: number; // Increment this to trigger data refresh
 }
 
 export interface StatusDisplay {

@@ -76,6 +76,7 @@ export default async function contextItemsRoutes(fastify: FastifyInstance) {
           enrichmentError: projectContextItems.enrichmentError,
           mismatchConfidence: projectContextItems.mismatchConfidence,
           isExcluded: projectContextItems.isExcluded,
+          originalIsExcluded: projectContextItems.originalIsExcluded,
         })
         .from(projectContextItems)
         .innerJoin(articles, eq(projectContextItems.articleId, articles.articleId))
@@ -120,6 +121,10 @@ export default async function contextItemsRoutes(fastify: FastifyInstance) {
       const ontologySchema = project.ontologySchema as OntologySchema | null;
       const ontologyAttributes = extractOntologyAttributes(ontologySchema);
 
+      // Dynamically calculate velocityScoresStale by comparing current vs original state
+      // This ensures we always return the correct value even if the database is stale
+      const velocityScoresStale = items.some((item) => item.isExcluded !== item.originalIsExcluded);
+
       return reply.status(200).send({
         items: itemsWithImages,
         summary: {
@@ -133,7 +138,7 @@ export default async function contextItemsRoutes(fastify: FastifyInstance) {
           excludedCount,
           reviewCompleted: project.mismatchReviewCompleted,
         },
-        velocityScoresStale: project.velocityScoresStale,
+        velocityScoresStale,
         ontologyAttributes,
         enrichmentStatus: project.enrichmentStatus,
         currentArticleId: project.enrichmentCurrentArticleId,

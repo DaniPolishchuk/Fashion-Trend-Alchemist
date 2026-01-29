@@ -326,9 +326,6 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
         });
       }
 
-      // Build RPT-1 request payload
-      const allColumnKeys = [...Object.keys(lockedAttributes), ...aiVariables];
-
       // Map attribute keys to their data sources
       const getAttributeValue = (item: (typeof contextItems)[0], key: string): string | null => {
         // Check if it's an article-level attribute
@@ -373,31 +370,59 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
       const contextRows: Record<string, string | number>[] = contextItems
         .map((item) => {
           const row: Record<string, string | number> = {};
-          let hasAllValues = true;
+          let hasAllLockedValues = true;
 
           // Add success_score as the first column (from normalized velocity score)
           const velocityScoreNum = parseFloat(item.velocityScore || '0');
           row['success_score'] = Math.round(velocityScoreNum); // Round to integer for cleaner data
 
-          for (const key of allColumnKeys) {
+          // Add locked attributes to the row - they don't need to match the query values
+          // Context rows provide diverse examples for RPT-1 to learn patterns from
+          // Accept ANY value (including empty string) as long as the column exists
+          for (const key of Object.keys(lockedAttributes)) {
             const value = getAttributeValue(item, key);
-            if (value !== null && value !== undefined && value !== '') {
-              row[key] = value;
+            if (value !== null && value !== undefined) {
+              // Convert arrays to comma-separated strings, or use value as-is (including '')
+              row[key] = Array.isArray(value) ? value.join(', ') : value;
             } else {
-              // If any required attribute is missing, skip this row
-              hasAllValues = false;
+              // Column doesn't exist in this item - skip row
+              hasAllLockedValues = false;
               break;
             }
           }
 
-          return hasAllValues ? row : null;
+          // If locked attributes are valid, add AI variables (use empty string for NULL)
+          if (hasAllLockedValues) {
+            for (const key of aiVariables) {
+              const value = getAttributeValue(item, key);
+              // Explicitly convert any falsy value to empty string
+              // Also convert arrays to comma-separated strings
+              if (value !== null && value !== undefined && value !== '') {
+                row[key] = Array.isArray(value) ? value.join(', ') : value;
+              } else {
+                row[key] = '';
+              }
+            }
+            return row;
+          }
+
+          return null;
         })
         .filter((row): row is Record<string, string | number> => row !== null);
+
+      fastify.log.info(
+        {
+          totalContextItems: contextItems.length,
+          filteredContextRows: contextRows.length,
+          lockedAttributes,
+        },
+        'Context row filtering results'
+      );
 
       if (contextRows.length < 2) {
         return reply.status(400).send({
           error: 'Insufficient context data',
-          details: `Only ${contextRows.length} valid context rows found. RPT-1 requires at least 2 context rows.`,
+          details: `Only ${contextRows.length} valid context rows found out of ${contextItems.length} total items. RPT-1 requires at least 2 context rows where all locked attributes match exactly.`,
         });
       }
 
@@ -412,12 +437,24 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
         queryRow[key] = '[PREDICT]';
       }
 
+      // Debug: Log sample rows AND check for any nulls in all rows
+      const rowsWithNulls = contextRows
+        .map((row, idx) => {
+          const nullKeys = Object.keys(row).filter((k) => row[k] === null || row[k] === undefined);
+          return nullKeys.length > 0 ? { rowIndex: idx, nullKeys } : null;
+        })
+        .filter((x) => x !== null);
+
       fastify.log.info(
         {
           contextRowCount: contextRows.length,
           lockedAttributeCount: Object.keys(lockedAttributes).length,
           aiVariableCount: aiVariables.length,
           targetSuccessScore,
+          rowsWithNulls: rowsWithNulls.length > 0 ? rowsWithNulls : 'None',
+          sampleRow1: contextRows[0],
+          sampleRow26: contextRows[26] || 'N/A',
+          sampleRow30: contextRows[30] || 'N/A',
         },
         'Preparing RPT-1 prediction request'
       );
