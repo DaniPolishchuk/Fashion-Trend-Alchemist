@@ -62,6 +62,8 @@ function EnhancedTableTab({
   projectId,
   enrichmentStatus,
   currentArticleId,
+  onContextChange,
+  refreshTrigger,
 }: EnhancedTableTabProps) {
   // Data state
   const [contextItems, setContextItems] = useState<ContextItem[]>([]);
@@ -125,6 +127,13 @@ function EnhancedTableTab({
   useEffect(() => {
     fetchContextItems();
   }, [fetchContextItems]);
+
+  // Refresh data when refreshTrigger changes (e.g., after recalculation)
+  useEffect(() => {
+    if (refreshTrigger !== undefined) {
+      fetchContextItems();
+    }
+  }, [refreshTrigger, fetchContextItems]);
 
   // Auto-expand control panel when enrichment is running or there are failed items
   useEffect(() => {
@@ -321,6 +330,11 @@ function EnhancedTableTab({
           item.articleId === articleId ? { ...item, isExcluded: !currentlyExcluded } : item
         )
       );
+
+      // Notify parent component of context change
+      if (onContextChange) {
+        onContextChange();
+      }
     } catch (err) {
       console.error('Error updating exclusion:', err);
     }

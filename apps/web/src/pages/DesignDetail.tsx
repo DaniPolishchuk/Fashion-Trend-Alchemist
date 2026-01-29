@@ -416,11 +416,14 @@ function DesignDetail() {
               navigate('/');
             } else if (text === projectName) {
               navigate(`/project/${projectId}`);
+            } else if (text === BREADCRUMBS.RESULTS) {
+              navigate(`/project/${projectId}?tab=result-overview`);
             }
           }}
         >
           <BreadcrumbsItem>{BREADCRUMBS.HOME}</BreadcrumbsItem>
           <BreadcrumbsItem>{projectName}</BreadcrumbsItem>
+          <BreadcrumbsItem>{BREADCRUMBS.RESULTS}</BreadcrumbsItem>
           <BreadcrumbsItem>{design.name}</BreadcrumbsItem>
         </Breadcrumbs>
       </div>
