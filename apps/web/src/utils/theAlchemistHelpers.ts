@@ -1,6 +1,6 @@
 /**
  * The Alchemist Tab Helper Functions
- * Utility functions for attribute management
+ * Utility functions for attribute management, persistence, and design transformation
  */
 
 import {
@@ -9,9 +9,15 @@ import {
   DEFAULT_NOT_INCLUDED,
   ATTRIBUTE_CATEGORIES,
   API_ENDPOINTS,
+  getSessionStorageKey,
   type AttributeCategory,
 } from '../constants/theAlchemistTab';
-import type { AttributeConfig } from '../types/theAlchemistTab';
+import type {
+  AttributeConfig,
+  PersistedAttribute,
+  PersistedAlchemistState,
+  GeneratedDesign,
+} from '../types/theAlchemistTab';
 import { fetchAPI } from '../services/api/client';
 
 /**
@@ -153,4 +159,188 @@ export const buildAIVariables = (attributes: AttributeConfig[]): string[] => {
   return attributes
     .filter((attr) => attr.category === ATTRIBUTE_CATEGORIES.AI)
     .map((attr) => attr.key);
+};
+
+// ==================== SESSION STORAGE FUNCTIONS ====================
+
+/**
+ * Save attributes to sessionStorage
+ */
+export const saveAttributesToSession = (
+  projectId: string,
+  attributes: AttributeConfig[]
+): void => {
+  try {
+    const persistedState: PersistedAlchemistState = {
+      projectId,
+      attributes: attributes.map((attr) => ({
+        key: attr.key,
+        category: attr.category,
+        selectedValue: attr.selectedValue,
+      })),
+    };
+    sessionStorage.setItem(getSessionStorageKey(projectId), JSON.stringify(persistedState));
+  } catch (error) {
+    console.error('Failed to save attributes to sessionStorage:', error);
+  }
+};
+
+/**
+ * Load attributes from sessionStorage
+ * Returns null if no valid state found
+ */
+export const loadAttributesFromSession = (
+  projectId: string
+): PersistedAlchemistState | null => {
+  try {
+    const stored = sessionStorage.getItem(getSessionStorageKey(projectId));
+    if (!stored) return null;
+
+    const parsed = JSON.parse(stored) as PersistedAlchemistState;
+
+    // Validate structure
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      parsed.projectId !== projectId ||
+      !Array.isArray(parsed.attributes)
+    ) {
+      console.warn('Invalid sessionStorage state structure, ignoring');
+      return null;
+    }
+
+    return parsed;
+  } catch (error) {
+    console.error('Failed to load attributes from sessionStorage:', error);
+    return null;
+  }
+};
+
+/**
+ * Clear attributes from sessionStorage for a project
+ */
+export const clearAttributesFromSession = (projectId: string): void => {
+  try {
+    sessionStorage.removeItem(getSessionStorageKey(projectId));
+  } catch (error) {
+    console.error('Failed to clear attributes from sessionStorage:', error);
+  }
+};
+
+// ==================== VALIDATION & MERGE FUNCTIONS ====================
+
+/**
+ * Validate and merge stored attributes with current attribute definitions
+ * This handles cases where stored state may be stale (schema changed)
+ */
+export const validateAndMergeAttributes = (
+  storedAttributes: PersistedAttribute[],
+  currentAttributes: AttributeConfig[]
+): AttributeConfig[] => {
+  // Build a map of current attributes by key
+  const currentByKey = new Map(currentAttributes.map((attr) => [attr.key, attr]));
+  const result: AttributeConfig[] = [];
+  const processedKeys = new Set<string>();
+
+  // Process stored attributes
+  for (const storedAttr of storedAttributes) {
+    const currentAttr = currentByKey.get(storedAttr.key);
+
+    // Skip attributes that no longer exist in current schema
+    if (!currentAttr) {
+      console.warn(`Stored attribute "${storedAttr.key}" not found in current schema, skipping`);
+      continue;
+    }
+
+    processedKeys.add(storedAttr.key);
+
+    // Validate selectedValue for locked attributes
+    let selectedValue = storedAttr.selectedValue;
+    if (storedAttr.category === ATTRIBUTE_CATEGORIES.LOCKED && selectedValue) {
+      if (!currentAttr.variants.includes(selectedValue)) {
+        console.warn(
+          `Stored value "${selectedValue}" for "${storedAttr.key}" not in current variants, using first variant`
+        );
+        selectedValue = currentAttr.variants[0] || null;
+      }
+    }
+
+    // Validate category
+    const validCategories = Object.values(ATTRIBUTE_CATEGORIES);
+    const category = validCategories.includes(storedAttr.category as AttributeCategory)
+      ? (storedAttr.category as AttributeCategory)
+      : currentAttr.category;
+
+    result.push({
+      ...currentAttr,
+      category,
+      selectedValue,
+    });
+  }
+
+  // Add current attributes that weren't in stored state (use defaults)
+  for (const currentAttr of currentAttributes) {
+    if (!processedKeys.has(currentAttr.key)) {
+      result.push(currentAttr);
+    }
+  }
+
+  return result;
+};
+
+// ==================== REFINE DESIGN TRANSFORMATION ====================
+
+/**
+ * Transform a generated design's attributes into AttributeConfig format
+ * - inputConstraints become Locked attributes with their values
+ * - predictedAttributes become AI variables
+ * - All other attributes become Not Included
+ */
+export const transformDesignToAttributes = (
+  design: GeneratedDesign,
+  currentAttributes: AttributeConfig[]
+): AttributeConfig[] => {
+  const inputConstraints = design.inputConstraints || {};
+  const predictedAttributes = design.predictedAttributes || {};
+
+  // Build sets of keys from the design
+  const lockedKeys = new Set(Object.keys(inputConstraints));
+  const aiKeys = new Set(Object.keys(predictedAttributes));
+
+  return currentAttributes.map((attr) => {
+    // Check if this attribute was in inputConstraints (locked)
+    if (lockedKeys.has(attr.key)) {
+      const value = inputConstraints[attr.key];
+      // Validate value exists in variants
+      const validValue = attr.variants.includes(value) ? value : attr.variants[0] || null;
+
+      if (value && !attr.variants.includes(value)) {
+        console.warn(
+          `Design value "${value}" for "${attr.key}" not in current variants, using "${validValue}"`
+        );
+      }
+
+      return {
+        ...attr,
+        category: ATTRIBUTE_CATEGORIES.LOCKED,
+        selectedValue: validValue,
+      };
+    }
+
+    // Check if this attribute was in predictedAttributes (AI variable)
+    if (aiKeys.has(attr.key)) {
+      return {
+        ...attr,
+        category: ATTRIBUTE_CATEGORIES.AI,
+        selectedValue: null,
+      };
+    }
+
+    // All other attributes go to Not Included
+    return {
+      ...attr,
+      category: ATTRIBUTE_CATEGORIES.NOT_INCLUDED,
+      selectedValue: null,
+    };
+  });
 };
