@@ -3,7 +3,7 @@
  * Optimized with constants, CSS modules, custom hooks, and reusable components
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   BusyIndicator,
@@ -38,8 +38,20 @@ import { useEnrichmentSSE } from '../hooks/useEnrichmentSSE';
 import { TABS, TEXT, API_ENDPOINTS, type TabType } from '../constants/projectHub';
 import { API_ENDPOINTS as TABLE_ENDPOINTS } from '../constants/enhancedTableTab';
 import type { MismatchSummary, ContextItem } from '../types/enhancedTableTab';
+import type { AttributeConfig, GeneratedDesign } from '../types/theAlchemistTab';
 import { fetchAPI } from '../services/api/client';
+import {
+  saveAttributesToSession,
+  loadAttributesFromSession,
+  initializeAttributes,
+  fetchArticleAttributes,
+  validateAndMergeAttributes,
+  transformDesignToAttributes,
+} from '../utils/theAlchemistHelpers';
 import styles from '../styles/pages/ProjectHub.module.css';
+
+// Debounce delay for sessionStorage writes
+const SESSION_STORAGE_DEBOUNCE_MS = 500;
 
 // Helper function to format creation date
 const formatCreationDate = (createdAt: string): string => {
@@ -86,6 +98,16 @@ function ProjectHub() {
   const [mismatchDialogOpen, setMismatchDialogOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
+  // ==================== ALCHEMIST TAB STATE MANAGEMENT ====================
+
+  // Lifted state for TheAlchemistTab - survives tab switches
+  const [alchemistAttributes, setAlchemistAttributes] = useState<AttributeConfig[] | null>(null);
+  const [refineFromLoading, setRefineFromLoading] = useState(false);
+  const [refineFromProcessed, setRefineFromProcessed] = useState(false);
+
+  // Ref for debounced sessionStorage write
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Use custom hook for project data
   const {
     project,
@@ -98,6 +120,132 @@ function ProjectHub() {
     setEnrichmentProgress,
     setCurrentArticleId,
   } = useProjectData(projectId);
+
+  // Handle attribute changes from TheAlchemistTab
+  const handleAlchemistAttributesChange = useCallback(
+    (attributes: AttributeConfig[]) => {
+      setAlchemistAttributes(attributes);
+
+      // Debounced save to sessionStorage
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      saveTimeoutRef.current = setTimeout(() => {
+        if (projectId) {
+          saveAttributesToSession(projectId, attributes);
+        }
+      }, SESSION_STORAGE_DEBOUNCE_MS);
+    },
+    [projectId]
+  );
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Handle refineFrom URL parameter
+  useEffect(() => {
+    const refineFrom = searchParams.get('refineFrom');
+
+    // Skip if already processed or no refineFrom
+    if (!refineFrom || refineFromProcessed || !projectId || !project) {
+      return;
+    }
+
+    const processRefineFrom = async () => {
+      setRefineFromLoading(true);
+      setRefineFromProcessed(true);
+
+      try {
+        // Fetch designs to find the one to refine from
+        const result = await fetchAPI<GeneratedDesign[]>(
+          `/api/projects/${projectId}/generated-designs`
+        );
+
+        if (result.error) {
+          console.error('Failed to fetch designs for refineFrom:', result.error);
+          // Clear refineFrom and fall back to sessionStorage/defaults
+          navigate(`/project/${projectId}?tab=alchemist`, { replace: true });
+          return;
+        }
+
+        const designs = result.data || [];
+        const design = designs.find((d) => d.id === refineFrom);
+
+        if (!design) {
+          console.warn(`Design ${refineFrom} not found, falling back to defaults`);
+          navigate(`/project/${projectId}?tab=alchemist`, { replace: true });
+          return;
+        }
+
+        // We need the current attributes to transform - fetch them if not available
+        const productTypes = (project.scopeConfig as { productTypes?: string[] } | null)?.productTypes;
+        const articleOptions = await fetchArticleAttributes(productTypes);
+        const defaultAttributes = initializeAttributes(articleOptions, project.ontologySchema);
+
+        // Transform design to attributes
+        const transformedAttributes = transformDesignToAttributes(design, defaultAttributes);
+
+        // Set the attributes and save to session
+        setAlchemistAttributes(transformedAttributes);
+        saveAttributesToSession(projectId, transformedAttributes);
+
+        // Clear refineFrom from URL
+        navigate(`/project/${projectId}?tab=alchemist`, { replace: true });
+      } catch (err) {
+        console.error('Error processing refineFrom:', err);
+        navigate(`/project/${projectId}?tab=alchemist`, { replace: true });
+      } finally {
+        setRefineFromLoading(false);
+      }
+    };
+
+    processRefineFrom();
+  }, [searchParams, projectId, project, refineFromProcessed, navigate]);
+
+  // Reset refineFromProcessed when projectId changes (new project)
+  useEffect(() => {
+    setRefineFromProcessed(false);
+    setAlchemistAttributes(null);
+  }, [projectId]);
+
+  // Load from sessionStorage when project is ready and no refineFrom
+  useEffect(() => {
+    const refineFrom = searchParams.get('refineFrom');
+
+    // Skip if there's a refineFrom to process, or if we already have attributes
+    if (refineFrom || !projectId || !project || alchemistAttributes !== null) {
+      return;
+    }
+
+    // Try to load from sessionStorage
+    const storedState = loadAttributesFromSession(projectId);
+
+    if (storedState && storedState.attributes.length > 0) {
+      // We need current attributes to validate against
+      const loadAndValidate = async () => {
+        const productTypes = (project.scopeConfig as { productTypes?: string[] } | null)?.productTypes;
+        const articleOptions = await fetchArticleAttributes(productTypes);
+        const defaultAttributes = initializeAttributes(articleOptions, project.ontologySchema);
+
+        // Validate and merge stored state with current schema
+        const mergedAttributes = validateAndMergeAttributes(
+          storedState.attributes,
+          defaultAttributes
+        );
+
+        setAlchemistAttributes(mergedAttributes);
+      };
+
+      loadAndValidate();
+    }
+    // If no stored state, leave alchemistAttributes as null - TheAlchemistTab will initialize
+  }, [projectId, project, searchParams, alchemistAttributes]);
 
   // Fetch mismatch summary and context items
   const fetchMismatchData = useCallback(async () => {
@@ -209,7 +357,15 @@ function ProjectHub() {
 
     switch (activeTab) {
       case 'alchemist':
-        return <TheAlchemistTab project={project} velocityScoresStale={velocityScoresStale} />;
+        return (
+          <TheAlchemistTab
+            project={project}
+            attributes={alchemistAttributes}
+            onAttributesChange={handleAlchemistAttributesChange}
+            externalLoading={refineFromLoading}
+            velocityScoresStale={velocityScoresStale}
+          />
+        );
       case 'enhanced-table':
         return (
           <EnhancedTableTab

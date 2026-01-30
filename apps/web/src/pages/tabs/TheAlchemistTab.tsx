@@ -1,5 +1,6 @@
 /**
  * The Alchemist Tab
+ * Controlled component - receives attributes from parent (ProjectHub)
  * Optimized with constants, CSS modules, types, and helper functions
  */
 
@@ -42,7 +43,6 @@ import {
 } from '../../constants/theAlchemistTab';
 import { fetchAPI } from '../../services/api/client';
 import type {
-  AttributeConfig,
   PreviewData,
   TheAlchemistTabProps,
 } from '../../types/theAlchemistTab';
@@ -54,13 +54,21 @@ import {
 } from '../../utils/theAlchemistHelpers';
 import styles from '../../styles/pages/TheAlchemistTab.module.css';
 
-function TheAlchemistTab({ project, velocityScoresStale = false }: TheAlchemistTabProps) {
-  const [attributes, setAttributes] = useState<AttributeConfig[]>([]);
+function TheAlchemistTab({
+  project,
+  attributes,
+  onAttributesChange,
+  externalLoading = false,
+  velocityScoresStale = false
+}: TheAlchemistTabProps) {
+  // Local state for fetched data (not user-modifiable state)
   const [articleAttributeOptions, setArticleAttributeOptions] = useState<Record<
     string,
     string[]
   > | null>(null);
-  const [attributesInitialized, setAttributesInitialized] = useState(false);
+  const [internalInitialized, setInternalInitialized] = useState(false);
+
+  // UI state (local to this component)
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -77,12 +85,7 @@ function TheAlchemistTab({ project, velocityScoresStale = false }: TheAlchemistT
     [project.scopeConfig?.productTypes]
   );
 
-  const ontologySchemaKey = useMemo(
-    () => JSON.stringify(project.ontologySchema ?? {}),
-    [project.ontologySchema]
-  );
-
-  // Fetch article attributes
+  // Fetch article attributes (needed for initialization and variant options)
   useEffect(() => {
     let isCancelled = false;
 
@@ -97,37 +100,64 @@ function TheAlchemistTab({ project, velocityScoresStale = false }: TheAlchemistT
     };
   }, [productTypesKey, project.scopeConfig?.productTypes]);
 
-  // Initialize attributes
+  // Initialize attributes if not provided by parent (null means initialize with defaults)
   useEffect(() => {
     if (articleAttributeOptions === null) return;
 
-    if (attributesInitialized) {
-      const hasOntologyAttributes = attributes.some((attr) => !attr.isArticleLevel);
-      const ontologyNowAvailable =
-        project.ontologySchema && Object.keys(project.ontologySchema).length > 0;
-
-      if (!hasOntologyAttributes && ontologyNowAvailable) {
-        setAttributesInitialized(false);
-        return;
-      }
+    // If parent provided attributes, don't initialize
+    if (attributes !== null) {
+      setInternalInitialized(true);
       return;
     }
 
-    const initialized = initializeAttributes(articleAttributeOptions, project.ontologySchema);
-    setAttributes(initialized);
-    setAttributesInitialized(true);
+    // Parent didn't provide attributes - initialize with defaults
+    if (!internalInitialized) {
+      const initialized = initializeAttributes(articleAttributeOptions, project.ontologySchema);
+      onAttributesChange(initialized);
+      setInternalInitialized(true);
+    }
   }, [
-    ontologySchemaKey,
     articleAttributeOptions,
-    attributesInitialized,
-    project.ontologySchema,
     attributes,
+    internalInitialized,
+    project.ontologySchema,
+    onAttributesChange,
   ]);
 
   // Attribute movement handlers
   const handleMoveToLocked = useCallback((key: string) => {
     setAttributes((prev) =>
       prev.map((attr) =>
+  // Reset internal initialized flag when project changes
+  useEffect(() => {
+    setInternalInitialized(false);
+  }, [project.id]);
+
+  // Fetch velocity stale status on mount
+  useEffect(() => {
+    const fetchVelocityStatus = async () => {
+      try {
+        const result = await fetchAPI<{ velocityScoresStale?: boolean }>(
+          `/api/projects/${project.id}/context-items`
+        );
+        if (result.data) {
+          setVelocityScoresStale(result.data.velocityScoresStale || false);
+        }
+      } catch (err) {
+        console.error('Failed to fetch velocity status:', err);
+      }
+    };
+
+    fetchVelocityStatus();
+  }, [project.id]);
+
+  // Use attributes from props, or empty array while loading
+  const currentAttributes = attributes ?? [];
+
+  // Attribute movement handlers - update parent state
+  const handleMoveToLocked = useCallback(
+    (key: string) => {
+      const updated = currentAttributes.map((attr) =>
         attr.key === key
           ? {
               ...attr,
@@ -135,35 +165,45 @@ function TheAlchemistTab({ project, velocityScoresStale = false }: TheAlchemistT
               selectedValue: attr.variants[0] || null,
             }
           : attr
-      )
-    );
-  }, []);
+      );
+      onAttributesChange(updated);
+    },
+    [currentAttributes, onAttributesChange]
+  );
 
-  const handleMoveToAIVariable = useCallback((key: string) => {
-    setAttributes((prev) =>
-      prev.map((attr) =>
+  const handleMoveToAIVariable = useCallback(
+    (key: string) => {
+      const updated = currentAttributes.map((attr) =>
         attr.key === key
           ? { ...attr, category: ATTRIBUTE_CATEGORIES.AI, selectedValue: null }
           : attr
-      )
-    );
-  }, []);
+      );
+      onAttributesChange(updated);
+    },
+    [currentAttributes, onAttributesChange]
+  );
 
-  const handleMoveToNotIncluded = useCallback((key: string) => {
-    setAttributes((prev) =>
-      prev.map((attr) =>
+  const handleMoveToNotIncluded = useCallback(
+    (key: string) => {
+      const updated = currentAttributes.map((attr) =>
         attr.key === key
           ? { ...attr, category: ATTRIBUTE_CATEGORIES.NOT_INCLUDED, selectedValue: null }
           : attr
-      )
-    );
-  }, []);
+      );
+      onAttributesChange(updated);
+    },
+    [currentAttributes, onAttributesChange]
+  );
 
-  const handleValueChange = useCallback((key: string, value: string) => {
-    setAttributes((prev) =>
-      prev.map((attr) => (attr.key === key ? { ...attr, selectedValue: value } : attr))
-    );
-  }, []);
+  const handleValueChange = useCallback(
+    (key: string, value: string) => {
+      const updated = currentAttributes.map((attr) =>
+        attr.key === key ? { ...attr, selectedValue: value } : attr
+      );
+      onAttributesChange(updated);
+    },
+    [currentAttributes, onAttributesChange]
+  );
 
   // Fetch preview data
   const fetchPreviewData = useCallback(async () => {
@@ -175,7 +215,7 @@ function TheAlchemistTab({ project, velocityScoresStale = false }: TheAlchemistT
       if (result.error) throw new Error(result.error);
 
       const contextData = result.data!;
-      const lockedAttrs = attributes
+      const lockedAttrs = currentAttributes
         .filter((attr) => attr.category === ATTRIBUTE_CATEGORIES.LOCKED)
         .map((attr) => ({
           key: attr.key,
@@ -183,7 +223,7 @@ function TheAlchemistTab({ project, velocityScoresStale = false }: TheAlchemistT
           value: attr.selectedValue || '',
         }));
 
-      const aiVars = attributes
+      const aiVars = currentAttributes
         .filter((attr) => attr.category === ATTRIBUTE_CATEGORIES.AI)
         .map((attr) => ({ key: attr.key, displayName: attr.displayName }));
 
@@ -208,7 +248,7 @@ function TheAlchemistTab({ project, velocityScoresStale = false }: TheAlchemistT
     } finally {
       setPreviewLoading(false);
     }
-  }, [project.id, attributes]);
+  }, [project.id, currentAttributes]);
 
   const handlePreview = async () => {
     setPreviewDialogOpen(true);
@@ -239,8 +279,8 @@ function TheAlchemistTab({ project, velocityScoresStale = false }: TheAlchemistT
         {
           method: 'POST',
           body: JSON.stringify({
-            lockedAttributes: buildLockedAttributes(attributes),
-            aiVariables: buildAIVariables(attributes),
+            lockedAttributes: buildLockedAttributes(currentAttributes),
+            aiVariables: buildAIVariables(currentAttributes),
             successScore,
           }),
         }
@@ -264,22 +304,25 @@ function TheAlchemistTab({ project, velocityScoresStale = false }: TheAlchemistT
 
   // Filter attributes by category
   const lockedAttributes = useMemo(
-    () => attributes.filter((attr) => attr.category === ATTRIBUTE_CATEGORIES.LOCKED),
-    [attributes]
+    () => currentAttributes.filter((attr) => attr.category === ATTRIBUTE_CATEGORIES.LOCKED),
+    [currentAttributes]
   );
   const aiVariables = useMemo(
-    () => attributes.filter((attr) => attr.category === ATTRIBUTE_CATEGORIES.AI),
-    [attributes]
+    () => currentAttributes.filter((attr) => attr.category === ATTRIBUTE_CATEGORIES.AI),
+    [currentAttributes]
   );
   const notIncludedAttributes = useMemo(
-    () => attributes.filter((attr) => attr.category === ATTRIBUTE_CATEGORIES.NOT_INCLUDED),
-    [attributes]
+    () => currentAttributes.filter((attr) => attr.category === ATTRIBUTE_CATEGORIES.NOT_INCLUDED),
+    [currentAttributes]
   );
 
   const aiVariableCount = aiVariables.length;
   const isOverLimit = aiVariableCount > MAX_AI_VARIABLES;
   const canTransmute = aiVariableCount > 0 && aiVariableCount <= MAX_AI_VARIABLES && !transmuting;
-  const isLoading = articleAttributeOptions === null || !attributesInitialized;
+
+  // Loading state - show while fetching article options OR if parent is loading refineFrom
+  const isLoading =
+    externalLoading || articleAttributeOptions === null || (attributes === null && !internalInitialized);
 
   // Loading state
   if (isLoading) {

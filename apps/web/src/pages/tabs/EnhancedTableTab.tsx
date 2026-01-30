@@ -43,6 +43,7 @@ import {
   SORT_FIELDS,
   ICONS,
   TEXT,
+  TOOLTIPS,
   API_ENDPOINTS,
   type FilterType,
   type SortField,
@@ -399,17 +400,17 @@ function EnhancedTableTab({
         {controlPanelExpanded && (
           <div className={styles.controlPanelContent}>
             <div className={styles.statusSummary}>
-              <div className={styles.statusItem}>
+              <div className={styles.statusItem} title={TOOLTIPS.STATUS_SUCCESSFUL}>
                 <ObjectStatus state="Positive">
                   <Icon name={ICONS.ACCEPT} /> {summary.successful} {TEXT.FILTER_SUCCESSFUL}
                 </ObjectStatus>
               </div>
-              <div className={styles.statusItem}>
+              <div className={styles.statusItem} title={TOOLTIPS.STATUS_PENDING}>
                 <ObjectStatus state="Information">
                   <Icon name={ICONS.PENDING} /> {summary.pending} {TEXT.FILTER_PENDING}
                 </ObjectStatus>
               </div>
-              <div className={styles.statusItem}>
+              <div className={styles.statusItem} title={TOOLTIPS.STATUS_FAILED}>
                 <ObjectStatus state="Negative">
                   <Icon name={ICONS.ALERT} /> {summary.failed} {TEXT.FILTER_FAILED}
                 </ObjectStatus>
@@ -461,24 +462,28 @@ function EnhancedTableTab({
             <Option
               data-value={SORT_FIELDS.VELOCITY_SCORE}
               selected={sortBy === SORT_FIELDS.VELOCITY_SCORE}
+              title={TOOLTIPS.SORT_VELOCITY}
             >
               {TEXT.SORT_VELOCITY}
             </Option>
             <Option
               data-value={SORT_FIELDS.ARTICLE_ID}
               selected={sortBy === SORT_FIELDS.ARTICLE_ID}
+              title={TOOLTIPS.SORT_ARTICLE}
             >
               {TEXT.SORT_ARTICLE}
             </Option>
             <Option
               data-value={SORT_FIELDS.PRODUCT_TYPE}
               selected={sortBy === SORT_FIELDS.PRODUCT_TYPE}
+              title={TOOLTIPS.SORT_PRODUCT}
             >
               {TEXT.SORT_PRODUCT}
             </Option>
             <Option
               data-value={SORT_FIELDS.MATCH_CONFIDENCE}
               selected={sortBy === SORT_FIELDS.MATCH_CONFIDENCE}
+              title={TOOLTIPS.SORT_MATCH_CONFIDENCE}
             >
               {TEXT.SORT_MATCH_CONFIDENCE}
             </Option>
@@ -488,7 +493,7 @@ function EnhancedTableTab({
             icon={sortDesc ? ICONS.SORT_DESC : ICONS.SORT_ASC}
             design="Transparent"
             onClick={() => setSortDesc(!sortDesc)}
-            tooltip={sortDesc ? TEXT.SORT_DESC : TEXT.SORT_ASC}
+            tooltip={TOOLTIPS.SORT_DIRECTION}
           />
 
           <Input
@@ -496,13 +501,14 @@ function EnhancedTableTab({
             value={searchQuery}
             onInput={(e: any) => setSearchQuery(e.target.value)}
             className={styles.searchInput}
+            title={TOOLTIPS.SEARCH_BAR}
           />
 
           <Button
             icon={ICONS.DOWNLOAD}
             design="Transparent"
             onClick={handleExportCSV}
-            tooltip={TEXT.EXPORT_TOOLTIP}
+            tooltip={TOOLTIPS.EXPORT_CSV}
           />
         </div>
       </div>
@@ -521,34 +527,73 @@ function EnhancedTableTab({
             <thead className={styles.tableHeader}>
               <tr>
                 <th className={styles.tableHeaderCellExpand}></th>
-                <th className={`${styles.tableHeaderCell} ${styles.tableHeaderCellInclude}`}>
+                <th
+                  className={`${styles.tableHeaderCell} ${styles.tableHeaderCellInclude}`}
+                  title={TOOLTIPS.COL_INCLUDE}
+                >
                   {TEXT.COL_INCLUDE}
                 </th>
-                <th className={`${styles.tableHeaderCell} ${styles.tableHeaderCellImage}`}>
+                <th
+                  className={`${styles.tableHeaderCell} ${styles.tableHeaderCellImage}`}
+                  title={TOOLTIPS.COL_IMAGE}
+                >
                   {TEXT.COL_IMAGE}
                 </th>
-                <th className={styles.tableHeaderCell}>{TEXT.COL_ARTICLE_ID}</th>
-                <th className={styles.tableHeaderCell}>{TEXT.COL_PRODUCT_TYPE}</th>
-                <th className={`${styles.tableHeaderCell} ${styles.tableHeaderCellVelocity}`}>
+                <th className={styles.tableHeaderCell} title={TOOLTIPS.COL_ARTICLE_ID}>
+                  {TEXT.COL_ARTICLE_ID}
+                </th>
+                <th className={styles.tableHeaderCell} title={TOOLTIPS.COL_PRODUCT_TYPE}>
+                  {TEXT.COL_PRODUCT_TYPE}
+                </th>
+                <th
+                  className={`${styles.tableHeaderCell} ${styles.tableHeaderCellVelocity}`}
+                  title={TOOLTIPS.COL_VELOCITY}
+                >
                   {TEXT.COL_VELOCITY}
                 </th>
-                <th className={`${styles.tableHeaderCell} ${styles.tableHeaderCellConfidence}`}>
+                <th
+                  className={`${styles.tableHeaderCell} ${styles.tableHeaderCellConfidence}`}
+                  title={TOOLTIPS.COL_MATCH_CONFIDENCE}
+                >
                   {TEXT.COL_MATCH_CONFIDENCE}
                 </th>
-                <th className={styles.tableHeaderCell}>{TEXT.COL_PATTERN}</th>
-                <th className={styles.tableHeaderCell}>{TEXT.COL_COLOR_FAMILY}</th>
-                <th className={styles.tableHeaderCell}>{TEXT.COL_SPECIFIC_COLOR}</th>
-                <th className={styles.tableHeaderCell}>{TEXT.COL_COLOR_INTENSITY}</th>
-                <th className={styles.tableHeaderCell}>{TEXT.COL_PRODUCT_FAMILY}</th>
-                <th className={styles.tableHeaderCell}>{TEXT.COL_CUSTOMER_SEGMENT}</th>
-                <th className={styles.tableHeaderCell}>{TEXT.COL_STYLE_CONCEPT}</th>
-                <th className={styles.tableHeaderCell}>{TEXT.COL_FABRIC_TYPE}</th>
+                <th className={styles.tableHeaderCell} title={TOOLTIPS.COL_PATTERN}>
+                  {TEXT.COL_PATTERN}
+                </th>
+                <th className={styles.tableHeaderCell} title={TOOLTIPS.COL_COLOR_FAMILY}>
+                  {TEXT.COL_COLOR_FAMILY}
+                </th>
+                <th className={styles.tableHeaderCell} title={TOOLTIPS.COL_SPECIFIC_COLOR}>
+                  {TEXT.COL_SPECIFIC_COLOR}
+                </th>
+                <th className={styles.tableHeaderCell} title={TOOLTIPS.COL_COLOR_INTENSITY}>
+                  {TEXT.COL_COLOR_INTENSITY}
+                </th>
+                <th className={styles.tableHeaderCell} title={TOOLTIPS.COL_PRODUCT_FAMILY}>
+                  {TEXT.COL_PRODUCT_FAMILY}
+                </th>
+                <th className={styles.tableHeaderCell} title={TOOLTIPS.COL_CUSTOMER_SEGMENT}>
+                  {TEXT.COL_CUSTOMER_SEGMENT}
+                </th>
+                <th className={styles.tableHeaderCell} title={TOOLTIPS.COL_STYLE_CONCEPT}>
+                  {TEXT.COL_STYLE_CONCEPT}
+                </th>
+                <th className={styles.tableHeaderCell} title={TOOLTIPS.COL_FABRIC_TYPE}>
+                  {TEXT.COL_FABRIC_TYPE}
+                </th>
                 {ontologyAttributes.map((attr) => (
-                  <th key={attr} className={styles.tableHeaderCell}>
+                  <th
+                    key={attr}
+                    className={styles.tableHeaderCell}
+                    title={TOOLTIPS.COL_ONTOLOGY_ATTRIBUTE}
+                  >
                     {formatAttributeName(attr)}
                   </th>
                 ))}
-                <th className={`${styles.tableHeaderCellCenter} ${styles.tableHeaderCellStatus}`}>
+                <th
+                  className={`${styles.tableHeaderCellCenter} ${styles.tableHeaderCellStatus}`}
+                  title={TOOLTIPS.COL_STATUS}
+                >
                   {TEXT.COL_STATUS}
                 </th>
               </tr>

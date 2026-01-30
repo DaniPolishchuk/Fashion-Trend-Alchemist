@@ -36,4 +36,32 @@ export interface PreviewData {
 export interface TheAlchemistTabProps {
   project: ProjectData;
   velocityScoresStale?: boolean;
+  attributes: AttributeConfig[] | null;
+  onAttributesChange: (attributes: AttributeConfig[]) => void;
+  externalLoading?: boolean;
+}
+
+/**
+ * Persisted attribute state for sessionStorage
+ * Only stores user-modifiable fields, not derived data like variants/displayName
+ */
+export interface PersistedAttribute {
+  key: string;
+  category: AttributeCategory;
+  selectedValue: string | null;
+}
+
+export interface PersistedAlchemistState {
+  attributes: PersistedAttribute[];
+  projectId: string;
+}
+
+/**
+ * Generated design structure (from API)
+ */
+export interface GeneratedDesign {
+  id: string;
+  name: string;
+  inputConstraints: Record<string, string> | null;
+  predictedAttributes: Record<string, string> | null;
 }
