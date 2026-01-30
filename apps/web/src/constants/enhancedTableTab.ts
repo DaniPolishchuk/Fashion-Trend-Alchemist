@@ -81,6 +81,61 @@ export const VELOCITY_COLORS = {
   POOR: { threshold: 0, color: '#D32F2F' }, // Red
 } as const;
 
+// ==================== TOOLTIP CONSTANTS ====================
+
+export const TOOLTIPS = {
+  // Main Table Columns
+  COL_INCLUDE:
+    "Include this article in the trend analysis dataset. Excluded items won't influence design predictions.",
+  COL_IMAGE: 'Product image from catalog. Click to enlarge.',
+  COL_ARTICLE_ID: 'Unique product identifier from the catalog.',
+  COL_PRODUCT_TYPE:
+    "Primary product category that defines the item's classification (e.g., Sweater, Coat, Dress).",
+  COL_VELOCITY:
+    'Sales performance metric (0-100) showing how quickly this item sold during the selected season. Higher scores indicate best-sellers.',
+  COL_MATCH_CONFIDENCE:
+    'Confidence level that the extracted attributes match the product type. Higher scores indicate potential mismatches—if there are likely non-matching products, use the Review feature to verify flagged items.',
+  COL_PATTERN:
+    'Visual pattern classification of the product (e.g., Solid, Striped, Printed, Checked).',
+  COL_COLOR_FAMILY:
+    'Primary color category of the product (e.g., Blue, Red, Neutral, Multi-color).',
+  COL_SPECIFIC_COLOR:
+    'Detailed color description from the catalog (e.g., Navy Blue, Burgundy, Beige).',
+  COL_COLOR_INTENSITY:
+    "Brightness level of the product's color (e.g., Dark, Light, Medium, Bright).",
+  COL_PRODUCT_FAMILY:
+    'Broader product categorization defining the construction type (e.g., Jersey, Knitwear, Woven).',
+  COL_CUSTOMER_SEGMENT:
+    'Target customer demographic for this product (e.g., Ladieswear, Menswear, Kids, Sport).',
+  COL_STYLE_CONCEPT:
+    "Fashion aesthetic category defining the product's style positioning (e.g., Casual, Modern Classic, Trend).",
+  COL_FABRIC_TYPE:
+    'Primary fabric material used in the product (e.g., Cotton, Polyester, Wool, Jersey).',
+  COL_STATUS:
+    'Processing status: Success (attributes extracted), Pending (awaiting processing), Failed (error—click retry button).',
+  COL_ONTOLOGY_ATTRIBUTE:
+    "Design attribute extracted from the product image using AI. Part of this project's custom attribute schema.",
+
+  // Control Panel Status Indicators
+  STATUS_SUCCESSFUL:
+    'Items successfully processed with all design attributes extracted from images.',
+  STATUS_PENDING:
+    'Items waiting to be processed. Enrichment extracts design attributes from product images.',
+  STATUS_FAILED:
+    'Items that encountered errors during processing. Use the Retry button to reprocess these items.',
+
+  // Sort/Filter Options
+  SORT_VELOCITY: 'Order by sales performance—see best-sellers or underperformers first.',
+  SORT_ARTICLE: 'Order alphabetically by product identifier.',
+  SORT_PRODUCT: 'Group items by their product category.',
+  SORT_MATCH_CONFIDENCE:
+    'Order by attribute matching confidence—review high-score items for potential mismatches.',
+  SORT_DIRECTION: 'Change sort direction (lowest to highest / highest to lowest).',
+  SEARCH_BAR:
+    'Search across all visible fields including Article ID, attributes, colors, and product types.',
+  EXPORT_CSV: 'Download the current filtered data as a CSV file for external analysis.',
+} as const;
+
 // ==================== TEXT CONSTANTS ====================
 
 export const TEXT = {
