@@ -182,3 +182,10 @@ export const LAYOUT = {
   MAX_COLUMN_HEIGHT: 'calc(5 * 4.25rem)', // ~5 items height
   SUCCESS_PANEL_WIDTH: '280px',
 } as const;
+
+// ==================== SESSION STORAGE ====================
+
+export const SESSION_STORAGE_KEY_PREFIX = 'alchemist_state_';
+
+export const getSessionStorageKey = (projectId: string): string =>
+  `${SESSION_STORAGE_KEY_PREFIX}${projectId}`;

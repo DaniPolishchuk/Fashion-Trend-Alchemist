@@ -13,8 +13,8 @@ This directory contains all Kubernetes manifests required to deploy the Fashion 
                                   │
                                   ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    fashion-alchemist-pod (3 Containers)                      │
-│                                                                               │
+│                    fashion-alchemist-pod (3 Containers)                     │
+│                                                                             │
 │  ┌────────────────────────────────────────────────────────────────────────┐ │
 │  │                    Approuter Container (Port 5000)                     │ │
 │  │                      - XSUAA Authentication                            │ │
@@ -22,24 +22,24 @@ This directory contains all Kubernetes manifests required to deploy the Fashion 
 │  │                      - JWT Token Handling                              │ │
 │  │                      - Request Routing                                 │ │
 │  └────────────┬──────────────────────────────────┬────────────────────────┘ │
-│               │                                   │                          │
-│               ▼                                   ▼                          │
-│  ┌────────────────────────┐       ┌────────────────────────────────────┐   │
-│  │  Frontend Container    │       │      Backend Container             │   │
-│  │   (nginx + React)      │       │    (Node.js + Fastify)             │   │
-│  │     Port: 80           │       │       Port: 3001                   │   │
-│  │  - Static files        │       │  - API endpoints                   │   │
-│  │  - SPA routing         │       │  - Business logic                  │   │
-│  │  - No auth logic       │       │  - No JWT validation (trusts       │   │
-│  │                        │       │    approuter tokens)               │   │
-│  └────────────────────────┘       └────────────────────────────────────┘   │
+│               │                                   │                         │
+│               ▼                                   ▼                         │
+│  ┌────────────────────────┐       ┌────────────────────────────────────┐    │
+│  │  Frontend Container    │       │      Backend Container             │    │
+│  │   (nginx + React)      │       │    (Node.js + Fastify)             │    │
+│  │     Port: 80           │       │       Port: 3001                   │    │
+│  │  - Static files        │       │  - API endpoints                   │    │
+│  │  - SPA routing         │       │  - Business logic                  │    │
+│  │  - No auth logic       │       │  - No JWT validation (trusts       │    │
+│  │                        │       │    approuter tokens)               │    │
+│  └────────────────────────┘       └────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
           ┌───────────────────────────┼───────────────────────────┐
           ▼                           ▼                           ▼
     ┌───────────┐            ┌───────────────┐           ┌────────────────┐
-    │ PostgreSQL │            │     Redis     │           │ External APIs  │
-    │  (existing)│            │   (cache)     │           │ (LLM, AI Core) │
+    │ PostgreSQL│            │     Redis     │           │ External APIs  │
+    │ (existing)│            │   (cache)     │           │ (LLM, AI Core) │
     └───────────┘            └───────────────┘           └────────────────┘
 ```
 
