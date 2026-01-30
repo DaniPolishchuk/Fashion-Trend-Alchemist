@@ -42,10 +42,7 @@ import {
   API_ENDPOINTS,
 } from '../../constants/theAlchemistTab';
 import { fetchAPI } from '../../services/api/client';
-import type {
-  PreviewData,
-  TheAlchemistTabProps,
-} from '../../types/theAlchemistTab';
+import type { PreviewData, TheAlchemistTabProps } from '../../types/theAlchemistTab';
 import {
   fetchArticleAttributes,
   initializeAttributes,
@@ -59,7 +56,7 @@ function TheAlchemistTab({
   attributes,
   onAttributesChange,
   externalLoading = false,
-  velocityScoresStale = false
+  velocityScoresStale = false,
 }: TheAlchemistTabProps) {
   // Local state for fetched data (not user-modifiable state)
   const [articleAttributeOptions, setArticleAttributeOptions] = useState<Record<
@@ -124,31 +121,9 @@ function TheAlchemistTab({
     onAttributesChange,
   ]);
 
-  // Attribute movement handlers
-  const handleMoveToLocked = useCallback((key: string) => {
-    setAttributes((prev) =>
-      prev.map((attr) =>
   // Reset internal initialized flag when project changes
   useEffect(() => {
     setInternalInitialized(false);
-  }, [project.id]);
-
-  // Fetch velocity stale status on mount
-  useEffect(() => {
-    const fetchVelocityStatus = async () => {
-      try {
-        const result = await fetchAPI<{ velocityScoresStale?: boolean }>(
-          `/api/projects/${project.id}/context-items`
-        );
-        if (result.data) {
-          setVelocityScoresStale(result.data.velocityScoresStale || false);
-        }
-      } catch (err) {
-        console.error('Failed to fetch velocity status:', err);
-      }
-    };
-
-    fetchVelocityStatus();
   }, [project.id]);
 
   // Use attributes from props, or empty array while loading
@@ -322,7 +297,9 @@ function TheAlchemistTab({
 
   // Loading state - show while fetching article options OR if parent is loading refineFrom
   const isLoading =
-    externalLoading || articleAttributeOptions === null || (attributes === null && !internalInitialized);
+    externalLoading ||
+    articleAttributeOptions === null ||
+    (attributes === null && !internalInitialized);
 
   // Loading state
   if (isLoading) {
