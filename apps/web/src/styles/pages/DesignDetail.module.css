@@ -160,7 +160,7 @@
 
 .panelContent {
   padding: 0.5rem 1rem;
-  max-height: calc(10 * 60px);
+  max-height: 260px;
   overflow-y: auto;
 }
 
