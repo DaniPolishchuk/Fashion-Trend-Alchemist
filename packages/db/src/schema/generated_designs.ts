@@ -12,6 +12,11 @@ import { projects } from './projects.js';
 export type ImageViewStatus = 'pending' | 'generating' | 'completed' | 'failed';
 
 /**
+ * Type for sales text generation status
+ */
+export type SalesTextStatus = 'pending' | 'generating' | 'completed' | 'failed';
+
+/**
  * Type for multi-image generation (front/back/model views)
  */
 export interface GeneratedImages {
@@ -37,6 +42,11 @@ export const generatedDesigns = pgTable('generated_designs', {
   imageGenerationStatus: varchar('image_generation_status', { length: 20 }).default('pending'),
   // Multi-image support: stores front/back/model views with per-view status
   generatedImages: jsonb('generated_images').$type<GeneratedImages>(),
+  // Sales text generation
+  salesText: text('sales_text'),
+  salesTextGenerationStatus: varchar('sales_text_generation_status', { length: 20 })
+    .default('pending')
+    .$type<SalesTextStatus>(),
   // Creation timestamp
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });

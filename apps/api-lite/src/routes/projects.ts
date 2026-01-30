@@ -632,6 +632,8 @@ export default async function projectRoutes(fastify: FastifyInstance) {
             generatedImageUrl: generatedDesigns.generatedImageUrl,
             imageGenerationStatus: generatedDesigns.imageGenerationStatus,
             generatedImages: generatedDesigns.generatedImages,
+            salesText: generatedDesigns.salesText,
+            salesTextGenerationStatus: generatedDesigns.salesTextGenerationStatus,
             createdAt: generatedDesigns.createdAt,
           })
           .from(generatedDesigns)
@@ -742,6 +744,102 @@ export default async function projectRoutes(fastify: FastifyInstance) {
         return reply.status(200).send(updatedDesign);
       } catch (error: any) {
         fastify.log.error({ error }, 'Failed to update generated design');
+        return reply.status(500).send({ error: 'Internal Server Error' });
+      }
+    }
+  );
+
+  /**
+   * POST /api/projects/:projectId/generated-designs/:designId/regenerate-sales-text
+   * Regenerate sales text for a specific design with optional image context
+   */
+  fastify.post<{
+    Params: { projectId: string; designId: string };
+    Body: { includeImage?: boolean };
+  }>(
+    '/projects/:projectId/generated-designs/:designId/regenerate-sales-text',
+    async (request, reply) => {
+      try {
+        const { projectId, designId } = request.params;
+        const { includeImage = false } = request.body;
+
+        // Verify the design exists and belongs to the project
+        const design = await db.query.generatedDesigns.findFirst({
+          where: and(eq(generatedDesigns.id, designId), eq(generatedDesigns.projectId, projectId)),
+        });
+
+        if (!design) {
+          return reply.status(404).send({ error: 'Generated design not found' });
+        }
+
+        // Extract attributes for sales text generation
+        const lockedAttributes = (design.inputConstraints as Record<string, any>) || {};
+        const predictedAttributes = (design.predictedAttributes as Record<string, any>) || {};
+        const targetSuccessScore = lockedAttributes._targetSuccessScore || 100;
+
+        // Determine product type
+        const productType =
+          lockedAttributes.article_product_type ||
+          lockedAttributes.product_type ||
+          predictedAttributes.article_product_type ||
+          predictedAttributes.product_type ||
+          'fashion item';
+
+        // Get image context if requested and available
+        let imageBase64: string | undefined;
+        if (includeImage && design.generatedImages) {
+          const frontImage = (design.generatedImages as any)?.front;
+          if (frontImage?.url && frontImage.status === 'completed') {
+            try {
+              const { fetchImageAsBase64 } = await import('../services/s3.js');
+              imageBase64 = await fetchImageAsBase64(frontImage.url);
+              fastify.log.info({ designId }, 'Using front image for sales text generation');
+            } catch (error) {
+              fastify.log.warn(
+                { designId, error },
+                'Failed to fetch image for sales text generation, proceeding without image'
+              );
+            }
+          }
+        }
+
+        // Generate new sales text
+        const { generateSalesTextWithRetry } = await import('../services/salesTextGeneration.js');
+
+        const salesText = await generateSalesTextWithRetry(
+          productType,
+          lockedAttributes,
+          predictedAttributes,
+          targetSuccessScore,
+          imageBase64,
+          1 // Single retry
+        );
+
+        if (!salesText) {
+          return reply.status(500).send({ error: 'Failed to generate sales text' });
+        }
+
+        // Update the design with new sales text
+        await db
+          .update(generatedDesigns)
+          .set({
+            salesText,
+            salesTextGenerationStatus: 'completed',
+          } as any) // Temporary type assertion until migration is applied
+          .where(eq(generatedDesigns.id, designId));
+
+        fastify.log.info(
+          { designId, includeImage, hasImage: !!imageBase64 },
+          'Sales text regenerated successfully'
+        );
+
+        return reply.status(200).send({
+          success: true,
+          salesText,
+          includedImage: !!imageBase64,
+        });
+      } catch (error: any) {
+        fastify.log.error({ error }, 'Failed to regenerate sales text');
         return reply.status(500).send({ error: 'Internal Server Error' });
       }
     }

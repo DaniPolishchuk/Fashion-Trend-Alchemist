@@ -1,0 +1,192 @@
+/* Sales Text Panel Styles */
+
+.salesTextPanel {
+  margin-bottom: 1rem;
+  border: 1px solid var(--sapList_BorderColor);
+  border-radius: var(--sapElement_BorderCornerRadius);
+  background: var(--sapList_Background);
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0 0.5rem;
+  width: 100%;
+}
+
+.panelIcon {
+  color: var(--sapContent_NonInteractiveIconColor);
+  font-size: 1rem;
+  margin-right: 0.5rem;
+}
+
+.panelTitle {
+  font-weight: 600;
+  color: var(--sapTextColor);
+  font-size: 0.875rem;
+  flex: 1;
+}
+
+.panelActions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
+}
+
+.copyButton {
+  min-width: auto;
+  padding: 0.25rem;
+}
+
+.regenerateButton {
+  white-space: nowrap;
+}
+
+.panelContent {
+  padding: 1rem;
+}
+
+.notification {
+  margin-bottom: 1rem;
+}
+
+.statusContainer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-radius: var(--sapElement_BorderCornerRadius);
+  background: var(--sapInfobar_Background);
+  border: 1px solid var(--sapInfobar_BorderColor);
+}
+
+.statusLoader {
+  flex-shrink: 0;
+}
+
+.statusText {
+  color: var(--sapInformationColor);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+.statusTextError {
+  color: var(--sapCriticalTextColor);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.statusTextEmpty {
+  color: var(--sapNeutralTextColor);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+.salesTextContent {
+  margin-top: 0;
+}
+
+.salesTextBody {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--sapTextColor);
+  background: var(--sapGroup_ContentBackground);
+  padding: 1rem;
+  border-radius: var(--sapElement_BorderCornerRadius);
+  border: 1px solid var(--sapGroup_BorderColor);
+  word-wrap: break-word;
+}
+
+/* Markdown styling within sales text */
+.salesTextBody h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--sapTextColor);
+  margin: 0 0 1rem 0;
+  line-height: 1.3;
+}
+
+.salesTextBody p {
+  margin: 0 0 1rem 0;
+  line-height: 1.6;
+}
+
+.salesTextBody ul {
+  margin: 0 0 1rem 0;
+  padding-left: 1.5rem;
+  list-style: none;
+}
+
+.salesTextBody li {
+  position: relative;
+  margin-bottom: 0.5rem;
+  padding-left: 0.5rem;
+}
+
+.salesTextBody li::before {
+  content: '•';
+  position: absolute;
+  left: -1rem;
+  color: var(--sapAccentColor6);
+  font-weight: bold;
+}
+
+.salesTextBody strong {
+  font-weight: 600;
+  color: var(--sapTextColor);
+}
+
+.salesTextBody em {
+  font-style: italic;
+  color: var(--sapContent_LabelColor);
+}
+
+.salesTextBody *:last-child {
+  margin-bottom: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .panelHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .panelActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .regenerateControls {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .switchContainer {
+    width: 100%;
+  }
+
+  .regenerateButton {
+    width: 100%;
+    max-width: 200px;
+  }
+}
+
+/* Dark theme adjustments */
+@media (prefers-color-scheme: dark) {
+  .statusContainer {
+    background: var(--sapInfobar_Background);
+    border-color: var(--sapInfobar_BorderColor);
+  }
+
+  .salesTextBody {
+    background: var(--sapGroup_ContentBackground);
+    border-color: var(--sapGroup_BorderColor);
+  }
+}

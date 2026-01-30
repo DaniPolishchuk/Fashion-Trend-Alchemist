@@ -114,6 +114,8 @@ export const GeneratedDesignResponseSchema = z.object({
   name: z.string(),
   predictedAttributes: z.record(z.string(), z.string()).nullable(),
   generatedImageUrl: z.string().nullable(),
+  salesText: z.string().nullable(),
+  salesTextGenerationStatus: z.enum(['pending', 'generating', 'completed', 'failed']).nullable(),
 });
 
 /**

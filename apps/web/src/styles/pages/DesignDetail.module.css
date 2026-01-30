@@ -66,43 +66,63 @@
   border-radius: 1.5rem;
 }
 
-/* Main Content Grid */
+/* Main Content Grid - 3 Column Layout: Attributes | Images | Sales Text */
 .contentGrid {
   display: grid;
-  grid-template-columns: 640px 1fr;
+  grid-template-columns: 1fr 2fr 1fr;
   gap: 1.5rem;
   padding: 0 2rem 5rem;
   align-items: start;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1200px) {
   .contentGrid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
   }
 }
 
 @media (max-width: 768px) {
   .contentGrid {
+    grid-template-columns: 1fr;
     padding: 0 1rem 5rem;
   }
 }
 
 /* Left Column - Attribute Panels */
 .attributePanelsColumn {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
-  align-items: start;
+  align-items: stretch;
+}
+
+@media (max-width: 1200px) {
+  .attributePanelsColumn {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
 }
 
 /* Predicted Attributes Panel - AI Enhanced */
 .panelPredicted {
-  background: linear-gradient(135deg, rgba(233, 115, 12, 0.04) 0%, rgba(233, 115, 12, 0.01) 100%);
+  background: var(--sapTile_Background);
   border: 1px solid rgba(233, 115, 12, 0.3);
   border-radius: 0.5rem;
   box-shadow: 0 2px 6px rgba(233, 115, 12, 0.08);
   transition: all 0.2s;
   overflow: hidden;
+}
+
+/* Target the actual UI5 Panel header element */
+.panelPredicted :global(.ui5-panel-header) {
+  background: #fff4ec !important;
+  border-bottom: 1px solid rgba(233, 115, 12, 0.2) !important;
+  border-radius: 0.5rem 0.5rem 0 0 !important;
+}
+
+.panelPredicted .panelHeader {
+  background: transparent;
 }
 
 .panelHeader {
@@ -157,7 +177,7 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 0.75rem;
+  padding: 1rem;
   border-radius: 0.25rem;
   transition: background 0.2s;
   gap: 1rem;
@@ -180,13 +200,14 @@
 }
 
 .attributeLabel {
-  font-size: 0.8125rem;
+  font-size: 0.9rem;
   color: var(--sapContent_LabelColor);
   text-transform: capitalize;
+  font-weight: 500;
 }
 
 .attributeValue {
-  font-size: 0.875rem;
+  font-size: 1rem;
   font-weight: 500;
   color: var(--sapTextColor);
   text-align: right;
@@ -194,7 +215,7 @@
 }
 
 .attributeValueAI {
-  font-size: 0.875rem;
+  font-size: 1rem;
   font-weight: 500;
   color: #e9730c;
   text-align: right;
@@ -203,10 +224,17 @@
 
 .emptyAttributesText {
   color: var(--sapContent_LabelColor);
-  font-size: 0.875rem;
+  font-size: 1rem;
 }
 
-/* Right Column - Image Gallery */
+/* Right Column - Image Gallery and Sales Text */
+.rightColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Image Gallery Container */
 .galleryColumn {
   display: flex;
   flex-direction: column;
@@ -362,7 +390,7 @@
 .imageStage {
   position: relative;
   width: 100%;
-  max-width: 520px;
+  max-width: 600px;
   aspect-ratio: 1/1;
   background: #f8f8f8;
   border-radius: 0.375rem;
@@ -372,6 +400,12 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
+}
+
+@media (max-width: 1200px) {
+  .imageStage {
+    max-width: 550px;
+  }
 }
 
 @media (max-width: 1024px) {
@@ -467,25 +501,10 @@
   border-top: 1px solid var(--sapPageFooter_BorderColor, var(--sapList_BorderColor));
   padding: 0.5rem 2rem;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.05);
   z-index: 10;
-}
-
-.actionBarLeft {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.actionBarIcon {
-  color: var(--sapContent_IconColor);
-}
-
-.actionBarText {
-  font-size: 0.8125rem;
-  color: var(--sapContent_LabelColor);
 }
 
 .actionBarRight {
