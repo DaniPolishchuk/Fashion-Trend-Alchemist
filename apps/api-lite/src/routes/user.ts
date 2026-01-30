@@ -1,43 +1,78 @@
 /**
  * User Routes
- * Provides user information from XSUAA authentication in deployed environments
+ * Extracts user information from XSUAA JWT token
  */
 
 import type { FastifyInstance } from 'fastify';
 
+/**
+ * Decode JWT token (without verification - approuter already verified it)
+ */
+function decodeJWT(token: string): any {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+
+    // Decode the payload (second part)
+    const payload = Buffer.from(parts[1], 'base64').toString('utf-8');
+    return JSON.parse(payload);
+  } catch (error) {
+    console.error('Failed to decode JWT:', error);
+    return null;
+  }
+}
+
 export default async function userRoutes(fastify: FastifyInstance) {
   /**
-   * GET /api/user/info
-   * Returns the current user's information
-   * In deployed environments with XSUAA, this extracts user data from authentication headers
-   * In local development, returns mock data
+   * GET /user/info
+   * Returns the current user's information from JWT token
+   * In deployed environments, extracts from XSUAA JWT token forwarded by AppRouter
+   * In local development, returns null (frontend uses mock data)
    */
-  fastify.get('/api/user/info', async (request, reply) => {
-    // XSUAA user information is typically provided by the AppRouter in these headers
-    // Different SAP environments may use slightly different header names
-    const userName =
-      (request.headers['x-approuter-user'] as string) ||
-      (request.headers['x-user-name'] as string) ||
-      (request.headers['x-approuter-user-name'] as string);
+  fastify.get('/user/info', async (request, reply) => {
+    // Try to get user from headers first (if available)
+    let userName = request.headers['x-approuter-user'] as string;
+    let userEmail = request.headers['x-approuter-user-email'] as string;
+    let userId = request.headers['x-approuter-user-id'] as string;
 
-    const userEmail =
-      (request.headers['x-approuter-user-email'] as string) ||
-      (request.headers['x-user-email'] as string);
+    // If headers not available, extract from JWT token
+    if (!userName || !userEmail) {
+      const authHeader = request.headers.authorization as string;
 
-    const userId =
-      (request.headers['x-approuter-user-id'] as string) ||
-      (request.headers['x-user-id'] as string);
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        const decoded = decodeJWT(token);
 
-    // If no XSUAA headers are present (local development), return null
-    // Frontend will fall back to mock data
+        if (decoded) {
+          // XSUAA token structure - try multiple field names
+          userName =
+            decoded.given_name && decoded.family_name
+              ? `${decoded.given_name} ${decoded.family_name}`
+              : decoded.user_name || decoded.name || decoded.email;
+          userEmail = decoded.email || decoded.user_name;
+          userId = decoded.user_id || decoded.user_uuid || decoded.sub;
+
+          console.log('✅ Extracted user from JWT:', { userName, userEmail, userId });
+        } else {
+          console.log('❌ Failed to decode JWT token');
+        }
+      } else {
+        console.log('ℹ️ No Authorization header found');
+      }
+    } else {
+      console.log('✅ User info from headers:', { userName, userEmail, userId });
+    }
+
+    // If still no user data, return unauthenticated
     if (!userName && !userEmail) {
+      console.log('⚠️ No user data available - returning unauthenticated');
       return reply.send({
         authenticated: false,
         user: null,
       });
     }
 
-    // Return user information from XSUAA
+    // Return user information
     return reply.send({
       authenticated: true,
       user: {

@@ -12,11 +12,12 @@ data:
     [
       {
         "name": "backend-api",
-        "url": "http://localhost:3001",
-        "forwardAuthToken": true
+        "url": "http://127.0.0.1:3001",
+        "forwardAuthToken": true,
+        "timeout": 30000
       },
       {
         "name": "app-frontend",
-        "url": "http://localhost:80"
+        "url": "http://127.0.0.1:80"
       }
     ]
