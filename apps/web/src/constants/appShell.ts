@@ -51,14 +51,14 @@ export const THEME = {
   LIGHT: {
     value: 'light',
     theme: 'sap_horizon',
-    icon: 'dark-mode', // moon icon
-    label: 'Dark Theme',
+    icon: 'light-mode', // sun icon
+    label: 'Light Mode',
   },
   DARK: {
     value: 'dark',
     theme: 'sap_horizon_dark',
-    icon: 'light-mode', // sun icon
-    label: 'Light Theme',
+    icon: 'dark-mode', // moon icon
+    label: 'Dark Mode',
   },
 } as const;
 

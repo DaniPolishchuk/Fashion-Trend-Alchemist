@@ -28,15 +28,7 @@ import '@ui5/webcomponents-icons/dist/lightbulb.js';
 
 import { useTheme } from '../hooks/useTheme';
 import { useUser } from '../hooks/useUser';
-import {
-  BRANDING,
-  MOCK_USER,
-  SEARCH,
-  MENU_ITEMS,
-  NOTIFICATIONS,
-  POPOVER,
-  AVATAR,
-} from '../constants/appShell';
+import { BRANDING, MOCK_USER, SEARCH, NOTIFICATIONS, POPOVER, AVATAR } from '../constants/appShell';
 import HelpDialog from './HelpDialog';
 import { getHelpContentForRoute } from '../utils/helpUtils';
 import styles from '../styles/components/AppShell.module.css';
@@ -180,12 +172,6 @@ function AppShell({ children }: AppShellProps) {
           </div>
         </div>
         <List>
-          <ListItemStandard icon={MENU_ITEMS.PROFILE.icon}>
-            {MENU_ITEMS.PROFILE.text}
-          </ListItemStandard>
-          <ListItemStandard icon={MENU_ITEMS.SETTINGS.icon}>
-            {MENU_ITEMS.SETTINGS.text}
-          </ListItemStandard>
           <ListItemStandard onClick={handleThemeToggle} className={styles.themeToggle}>
             <div className={styles.themeToggleContent}>
               <Icon
@@ -204,10 +190,6 @@ function AppShell({ children }: AppShellProps) {
                 }}
               />
             </div>
-          </ListItemStandard>
-          <ListItemStandard icon={MENU_ITEMS.HELP.icon}>{MENU_ITEMS.HELP.text}</ListItemStandard>
-          <ListItemStandard icon={MENU_ITEMS.SIGN_OUT.icon}>
-            {MENU_ITEMS.SIGN_OUT.text}
           </ListItemStandard>
         </List>
       </Popover>
