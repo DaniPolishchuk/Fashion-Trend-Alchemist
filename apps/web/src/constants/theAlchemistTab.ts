@@ -150,7 +150,7 @@ export const TEXT = {
     `Too many AI Variables. Maximum is ${max}. Move some to "Not Included".`,
   WARNING_MISSING_ENRICHMENT: (count: number) =>
     `${count} articles missing enriched attributes (will be excluded)`,
-  WARNING_NO_CONTEXT: 'No context rows available. Run image enrichment first.',
+  WARNING_NO_CONTEXT: 'No context rows available. Run data enrichment first.',
 } as const;
 
 // ==================== API ENDPOINTS ====================

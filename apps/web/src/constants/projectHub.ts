@@ -20,10 +20,10 @@ export const STATUS_CONFIGS = {
     label: 'READY',
     state: 'Information' as const,
     icon: 'play',
-    title: 'Image Enrichment',
+    title: 'Data Enrichment',
     showButton: true,
     buttonText: 'Start',
-    buttonTooltip: 'Start Image Enrichment',
+    buttonTooltip: 'Start Data Enrichment',
     showProgress: false,
   },
   [ENRICHMENT_STATUS.RUNNING]: {
@@ -31,7 +31,7 @@ export const STATUS_CONFIGS = {
     label: 'RUNNING',
     state: 'Information' as const,
     icon: null,
-    title: 'Image Enrichment',
+    title: 'Data Enrichment',
     showButton: false,
     showProgress: true,
   },
@@ -40,7 +40,7 @@ export const STATUS_CONFIGS = {
     label: 'COMPLETED',
     state: 'Positive' as const,
     icon: 'accept',
-    title: 'Image Enrichment',
+    title: 'Data Enrichment',
     showButton: false,
     showProgress: false,
   },
@@ -49,10 +49,10 @@ export const STATUS_CONFIGS = {
     label: 'FAILED',
     state: 'Negative' as const,
     icon: 'play',
-    title: 'Image Enrichment',
+    title: 'Data Enrichment',
     showButton: true,
     buttonText: 'Retry',
-    buttonTooltip: 'Retry Image Enrichment',
+    buttonTooltip: 'Retry Data Enrichment',
     showProgress: false,
   },
 } as const;
@@ -61,7 +61,7 @@ export const STATUS_CONFIGS = {
 export const TABS = [
   { id: 'enhanced-table', label: 'Enhanced Table', icon: 'table-chart' },
   { id: 'alchemist', label: 'The Alchemist', icon: 'ai' },
-  { id: 'result-overview', label: 'Result Overview', icon: 'grid' },
+  { id: 'result-overview', label: 'Generated Products', icon: 'grid' },
   { id: 'data-analysis', label: 'Data Analysis', icon: 'business-objects-experience' },
 ] as const;
 
@@ -110,7 +110,8 @@ export const MISMATCH_REVIEW_STATUS = {
   REVIEWED: 'reviewed',
 } as const;
 
-export type MismatchReviewStatus = (typeof MISMATCH_REVIEW_STATUS)[keyof typeof MISMATCH_REVIEW_STATUS];
+export type MismatchReviewStatus =
+  (typeof MISMATCH_REVIEW_STATUS)[keyof typeof MISMATCH_REVIEW_STATUS];
 
 // ==================== MISMATCH CONFIGURATIONS ====================
 export const MISMATCH_CONFIGS = {
@@ -118,14 +119,14 @@ export const MISMATCH_CONFIGS = {
     color: '#bb0000',
     borderColor: '#bb0000',
     icon: 'alert',
-    title: 'flagged',
+    title: 'mismatch',
     subtitle: 'Click to review',
   },
   [MISMATCH_REVIEW_STATUS.REVIEWED]: {
     color: '#107e3e',
     borderColor: '#107e3e',
     icon: 'accept',
-    title: 'flagged',
+    title: 'mismatch',
     subtitle: 'Click to review again',
   },
 } as const;

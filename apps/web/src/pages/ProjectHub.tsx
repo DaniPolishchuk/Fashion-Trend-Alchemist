@@ -363,6 +363,7 @@ function ProjectHub() {
             attributes={alchemistAttributes}
             onAttributesChange={handleAlchemistAttributesChange}
             externalLoading={refineFromLoading}
+            velocityScoresStale={velocityScoresStale}
           />
         );
       case 'enhanced-table':

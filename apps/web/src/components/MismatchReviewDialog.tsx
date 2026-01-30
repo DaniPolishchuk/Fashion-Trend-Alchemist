@@ -119,7 +119,7 @@ const MismatchReviewDialog: React.FC<MismatchReviewDialogProps> = ({
   return (
     <Dialog
       open={open}
-      headerText="Review Flagged Articles"
+      headerText="Review Mismatched Articles"
       className={styles.dialog}
       footer={
         <Bar

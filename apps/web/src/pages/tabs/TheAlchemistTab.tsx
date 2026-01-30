@@ -59,6 +59,7 @@ function TheAlchemistTab({
   attributes,
   onAttributesChange,
   externalLoading = false,
+  velocityScoresStale = false
 }: TheAlchemistTabProps) {
   // Local state for fetched data (not user-modifiable state)
   const [articleAttributeOptions, setArticleAttributeOptions] = useState<Record<
@@ -76,7 +77,6 @@ function TheAlchemistTab({
   const [designName, setDesignName] = useState<string>('');
   const [transmutingError, setTransmutingError] = useState<string | null>(null);
   const [successScore, setSuccessScore] = useState(SUCCESS_SCORE_CONFIG.DEFAULT);
-  const [velocityScoresStale, setVelocityScoresStale] = useState(false);
   const [staleWarningDialogOpen, setStaleWarningDialogOpen] = useState(false);
 
   // Memoize stable keys to prevent unnecessary refetches
@@ -124,6 +124,10 @@ function TheAlchemistTab({
     onAttributesChange,
   ]);
 
+  // Attribute movement handlers
+  const handleMoveToLocked = useCallback((key: string) => {
+    setAttributes((prev) =>
+      prev.map((attr) =>
   // Reset internal initialized flag when project changes
   useEffect(() => {
     setInternalInitialized(false);

@@ -5,7 +5,7 @@
 
 export const BREADCRUMBS = {
   HOME: 'Home',
-  RESULTS: 'Result Overview',
+  RESULTS: 'Generated Products',
 } as const;
 
 export const LABELS = {

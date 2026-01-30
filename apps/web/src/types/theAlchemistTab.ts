@@ -35,6 +35,7 @@ export interface PreviewData {
 
 export interface TheAlchemistTabProps {
   project: ProjectData;
+  velocityScoresStale?: boolean;
   attributes: AttributeConfig[] | null;
   onAttributesChange: (attributes: AttributeConfig[]) => void;
   externalLoading?: boolean;
