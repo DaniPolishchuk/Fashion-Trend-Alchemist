@@ -32,6 +32,7 @@ import '@ui5/webcomponents-icons/dist/ai.js';
 import '@ui5/webcomponents-icons/dist/camera.js';
 
 import SaveToCollectionPopover from '../components/SaveToCollectionPopover';
+import SalesTextPanel from '../components/SalesTextPanel';
 import { fetchAPI } from '../services/api/client';
 import {
   BREADCRUMBS,
@@ -70,6 +71,8 @@ interface GeneratedDesign {
   generatedImageUrl: string | null;
   imageGenerationStatus?: OverallImageStatus;
   generatedImages?: GeneratedImages | null;
+  salesText?: string | null;
+  salesTextGenerationStatus?: 'pending' | 'generating' | 'completed' | 'failed' | null;
   createdAt?: string;
 }
 
@@ -103,6 +106,7 @@ function DesignDetail() {
   // Collapsible panel states
   const [predictedPanelCollapsed, setPredictedPanelCollapsed] = useState(false);
   const [givenPanelCollapsed, setGivenPanelCollapsed] = useState(false);
+  const [salesTextPanelCollapsed, setSalesTextPanelCollapsed] = useState(false);
 
   // Polling ref
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
@@ -381,6 +385,21 @@ function DesignDetail() {
     [selectedView]
   );
 
+  const handleSalesTextUpdate = useCallback(
+    (salesText: string, status: 'pending' | 'generating' | 'completed' | 'failed') => {
+      setDesign((prev) =>
+        prev
+          ? {
+              ...prev,
+              salesText,
+              salesTextGenerationStatus: status,
+            }
+          : prev
+      );
+    },
+    []
+  );
+
   if (loading) {
     return (
       <div className={styles.loadingContainer}>
@@ -560,113 +579,125 @@ function DesignDetail() {
           </Panel>
         </div>
 
-        {/* Right Column - Image Gallery */}
-        <div className={styles.galleryColumn}>
-          <div className={styles.galleryContainer}>
-            {/* Thumbnail List */}
-            <div className={styles.thumbnailList}>
-              {IMAGE_VIEW_ORDER.map((view) => {
-                const img = generatedImages?.[view];
-                const isSelected = selectedView === view;
+        {/* Middle Column - Image Gallery */}
+        <div className={styles.galleryContainer}>
+          {/* Thumbnail List */}
+          <div className={styles.thumbnailList}>
+            {IMAGE_VIEW_ORDER.map((view) => {
+              const img = generatedImages?.[view];
+              const isSelected = selectedView === view;
 
-                return (
+              return (
+                <div
+                  key={view}
+                  onClick={() => setSelectedView(view)}
+                  className={`${styles.thumbnailItem} ${isSelected ? styles.thumbnailItemSelected : ''}`}
+                >
                   <div
-                    key={view}
-                    onClick={() => setSelectedView(view)}
-                    className={`${styles.thumbnailItem} ${isSelected ? styles.thumbnailItemSelected : ''}`}
+                    className={`${styles.thumbnailBox} ${isSelected ? styles.thumbnailBoxSelected : ''}`}
                   >
-                    <div
-                      className={`${styles.thumbnailBox} ${isSelected ? styles.thumbnailBoxSelected : ''}`}
-                    >
-                      {img?.status === 'completed' && img.url ? (
-                        <img src={img.url} alt={view} className={styles.thumbnailImage} />
-                      ) : img?.status === 'generating' ? (
-                        <div className={styles.thumbnailLoading}>
-                          <BusyIndicator active size="S" />
-                        </div>
-                      ) : img?.status === 'failed' ? (
-                        <div className={styles.thumbnailFailed}>
-                          <Icon name={ICONS.SYS_CANCEL} className={styles.thumbnailFailedIcon} />
-                        </div>
-                      ) : (
-                        <div className={styles.thumbnailEmpty}>
-                          <Icon name={ICONS.CAMERA} className={styles.thumbnailEmptyIcon} />
-                        </div>
-                      )}
-                    </div>
-                    <Text
-                      className={`${styles.thumbnailLabel} ${isSelected ? styles.thumbnailLabelSelected : ''}`}
-                    >
-                      {view.charAt(0).toUpperCase() + view.slice(1)}
-                    </Text>
+                    {img?.status === 'completed' && img.url ? (
+                      <img src={img.url} alt={view} className={styles.thumbnailImage} />
+                    ) : img?.status === 'generating' ? (
+                      <div className={styles.thumbnailLoading}>
+                        <BusyIndicator active size="S" />
+                      </div>
+                    ) : img?.status === 'failed' ? (
+                      <div className={styles.thumbnailFailed}>
+                        <Icon name={ICONS.SYS_CANCEL} className={styles.thumbnailFailedIcon} />
+                      </div>
+                    ) : (
+                      <div className={styles.thumbnailEmpty}>
+                        <Icon name={ICONS.CAMERA} className={styles.thumbnailEmptyIcon} />
+                      </div>
+                    )}
                   </div>
-                );
-              })}
-            </div>
+                  <Text
+                    className={`${styles.thumbnailLabel} ${isSelected ? styles.thumbnailLabelSelected : ''}`}
+                  >
+                    {view.charAt(0).toUpperCase() + view.slice(1)}
+                  </Text>
+                </div>
+              );
+            })}
+          </div>
 
-            {/* Main Image Stage */}
-            <div className={styles.imageStageContainer}>
-              <div className={styles.imageStage}>
-                {/* Navigation Arrows */}
-                {generatedImages && (
-                  <>
-                    <Button
-                      icon={ICONS.NAV_LEFT}
-                      design="Transparent"
-                      tooltip={BUTTONS.PREVIOUS_VIEW}
-                      onClick={() => navigateView('prev')}
-                      className={`${styles.navButton} ${styles.navButtonLeft}`}
-                    />
-                    <Button
-                      icon={ICONS.NAV_RIGHT}
-                      design="Transparent"
-                      tooltip={BUTTONS.NEXT_VIEW}
-                      onClick={() => navigateView('next')}
-                      className={`${styles.navButton} ${styles.navButtonRight}`}
-                    />
-                  </>
-                )}
-
-                {/* Image Content */}
-                {currentViewImage?.status === 'completed' && currentViewImage.url ? (
-                  <img
-                    src={currentViewImage.url}
-                    alt={`${design.name} - ${selectedView} view`}
-                    className={styles.mainImage}
+          {/* Main Image Stage */}
+          <div className={styles.imageStageContainer}>
+            <div className={styles.imageStage}>
+              {/* Navigation Arrows */}
+              {generatedImages && (
+                <>
+                  <Button
+                    icon={ICONS.NAV_LEFT}
+                    design="Transparent"
+                    tooltip={BUTTONS.PREVIOUS_VIEW}
+                    onClick={() => navigateView('prev')}
+                    className={`${styles.navButton} ${styles.navButtonLeft}`}
                   />
-                ) : currentViewImage?.status === 'pending' ||
-                  currentViewImage?.status === 'generating' ? (
-                  <div className={styles.imageStatusContainer}>
-                    <BusyIndicator active size="L" />
-                    <Text className={styles.imageStatusText}>
-                      {currentViewImage?.status === 'pending'
-                        ? `Waiting to generate ${selectedView} view...`
-                        : `Generating ${selectedView} view...`}
-                    </Text>
-                  </div>
-                ) : currentViewImage?.status === 'failed' ? (
-                  <div className={styles.imageStatusContainer}>
-                    <Icon name={ICONS.SYS_CANCEL} className={styles.imageFailedIcon} />
-                    <Text className={styles.imageFailedText}>
-                      {selectedView.charAt(0).toUpperCase() + selectedView.slice(1)} view generation
-                      failed
-                    </Text>
-                  </div>
-                ) : (
-                  <div className={styles.imageStatusContainer}>
-                    <Text className={styles.imageStatusText}>{LABELS.NO_IMAGE_AVAILABLE}</Text>
-                  </div>
-                )}
-              </div>
-              {/* View Badge - Above Image */}
-              <div className={styles.viewBadge}>
-                <ObjectStatus state="Information" inverted>
-                  {selectedView.toUpperCase()} {LABELS.VIEW_BADGE_SUFFIX}
-                </ObjectStatus>
-              </div>
+                  <Button
+                    icon={ICONS.NAV_RIGHT}
+                    design="Transparent"
+                    tooltip={BUTTONS.NEXT_VIEW}
+                    onClick={() => navigateView('next')}
+                    className={`${styles.navButton} ${styles.navButtonRight}`}
+                  />
+                </>
+              )}
+
+              {/* Image Content */}
+              {currentViewImage?.status === 'completed' && currentViewImage.url ? (
+                <img
+                  src={currentViewImage.url}
+                  alt={`${design.name} - ${selectedView} view`}
+                  className={styles.mainImage}
+                />
+              ) : currentViewImage?.status === 'pending' ||
+                currentViewImage?.status === 'generating' ? (
+                <div className={styles.imageStatusContainer}>
+                  <BusyIndicator active size="L" />
+                  <Text className={styles.imageStatusText}>
+                    {currentViewImage?.status === 'pending'
+                      ? `Waiting to generate ${selectedView} view...`
+                      : `Generating ${selectedView} view...`}
+                  </Text>
+                </div>
+              ) : currentViewImage?.status === 'failed' ? (
+                <div className={styles.imageStatusContainer}>
+                  <Icon name={ICONS.SYS_CANCEL} className={styles.imageFailedIcon} />
+                  <Text className={styles.imageFailedText}>
+                    {selectedView.charAt(0).toUpperCase() + selectedView.slice(1)} view generation
+                    failed
+                  </Text>
+                </div>
+              ) : (
+                <div className={styles.imageStatusContainer}>
+                  <Text className={styles.imageStatusText}>{LABELS.NO_IMAGE_AVAILABLE}</Text>
+                </div>
+              )}
+            </div>
+            {/* View Badge - Above Image */}
+            <div className={styles.viewBadge}>
+              <ObjectStatus state="Information" inverted>
+                {selectedView.toUpperCase()} {LABELS.VIEW_BADGE_SUFFIX}
+              </ObjectStatus>
             </div>
           </div>
         </div>
+
+        {/* Right Column - Sales Text Panel */}
+        {projectId && designId && (
+          <SalesTextPanel
+            projectId={projectId}
+            designId={designId}
+            salesText={design.salesText || null}
+            salesTextGenerationStatus={design.salesTextGenerationStatus || null}
+            onSalesTextUpdate={handleSalesTextUpdate}
+            collapsed={salesTextPanelCollapsed}
+            onToggle={() => setSalesTextPanelCollapsed(!salesTextPanelCollapsed)}
+            imageGenerationStatus={overallStatus}
+          />
+        )}
       </div>
 
       {/* Success Notification */}
@@ -694,10 +725,6 @@ function DesignDetail() {
 
       {/* Bottom Action Bar */}
       <div className={styles.actionBar}>
-        <div className={styles.actionBarLeft}>
-          <Icon name={ICONS.HINT} className={styles.actionBarIcon} />
-          <Text className={styles.actionBarText}>{LABELS.HINT_TEXT}</Text>
-        </div>
         <div className={styles.actionBarRight}>
           <Button icon={ICONS.SYNCHRONIZE} design="Default" onClick={handleRefineDesign}>
             {BUTTONS.REFINE_DESIGN}

@@ -24,6 +24,7 @@ import {
   type ImageView,
 } from '../services/imageGeneration.js';
 import { uploadGeneratedImageForViewWithRetry } from '../services/s3.js';
+import { generateSalesTextWithRetry } from '../services/salesTextGeneration.js';
 import { API_LIMITS, CACHE_TTL_MS } from '../constants.js';
 
 interface PredictRequestBody {
@@ -565,7 +566,8 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
           predictedAttributes,
           imageGenerationStatus: 'pending',
           generatedImages: initialGeneratedImages,
-        })
+          salesTextGenerationStatus: 'pending',
+        } as any) // Temporary type assertion until migration is applied
         .returning();
 
       // Start async image generation (don't await) - generates front, back, model sequentially
@@ -659,9 +661,69 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
         );
       };
 
-      // Fire and forget - don't await
+      // Start async sales text generation (parallel to image generation)
+      const asyncSalesTextGeneration = async () => {
+        try {
+          // Update status to generating
+          await db
+            .update(generatedDesigns)
+            .set({ salesTextGenerationStatus: 'generating' } as any)
+            .where(eq(generatedDesigns.id, designId));
+
+          fastify.log.info({ designId }, 'Starting sales text generation');
+
+          // Determine product type for sales text generation
+          const productType =
+            lockedAttributes.article_product_type ||
+            lockedAttributes.product_type ||
+            predictedAttributes.article_product_type ||
+            predictedAttributes.product_type ||
+            'fashion item';
+
+          // Generate sales text (without images initially)
+          const salesText = await generateSalesTextWithRetry(
+            productType,
+            lockedAttributes,
+            predictedAttributes,
+            targetSuccessScore,
+            undefined, // No image context initially
+            1 // Single retry
+          );
+
+          if (salesText) {
+            await db
+              .update(generatedDesigns)
+              .set({
+                salesText,
+                salesTextGenerationStatus: 'completed',
+              } as any)
+              .where(eq(generatedDesigns.id, designId));
+
+            fastify.log.info({ designId }, 'Sales text generation completed');
+          } else {
+            await db
+              .update(generatedDesigns)
+              .set({ salesTextGenerationStatus: 'failed' } as any)
+              .where(eq(generatedDesigns.id, designId));
+
+            fastify.log.warn({ designId }, 'Sales text generation failed after retries');
+          }
+        } catch (error) {
+          fastify.log.error({ designId, error }, 'Error generating sales text');
+          await db
+            .update(generatedDesigns)
+            .set({ salesTextGenerationStatus: 'failed' } as any)
+            .where(eq(generatedDesigns.id, designId));
+        }
+      };
+
+      // Fire and forget both processes - don't await
       asyncImageGeneration().catch((err) => {
         fastify.log.error({ designId, err }, 'Unhandled error in async image generation');
+      });
+
+      asyncSalesTextGeneration().catch((err) => {
+        fastify.log.error({ designId, err }, 'Unhandled error in async sales text generation');
       });
 
       return reply.status(201).send({
