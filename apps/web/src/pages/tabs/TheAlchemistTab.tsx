@@ -54,7 +54,7 @@ import {
 } from '../../utils/theAlchemistHelpers';
 import styles from '../../styles/pages/TheAlchemistTab.module.css';
 
-function TheAlchemistTab({ project }: TheAlchemistTabProps) {
+function TheAlchemistTab({ project, velocityScoresStale = false }: TheAlchemistTabProps) {
   const [attributes, setAttributes] = useState<AttributeConfig[]>([]);
   const [articleAttributeOptions, setArticleAttributeOptions] = useState<Record<
     string,
@@ -69,7 +69,6 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
   const [designName, setDesignName] = useState<string>('');
   const [transmutingError, setTransmutingError] = useState<string | null>(null);
   const [successScore, setSuccessScore] = useState(SUCCESS_SCORE_CONFIG.DEFAULT);
-  const [velocityScoresStale, setVelocityScoresStale] = useState(false);
   const [staleWarningDialogOpen, setStaleWarningDialogOpen] = useState(false);
 
   // Memoize stable keys to prevent unnecessary refetches
@@ -124,24 +123,6 @@ function TheAlchemistTab({ project }: TheAlchemistTabProps) {
     project.ontologySchema,
     attributes,
   ]);
-
-  // Fetch velocity stale status on mount
-  useEffect(() => {
-    const fetchVelocityStatus = async () => {
-      try {
-        const result = await fetchAPI<{ velocityScoresStale?: boolean }>(
-          `/api/projects/${project.id}/context-items`
-        );
-        if (result.data) {
-          setVelocityScoresStale(result.data.velocityScoresStale || false);
-        }
-      } catch (err) {
-        console.error('Failed to fetch velocity status:', err);
-      }
-    };
-
-    fetchVelocityStatus();
-  }, [project.id]);
 
   // Attribute movement handlers
   const handleMoveToLocked = useCallback((key: string) => {

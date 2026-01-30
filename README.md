@@ -166,7 +166,7 @@ fashion-trend-alchemist/
 - **Caching**: Redis (optional, 15-30x performance boost)
 - **AI Integration**:
   - OpenAI API for LLM text generation (ontology, names)
-  - LiteLLM proxy for Vision LLM (image enrichment)
+  - LiteLLM proxy for Vision LLM (data enrichment)
   - SAP AI Core for RPT-1 predictions and image generation
 - **Storage**: SeaweedFS/S3 for generated images
 - **Package Manager**: pnpm (workspaces for monorepo)
@@ -719,7 +719,7 @@ pnpm --recursive run type-check
 ### AI & ML
 
 - **OpenAI API**: Text generation for ontology and names
-- **LiteLLM Proxy**: Vision LLM for image enrichment
+- **LiteLLM Proxy**: Vision LLM for data enrichment
 - **SAP AI Core**: RPT-1 predictions and image generation
 - **OAuth2**: Secure authentication with SAP AI Core
 

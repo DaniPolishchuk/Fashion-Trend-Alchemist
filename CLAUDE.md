@@ -404,7 +404,7 @@ REDIS_URL (e.g., redis://localhost:6379)
 # LLM Integration (for ontology generation)
 LLM_API_URL, LLM_API_KEY, LLM_MODEL
 
-# Vision LLM (for image enrichment)
+# Vision LLM (for data enrichment)
 LITELLM_PROXY_URL, LITELLM_API_KEY, VISION_LLM_MODEL
 
 # Enrichment Processing

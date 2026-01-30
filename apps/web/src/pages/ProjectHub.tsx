@@ -209,7 +209,7 @@ function ProjectHub() {
 
     switch (activeTab) {
       case 'alchemist':
-        return <TheAlchemistTab project={project} />;
+        return <TheAlchemistTab project={project} velocityScoresStale={velocityScoresStale} />;
       case 'enhanced-table':
         return (
           <EnhancedTableTab

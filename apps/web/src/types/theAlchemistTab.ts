@@ -35,4 +35,5 @@ export interface PreviewData {
 
 export interface TheAlchemistTabProps {
   project: ProjectData;
+  velocityScoresStale?: boolean;
 }

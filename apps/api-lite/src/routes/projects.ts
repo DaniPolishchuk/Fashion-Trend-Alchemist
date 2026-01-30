@@ -812,11 +812,14 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
       // Update exclusions in transaction
       await db.transaction(async (tx) => {
-        // Update each article's exclusion status
+        // Update each article's exclusion status AND establish new baseline
         for (const { articleId, isExcluded } of exclusions) {
           await tx
             .update(projectContextItems)
-            .set({ isExcluded })
+            .set({
+              isExcluded,
+              originalIsExcluded: isExcluded, // Establish new baseline after mismatch review
+            })
             .where(
               and(
                 eq(projectContextItems.projectId, projectId),

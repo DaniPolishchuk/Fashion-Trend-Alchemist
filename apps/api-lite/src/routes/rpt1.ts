@@ -322,7 +322,7 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
       if (contextItems.length === 0) {
         return reply.status(400).send({
           error: 'No enriched context items',
-          details: 'Run image enrichment before making predictions',
+          details: 'Run data enrichment before making predictions',
         });
       }
 
