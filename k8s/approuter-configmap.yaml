@@ -14,7 +14,7 @@ data:
         "name": "backend-api",
         "url": "http://127.0.0.1:3001",
         "forwardAuthToken": true,
-        "timeout": 30000
+        "timeout": 600000
       },
       {
         "name": "app-frontend",
