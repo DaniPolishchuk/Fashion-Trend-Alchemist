@@ -309,9 +309,23 @@ export default async function projectRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: 'Project is not in draft status' });
       }
 
+      // Transform ontology schema: Convert top-level product type keys from underscore to hyphen
+      // e.g., {"shorts_trousers": {...}} -> {"shorts-trousers": {...}}
+      // Only transforms the parent keys, not nested attribute names
+      const transformedOntologySchema = validatedInput.ontologySchema
+        ? Object.entries(validatedInput.ontologySchema).reduce(
+            (acc, [productTypeKey, attributes]) => {
+              const transformedKey = productTypeKey.replace(/[_\/]/g, '-');
+              acc[transformedKey] = attributes; // Keep attributes unchanged
+              return acc;
+            },
+            {} as Record<string, any>
+          )
+        : null;
+
       // Use transaction for atomicity
       const result = await db.transaction(async (tx) => {
-        // Update project status, season config, and ontology schema
+        // Update project status, season config, and ontology schema (with transformed product type keys)
         await tx
           .update(projects)
           .set({
@@ -319,8 +333,8 @@ export default async function projectRoutes(fastify: FastifyInstance) {
             seasonConfig: validatedInput.seasonConfig
               ? JSON.stringify(validatedInput.seasonConfig)
               : undefined,
-            ontologySchema: validatedInput.ontologySchema
-              ? JSON.stringify(validatedInput.ontologySchema)
+            ontologySchema: transformedOntologySchema
+              ? JSON.stringify(transformedOntologySchema)
               : undefined,
           })
           .where(eq(projects.id, projectId));
