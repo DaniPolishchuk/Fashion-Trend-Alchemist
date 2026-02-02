@@ -122,7 +122,37 @@
 }
 
 .deleteButton {
-  color: var(--sapNegativeColor);
+  color: var(--sapNegativeColor) !important;
+}
+
+/* Table column widths */
+.tableColIcon {
+  width: 40px;
+}
+
+.tableColStatus {
+  width: 100px;
+}
+
+.tableColActions {
+  width: 80px;
+}
+
+/* Text styles */
+.projectName {
+  font-weight: 500;
+}
+
+.sectionMargin {
+  margin-bottom: 2rem;
+}
+
+.flexGap {
+  gap: 0.5rem;
+}
+
+.titleNoMargin {
+  margin: 0;
 }
 
 .pinnedButton {

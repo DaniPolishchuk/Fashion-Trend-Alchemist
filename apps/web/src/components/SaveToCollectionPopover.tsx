@@ -16,10 +16,12 @@ import '@ui5/webcomponents-icons/dist/search.js';
 
 import { api } from '../services/api';
 import type { CollectionListItem } from '@fashion/types';
+import { TEXT } from '../constants/saveToCollectionPopover';
+import styles from '../styles/components/SaveToCollectionPopover.module.css';
 
 interface SaveToCollectionPopoverProps {
   open: boolean;
-  opener?: string; // ID of the opener element
+  opener?: string;
   designId: string;
   onClose: () => void;
   onSaved?: (collectionName: string, collectionId: string) => void;
@@ -41,7 +43,6 @@ function SaveToCollectionPopover({
   const [newCollectionName, setNewCollectionName] = useState('');
   const [creating, setCreating] = useState(false);
 
-  // Fetch collections when popover opens
   useEffect(() => {
     if (open && collections.length === 0) {
       fetchCollections();
@@ -66,12 +67,10 @@ function SaveToCollectionPopover({
     }
   }, []);
 
-  // Filter collections based on search
   const filteredCollections = collections.filter((collection) =>
     collection.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Handle save to existing collection
   const handleSaveToCollection = useCallback(
     async (collectionId: string, collectionName: string) => {
       try {
@@ -95,7 +94,6 @@ function SaveToCollectionPopover({
     [designId, onSaved, onClose]
   );
 
-  // Handle create new collection
   const handleCreateNewCollection = useCallback(async () => {
     if (!newCollectionName.trim()) return;
 
@@ -103,7 +101,6 @@ function SaveToCollectionPopover({
       setCreating(true);
       setError(null);
 
-      // Create collection
       const createResult = await api.collections.create(newCollectionName.trim());
 
       if (createResult.error) {
@@ -117,7 +114,6 @@ function SaveToCollectionPopover({
         return;
       }
 
-      // Add design to the new collection
       const addResult = await api.collections.addDesign(newCollection.id, designId);
 
       if (addResult.error) {
@@ -125,13 +121,12 @@ function SaveToCollectionPopover({
         return;
       }
 
-      // Update local collections list with proper typing
       const newCollectionItem: CollectionListItem = {
         id: newCollection.id,
         name: newCollection.name,
         createdAt: newCollection.createdAt,
-        itemCount: 1, // Just added one design
-        imageUrls: [], // No images yet
+        itemCount: 1,
+        imageUrls: [],
       };
 
       setCollections((prev) => [newCollectionItem, ...prev]);
@@ -145,19 +140,16 @@ function SaveToCollectionPopover({
     }
   }, [newCollectionName, designId, onSaved, onClose]);
 
-  // Handle show create new
   const handleShowCreateNew = useCallback(() => {
     setShowCreateNew(true);
     setNewCollectionName('');
   }, []);
 
-  // Handle cancel create new
   const handleCancelCreateNew = useCallback(() => {
     setShowCreateNew(false);
     setNewCollectionName('');
   }, []);
 
-  // Handle popover close
   const handleClose = useCallback(() => {
     setShowCreateNew(false);
     setNewCollectionName('');
@@ -166,17 +158,14 @@ function SaveToCollectionPopover({
     onClose();
   }, [onClose]);
 
-  // Handle search input
   const handleSearchInput = useCallback((e: CustomEvent) => {
     setSearchQuery((e.target as HTMLInputElement).value);
   }, []);
 
-  // Handle create input
   const handleCreateInput = useCallback((e: CustomEvent) => {
     setNewCollectionName((e.target as HTMLInputElement).value);
   }, []);
 
-  // Handle create input keypress
   const handleCreateKeyPress = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Enter') {
@@ -194,101 +183,58 @@ function SaveToCollectionPopover({
       opener={opener}
       onClose={handleClose}
       placement="Bottom"
-      style={{
-        width: '320px',
-        maxHeight: '400px',
-      }}
+      className={styles.popover}
     >
-      <div style={{ padding: '1rem' }}>
-        {/* Header */}
-        <div style={{ marginBottom: '0.75rem' }}>
-          <div
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}
-          >
-            <Icon name="bookmark" style={{ color: 'var(--sapContent_IconColor)' }} />
-            <Text style={{ fontWeight: '600', fontSize: '0.875rem' }}>Save to Collection</Text>
+      <div className={styles.container}>
+        <div className={styles.header}>
+          <div className={styles.headerTitle}>
+            <Icon name="bookmark" className={styles.headerIcon} />
+            <Text className={styles.headerText}>{TEXT.TITLE}</Text>
           </div>
 
-          {/* Search input */}
           <Input
-            placeholder="Search collections..."
+            placeholder={TEXT.SEARCH_PLACEHOLDER}
             value={searchQuery}
             onInput={handleSearchInput}
             showClearIcon
-            style={{ width: '100%' }}
+            className={styles.searchInput}
           />
         </div>
 
-        {/* Error message */}
         {error && (
-          <div style={{ marginBottom: '0.75rem' }}>
+          <div className={styles.errorContainer}>
             <MessageStrip design="Negative" hideCloseButton>
               {error}
             </MessageStrip>
           </div>
         )}
 
-        {/* Content */}
-        <div style={{ minHeight: '120px', maxHeight: '240px', overflow: 'auto' }}>
+        <div className={styles.content}>
           {loading ? (
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                height: '120px',
-              }}
-            >
+            <div className={styles.loadingContainer}>
               <BusyIndicator active size="S" />
             </div>
           ) : (
             <>
-              {/* Create New Collection Section */}
               {showCreateNew ? (
-                <div
-                  style={{
-                    padding: '0.75rem',
-                    background: 'var(--sapGroup_ContentBackground)',
-                    borderRadius: '0.375rem',
-                    border: '1px solid var(--sapList_BorderColor)',
-                    marginBottom: '0.75rem',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      marginBottom: '0.5rem',
-                    }}
-                  >
-                    <Icon
-                      name="add"
-                      style={{ color: 'var(--sapPositiveColor)', fontSize: '0.875rem' }}
-                    />
-                    <Text
-                      style={{
-                        fontSize: '0.8125rem',
-                        fontWeight: '500',
-                        color: 'var(--sapPositiveColor)',
-                      }}
-                    >
-                      Create New Collection
-                    </Text>
+                <div className={styles.createCard}>
+                  <div className={styles.createCardHeader}>
+                    <Icon name="add" className={styles.createIcon} />
+                    <Text className={styles.createTitle}>{TEXT.CREATE_NEW_TITLE}</Text>
                   </div>
 
-                  <div style={{ marginBottom: '0.5rem' }}>
+                  <div className={styles.createInputContainer}>
                     <Input
-                      placeholder="Enter collection name..."
+                      placeholder={TEXT.CREATE_INPUT_PLACEHOLDER}
                       value={newCollectionName}
                       onInput={handleCreateInput}
                       onKeyDown={handleCreateKeyPress as any}
-                      style={{ width: '100%' }}
+                      className={styles.createInput}
                       disabled={creating}
                     />
                   </div>
 
-                  <div style={{ display: 'flex', gap: '0.375rem', justifyContent: 'flex-end' }}>
+                  <div className={styles.createActions}>
                     <Button
                       icon="decline"
                       design="Transparent"
@@ -301,76 +247,37 @@ function SaveToCollectionPopover({
                       onClick={handleCreateNewCollection}
                       disabled={!newCollectionName.trim() || creating}
                     >
-                      {creating ? 'Creating...' : 'Create'}
+                      {creating ? TEXT.CREATE_BUTTON_LOADING : TEXT.CREATE_BUTTON}
                     </Button>
                   </div>
                 </div>
               ) : (
-                <div style={{ marginBottom: '0.75rem' }}>
+                <div className={styles.createSection}>
                   <Button
                     icon="add"
                     design="Transparent"
                     onClick={handleShowCreateNew}
-                    style={{
-                      width: '100%',
-                      justifyContent: 'flex-start',
-                      color: 'var(--sapPositiveColor)',
-                      borderColor: 'var(--sapPositiveColor)',
-                      borderStyle: 'dashed',
-                    }}
+                    className={styles.createButton}
                   >
-                    Create New Collection
+                    {TEXT.CREATE_NEW_BUTTON}
                   </Button>
                 </div>
               )}
 
-              {/* Collections List */}
               {filteredCollections.length > 0 ? (
                 <div>
                   {filteredCollections.map((collection) => (
                     <div
                       key={collection.id}
                       onClick={() => handleSaveToCollection(collection.id, collection.name)}
-                      style={{
-                        padding: '0.75rem',
-                        border: '1px solid var(--sapList_BorderColor)',
-                        borderRadius: '0.375rem',
-                        marginBottom: '0.5rem',
-                        cursor: 'pointer',
-                        opacity: saving === collection.id ? 0.6 : 1,
-                        transition: 'all 0.2s',
-                        background: 'var(--sapList_Background)',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (saving !== collection.id) {
-                          e.currentTarget.style.background = 'var(--sapList_Hover_Background)';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'var(--sapList_Background)';
-                      }}
+                      className={styles.collectionItem}
+                      style={{ opacity: saving === collection.id ? 0.6 : 1 }}
                     >
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.5rem',
-                          width: '100%',
-                        }}
-                      >
-                        <div style={{ flex: 1 }}>
-                          <Text style={{ fontWeight: '500', fontSize: '0.875rem' }}>
-                            {collection.name}
-                          </Text>
-                          <Text
-                            style={{
-                              fontSize: '0.75rem',
-                              color: 'var(--sapContent_LabelColor)',
-                              display: 'block',
-                              marginTop: '0.125rem',
-                            }}
-                          >
-                            {collection.itemCount} items
+                      <div className={styles.collectionItemContent}>
+                        <div className={styles.collectionItemInfo}>
+                          <Text className={styles.collectionName}>{collection.name}</Text>
+                          <Text className={styles.collectionCount}>
+                            {collection.itemCount} {TEXT.ITEMS_SUFFIX}
                           </Text>
                         </div>
                         {saving === collection.id && <BusyIndicator active size="S" />}
@@ -379,41 +286,16 @@ function SaveToCollectionPopover({
                   ))}
                 </div>
               ) : searchQuery ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: '80px',
-                    gap: '0.5rem',
-                  }}
-                >
-                  <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '0.875rem' }}>
-                    No collections found matching "{searchQuery}"
+                <div className={styles.emptyState}>
+                  <Text className={styles.emptyText}>
+                    {TEXT.NO_COLLECTIONS_SEARCH} "{searchQuery}"
                   </Text>
                 </div>
               ) : (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: '80px',
-                    gap: '0.5rem',
-                  }}
-                >
-                  <Icon
-                    name="bookmark"
-                    style={{ color: 'var(--sapContent_LabelColor)', fontSize: '1.5rem' }}
-                  />
-                  <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '0.875rem' }}>
-                    No collections yet
-                  </Text>
-                  <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '0.75rem' }}>
-                    Create your first collection above
-                  </Text>
+                <div className={styles.emptyState}>
+                  <Icon name="bookmark" className={styles.emptyIcon} />
+                  <Text className={styles.emptyText}>{TEXT.NO_COLLECTIONS_EMPTY}</Text>
+                  <Text className={styles.emptySubtext}>{TEXT.NO_COLLECTIONS_HINT}</Text>
                 </div>
               )}
             </>

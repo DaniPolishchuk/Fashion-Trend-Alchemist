@@ -176,18 +176,12 @@ function AppShell({ children }: AppShellProps) {
             <div className={styles.themeToggleContent}>
               <Icon
                 name={themeIcon}
-                className={styles.themeIcon}
-                style={{
-                  transform: isDarkTheme ? 'rotate(360deg) scale(1)' : 'rotate(0deg) scale(1)',
-                }}
+                className={`${styles.themeIcon} ${isDarkTheme ? styles.themeIconDark : ''}`}
               />
               <span>{themeLabel}</span>
               <Icon
                 name={themeIcon}
-                className={styles.themeIcon}
-                style={{
-                  transform: isDarkTheme ? 'rotate(360deg) scale(1)' : 'rotate(0deg) scale(1)',
-                }}
+                className={`${styles.themeIcon} ${isDarkTheme ? styles.themeIconDark : ''}`}
               />
             </div>
           </ListItemStandard>

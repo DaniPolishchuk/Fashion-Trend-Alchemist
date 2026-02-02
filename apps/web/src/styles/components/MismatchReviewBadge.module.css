@@ -1,0 +1,8 @@
+/**
+ * Mismatch Review Badge Styles
+ * Simple styles for the clickable mismatch review badge
+ */
+
+.badge {
+  cursor: pointer;
+}

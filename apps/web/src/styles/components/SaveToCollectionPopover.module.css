@@ -1,0 +1,173 @@
+/**
+ * Save to Collection Popover Styles
+ * Optimized styles for collection selection and creation
+ */
+
+.popover {
+  width: 320px;
+  max-height: 400px;
+}
+
+.container {
+  padding: 1rem;
+}
+
+/* Header */
+.header {
+  margin-bottom: 0.75rem;
+}
+
+.headerTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.headerIcon {
+  color: var(--sapContent_IconColor);
+}
+
+.headerText {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.searchInput {
+  width: 100%;
+}
+
+/* Error message */
+.errorContainer {
+  margin-bottom: 0.75rem;
+}
+
+/* Content area */
+.content {
+  min-height: 120px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.loadingContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 120px;
+}
+
+/* Create New Section */
+.createSection {
+  margin-bottom: 0.75rem;
+}
+
+.createCard {
+  padding: 0.75rem;
+  background: var(--sapGroup_ContentBackground);
+  border-radius: 0.375rem;
+  border: 1px solid var(--sapList_BorderColor);
+  margin-bottom: 0.75rem;
+}
+
+.createCardHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.createIcon {
+  color: var(--sapPositiveColor);
+  font-size: 0.875rem;
+}
+
+.createTitle {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--sapPositiveColor);
+}
+
+.createInputContainer {
+  margin-bottom: 0.5rem;
+}
+
+.createInput {
+  width: 100%;
+}
+
+.createActions {
+  display: flex;
+  gap: 0.375rem;
+  justify-content: flex-end;
+}
+
+.createButton {
+  width: 100%;
+  justify-content: flex-start;
+  color: var(--sapPositiveColor);
+  border-color: var(--sapPositiveColor);
+  border-style: dashed;
+}
+
+/* Collections List */
+.collectionItem {
+  padding: 0.75rem;
+  border: 1px solid var(--sapList_BorderColor);
+  border-radius: 0.375rem;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--sapList_Background);
+}
+
+.collectionItem:hover {
+  background: var(--sapList_Hover_Background);
+}
+
+.collectionItemContent {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.collectionItemInfo {
+  flex: 1;
+}
+
+.collectionName {
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.collectionCount {
+  font-size: 0.75rem;
+  color: var(--sapContent_LabelColor);
+  display: block;
+  margin-top: 0.125rem;
+}
+
+/* Empty States */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 80px;
+  gap: 0.5rem;
+}
+
+.emptyIcon {
+  color: var(--sapContent_LabelColor);
+  font-size: 1.5rem;
+}
+
+.emptyText {
+  color: var(--sapContent_LabelColor);
+  font-size: 0.875rem;
+}
+
+.emptySubtext {
+  color: var(--sapContent_LabelColor);
+  font-size: 0.75rem;
+}

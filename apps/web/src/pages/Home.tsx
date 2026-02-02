@@ -390,7 +390,7 @@ function Home() {
           <Bar
             design="Header"
             startContent={
-              <Title level="H5" style={{ margin: 0 }}>
+              <Title level="H5" className={styles.titleNoMargin}>
                 Projects ({filteredProjects.length})
               </Title>
             }
@@ -434,15 +434,15 @@ function Home() {
                 <table className={styles.table}>
                   <thead className={styles.tableHeader}>
                     <tr>
-                      <th className={styles.tableHeaderCell} style={{ width: '40px' }}></th>
-                      <th className={styles.tableHeaderCell} style={{ width: '100px' }}>
+                      <th className={`${styles.tableHeaderCell} ${styles.tableColIcon}`}></th>
+                      <th className={`${styles.tableHeaderCell} ${styles.tableColStatus}`}>
                         Status
                       </th>
                       <th className={styles.tableHeaderCell}>Project Name</th>
                       <th className={styles.tableHeaderCell}>Time Period</th>
                       <th className={styles.tableHeaderCell}>Product Group</th>
                       <th className={styles.tableHeaderCellRight}>Generated Products</th>
-                      <th className={styles.tableHeaderCellCenter} style={{ width: '80px' }}>
+                      <th className={`${styles.tableHeaderCellCenter} ${styles.tableColActions}`}>
                         Actions
                       </th>
                     </tr>
@@ -475,7 +475,7 @@ function Home() {
                         </td>
                         <td className={styles.projectNameCell}>
                           <div>
-                            <Text style={{ fontWeight: 500 }}>{project.name}</Text>
+                            <Text className={styles.projectName}>{project.name}</Text>
                             <Text className={styles.projectIdText}>
                               {project.id.slice(0, 8)}...
                             </Text>

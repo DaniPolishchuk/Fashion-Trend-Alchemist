@@ -64,9 +64,8 @@ const MismatchReviewBadge: React.FC<MismatchReviewBadgeProps> = ({ mismatchSumma
 
   return (
     <div
-      className={`${styles.statusCard} ${cardVariantClass}`}
+      className={`${styles.statusCard} ${cardVariantClass} ${styles.clickable}`}
       onClick={onClick}
-      style={{ cursor: 'pointer' }}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {

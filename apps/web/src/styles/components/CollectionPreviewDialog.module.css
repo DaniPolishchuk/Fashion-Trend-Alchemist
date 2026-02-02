@@ -1,0 +1,153 @@
+/**
+ * Collection Preview Dialog Styles
+ * Optimized styles for collection preview and design grid
+ */
+
+.dialog {
+  width: 90vw;
+  max-width: 1200px;
+  height: 80vh;
+}
+
+.footer {
+  padding: 0.5rem;
+  min-height: 50px;
+}
+
+.content {
+  padding: 1rem;
+  height: calc(80vh - 120px);
+  overflow: auto;
+}
+
+.errorContainer {
+  margin-bottom: 1rem;
+}
+
+.loadingContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
+
+.errorDisplay {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Collection Metadata */
+.metadata {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--sapList_BorderColor);
+}
+
+.metadataText {
+  color: var(--sapContent_LabelColor);
+  font-size: 0.875rem;
+}
+
+/* Empty State */
+.emptyState {
+  height: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Design Grid */
+.designGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+.designCard {
+  position: relative;
+  border: 1px solid var(--sapList_BorderColor);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  transition: all 0.2s;
+  background-color: var(--sapTile_Background);
+}
+
+.designCard:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Remove Button */
+.removeButton {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: var(--sapNegativeColor) !important;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.removeButton:hover {
+  opacity: 1;
+}
+
+/* Design Image Area */
+.designClickable {
+  cursor: pointer;
+}
+
+.designImageContainer {
+  aspect-ratio: 1;
+  background-color: #f8f8f8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.designImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.designImagePlaceholder {
+  color: var(--sapContent_IconColor);
+  font-size: 2rem;
+}
+
+/* Design Info */
+.designInfo {
+  padding: 0.75rem;
+}
+
+.designTitle {
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.designDate {
+  font-size: 0.75rem;
+  color: var(--sapContent_LabelColor);
+}
+
+/* Loading Overlay */
+.loadingOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+}

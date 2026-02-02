@@ -654,7 +654,7 @@ function TheAlchemistTab({
         open={transmutingDialogOpen}
         onClose={transmuting ? undefined : () => setTransmutingDialogOpen(false)}
         headerText=""
-        style={{ width: '400px' }}
+        className={styles.dialogSmall}
       >
         <div className={styles.dialogContent}>
           {transmuting ? (
@@ -691,7 +691,7 @@ function TheAlchemistTab({
         open={previewDialogOpen}
         onClose={() => setPreviewDialogOpen(false)}
         headerText={TEXT.PREVIEW_DIALOG_TITLE}
-        style={{ width: '600px' }}
+        className={styles.dialogMedium}
         footer={
           <Bar
             endContent={
@@ -833,8 +833,8 @@ function TheAlchemistTab({
           />
         }
       >
-        <div style={{ padding: '1rem' }}>
-          <MessageStrip design="Negative" hideCloseButton style={{ marginBottom: '1rem' }}>
+        <div className={styles.dialogPadding}>
+          <MessageStrip design="Negative" hideCloseButton className={styles.dialogMessageStrip}>
             Your context has changed since velocity scores were last calculated.
           </MessageStrip>
           <Text>

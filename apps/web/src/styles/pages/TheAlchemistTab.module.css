@@ -530,12 +530,30 @@
 }
 
 .previewJson {
-  background: var(--sapShell_Background);
+  background: var(--sapBackgroundColor);
   padding: 1rem;
-  border-radius: 0.5rem;
-  overflow: auto;
+  border-radius: 0.25rem;
+  overflow-x: auto;
   font-size: 0.75rem;
-  max-height: 200px;
+  line-height: 1.5;
+}
+
+/* ==================== DIALOG DIMENSIONS ==================== */
+
+.dialogSmall {
+  width: 400px;
+}
+
+.dialogMedium {
+  width: 600px;
+}
+
+.dialogPadding {
+  padding: 1rem;
+}
+
+.dialogMessageStrip {
+  margin-bottom: 1rem;
 }
 
 /* ==================== EMPTY STATE ==================== */

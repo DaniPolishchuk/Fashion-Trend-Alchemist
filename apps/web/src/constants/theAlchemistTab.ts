@@ -189,3 +189,10 @@ export const SESSION_STORAGE_KEY_PREFIX = 'alchemist_state_';
 
 export const getSessionStorageKey = (projectId: string): string =>
   `${SESSION_STORAGE_KEY_PREFIX}${projectId}`;
+
+// ==================== DIALOG DIMENSIONS ====================
+
+export const DIALOG = {
+  PREVIEW_WIDTH: '600px',
+  ATTRIBUTE_WIDTH: '400px',
+} as const;

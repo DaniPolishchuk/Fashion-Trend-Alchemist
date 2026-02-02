@@ -91,6 +91,10 @@
   opacity: 1;
 }
 
+.themeIconDark {
+  transform: rotate(360deg) scale(1);
+}
+
 /* ==================== NOTIFICATIONS ==================== */
 
 .notificationsContainer {
