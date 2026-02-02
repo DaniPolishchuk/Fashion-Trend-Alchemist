@@ -4,14 +4,6 @@
   "sessionTimeout": 30,
   "routes": [
     {
-      "source": "^/api/projects/([^/]+)/enrichment-progress$",
-      "target": "/api/projects/$1/enrichment-progress",
-      "destination": "backend-api",
-      "authenticationType": "xsuaa",
-      "csrfProtection": false,
-      "timeout": 600000
-    },
-    {
       "source": "^/api/(.*)$",
       "target": "/api/$1",
       "destination": "backend-api",
