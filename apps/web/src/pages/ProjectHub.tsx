@@ -32,7 +32,7 @@ import MismatchReviewBadge from '../components/MismatchReviewBadge';
 import MismatchReviewDialog from '../components/MismatchReviewDialog';
 import VelocityRecalcIndicator from '../components/VelocityRecalcIndicator';
 import { useProjectData } from '../hooks/useProjectData';
-import { useEnrichmentSSE } from '../hooks/useEnrichmentSSE';
+import { useEnrichmentPolling } from '../hooks/useEnrichmentPolling';
 
 // Constants and styles
 import { TABS, TEXT, API_ENDPOINTS, type TabType } from '../constants/projectHub';
@@ -184,7 +184,8 @@ function ProjectHub() {
         }
 
         // We need the current attributes to transform - fetch them if not available
-        const productTypes = (project.scopeConfig as { productTypes?: string[] } | null)?.productTypes;
+        const productTypes = (project.scopeConfig as { productTypes?: string[] } | null)
+          ?.productTypes;
         const articleOptions = await fetchArticleAttributes(productTypes);
         const defaultAttributes = initializeAttributes(articleOptions, project.ontologySchema);
 
@@ -229,7 +230,8 @@ function ProjectHub() {
     if (storedState && storedState.attributes.length > 0) {
       // We need current attributes to validate against
       const loadAndValidate = async () => {
-        const productTypes = (project.scopeConfig as { productTypes?: string[] } | null)?.productTypes;
+        const productTypes = (project.scopeConfig as { productTypes?: string[] } | null)
+          ?.productTypes;
         const articleOptions = await fetchArticleAttributes(productTypes);
         const defaultAttributes = initializeAttributes(articleOptions, project.ontologySchema);
 
@@ -307,8 +309,8 @@ function ProjectHub() {
     setCurrentArticleId(null);
   }, [setEnrichmentStatus, setCurrentArticleId]);
 
-  // Use SSE hook
-  useEnrichmentSSE({
+  // Use polling hook for real-time progress updates
+  useEnrichmentPolling({
     projectId,
     enrichmentStatus,
     onProgress: handleProgress,
