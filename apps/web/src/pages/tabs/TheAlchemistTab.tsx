@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Card,
   Title,
@@ -16,7 +17,6 @@ import {
   Dialog,
   Bar,
   MessageStrip,
-  BusyIndicator,
   Slider,
 } from '@ui5/webcomponents-react';
 import AttributeSkeletonLoader from '../../components/AttributeSkeletonLoader';
@@ -42,7 +42,7 @@ import {
   API_ENDPOINTS,
 } from '../../constants/theAlchemistTab';
 import { fetchAPI } from '../../services/api/client';
-import type { PreviewData, TheAlchemistTabProps } from '../../types/theAlchemistTab';
+import type { TheAlchemistTabProps } from '../../types/theAlchemistTab';
 import {
   fetchArticleAttributes,
   initializeAttributes,
@@ -58,6 +58,8 @@ function TheAlchemistTab({
   externalLoading = false,
   velocityScoresStale = false,
 }: TheAlchemistTabProps) {
+  const navigate = useNavigate();
+
   // Local state for fetched data (not user-modifiable state)
   const [articleAttributeOptions, setArticleAttributeOptions] = useState<Record<
     string,
@@ -66,12 +68,10 @@ function TheAlchemistTab({
   const [internalInitialized, setInternalInitialized] = useState(false);
 
   // UI state (local to this component)
-  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
-  const [previewData, setPreviewData] = useState<PreviewData | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
   const [transmuting, setTransmuting] = useState(false);
   const [transmutingDialogOpen, setTransmutingDialogOpen] = useState(false);
   const [designName, setDesignName] = useState<string>('');
+  const [designId, setDesignId] = useState<string>('');
   const [transmutingError, setTransmutingError] = useState<string | null>(null);
   const [successScore, setSuccessScore] = useState(SUCCESS_SCORE_CONFIG.DEFAULT);
   const [staleWarningDialogOpen, setStaleWarningDialogOpen] = useState(false);
@@ -180,56 +180,6 @@ function TheAlchemistTab({
     [currentAttributes, onAttributesChange]
   );
 
-  // Fetch preview data
-  const fetchPreviewData = useCallback(async () => {
-    setPreviewLoading(true);
-    try {
-      const result = await fetchAPI<{ enrichedCount?: number; totalCount?: number }>(
-        API_ENDPOINTS.RPT1_PREVIEW(project.id)
-      );
-      if (result.error) throw new Error(result.error);
-
-      const contextData = result.data!;
-      const lockedAttrs = currentAttributes
-        .filter((attr) => attr.category === ATTRIBUTE_CATEGORIES.LOCKED)
-        .map((attr) => ({
-          key: attr.key,
-          displayName: attr.displayName,
-          value: attr.selectedValue || '',
-        }));
-
-      const aiVars = currentAttributes
-        .filter((attr) => attr.category === ATTRIBUTE_CATEGORIES.AI)
-        .map((attr) => ({ key: attr.key, displayName: attr.displayName }));
-
-      const queryRow: Record<string, string> = {};
-      lockedAttrs.forEach((attr) => {
-        queryRow[attr.key] = attr.value;
-      });
-      aiVars.forEach((attr) => {
-        queryRow[attr.key] = TEXT.PREDICT_VALUE;
-      });
-
-      setPreviewData({
-        contextRowCount: contextData.enrichedCount || 0,
-        totalContextItems: contextData.totalCount || 0,
-        missingEnrichmentCount: (contextData.totalCount || 0) - (contextData.enrichedCount || 0),
-        lockedAttributes: lockedAttrs,
-        aiVariables: aiVars,
-        samplePayload: { rows: [{ '...': '(context rows from enriched articles)' }, queryRow] },
-      });
-    } catch (error) {
-      console.error('Failed to fetch preview:', error);
-    } finally {
-      setPreviewLoading(false);
-    }
-  }, [project.id, currentAttributes]);
-
-  const handlePreview = async () => {
-    setPreviewDialogOpen(true);
-    await fetchPreviewData();
-  };
-
   // Handle transmutation request (may show stale warning first)
   const handleTransmuteRequest = () => {
     if (velocityScoresStale) {
@@ -244,12 +194,12 @@ function TheAlchemistTab({
     setStaleWarningDialogOpen(false);
     setTransmuting(true);
     setTransmutingDialogOpen(true);
-    setPreviewDialogOpen(false);
     setDesignName('');
+    setDesignId('');
     setTransmutingError(null);
 
     try {
-      const result = await fetchAPI<{ designName: string; details?: string }>(
+      const result = await fetchAPI<{ designName: string; designId: string; details?: string }>(
         API_ENDPOINTS.RPT1_PREDICT(project.id),
         {
           method: 'POST',
@@ -266,6 +216,7 @@ function TheAlchemistTab({
         setTransmuting(false);
       } else {
         setDesignName(result.data!.designName);
+        setDesignId(result.data!.designId);
         setTransmuting(false);
       }
     } catch (error) {
@@ -602,7 +553,7 @@ function TheAlchemistTab({
               <Button
                 design="Emphasized"
                 icon={ICONS.AI}
-                onClick={handlePreview}
+                onClick={handleTransmuteRequest}
                 disabled={!canTransmute}
                 className={canTransmute ? styles.transmuteButton : styles.transmuteButtonDisabled}
               >
@@ -653,7 +604,16 @@ function TheAlchemistTab({
       <Dialog
         open={transmutingDialogOpen}
         onClose={transmuting ? undefined : () => setTransmutingDialogOpen(false)}
-        headerText=""
+        header={
+          !transmuting && (
+            <Button
+              icon="decline"
+              design="Transparent"
+              onClick={() => setTransmutingDialogOpen(false)}
+              style={{ position: 'absolute', right: '1rem', top: '1rem' }}
+            />
+          )
+        }
         className={styles.dialogSmall}
       >
         <div className={styles.dialogContent}>
@@ -670,150 +630,20 @@ function TheAlchemistTab({
             <>
               <Text className={styles.dialogErrorTitle}>{TEXT.ERROR_TITLE}</Text>
               <Text className={styles.dialogErrorMessage}>{transmutingError}</Text>
-              <Button design="Emphasized" onClick={() => setTransmutingDialogOpen(false)}>
-                {TEXT.BUTTON_CLOSE}
-              </Button>
             </>
           ) : (
             <>
               <Text className={styles.dialogSuccessTitle}>{TEXT.SUCCESS_TITLE}</Text>
               <Text className={styles.dialogSuccessName}>"{designName}"</Text>
-              <Button design="Emphasized" onClick={() => setTransmutingDialogOpen(false)}>
-                {TEXT.BUTTON_CLOSE}
+              <Button
+                design="Emphasized"
+                onClick={() => navigate(`/project/${project.id}/design/${designId}`)}
+              >
+                Go to Product
               </Button>
             </>
           )}
         </div>
-      </Dialog>
-
-      {/* Preview Dialog */}
-      <Dialog
-        open={previewDialogOpen}
-        onClose={() => setPreviewDialogOpen(false)}
-        headerText={TEXT.PREVIEW_DIALOG_TITLE}
-        className={styles.dialogMedium}
-        footer={
-          <Bar
-            endContent={
-              <>
-                <Button design="Transparent" onClick={() => setPreviewDialogOpen(false)}>
-                  {TEXT.BUTTON_CANCEL}
-                </Button>
-                <Button
-                  design="Emphasized"
-                  onClick={handleTransmuteRequest}
-                  disabled={!canTransmute || previewLoading || previewData?.contextRowCount === 0}
-                >
-                  Transmute
-                </Button>
-              </>
-            }
-          />
-        }
-      >
-        {previewLoading ? (
-          <div className={styles.previewLoading}>
-            <BusyIndicator active size="M" />
-            <Text className={styles.previewLoadingText}>{TEXT.LOADING_PREVIEW}</Text>
-          </div>
-        ) : previewData ? (
-          <div className={styles.previewContent}>
-            <div className={styles.previewSection}>
-              <Title level="H5" className={styles.previewSectionTitle}>
-                {TEXT.CONTEXT_SUMMARY_TITLE}
-              </Title>
-              <div className={styles.previewContextSummary}>
-                <div className={styles.previewContextRow}>
-                  <Text className={styles.previewContextLabel}>{TEXT.CONTEXT_ROWS}</Text>
-                  <Text>
-                    {previewData.contextRowCount} {TEXT.OF} {previewData.totalContextItems}{' '}
-                    {TEXT.ARTICLES}
-                  </Text>
-                </div>
-                {previewData.missingEnrichmentCount > 0 && (
-                  <MessageStrip
-                    design="Critical"
-                    hideCloseButton
-                    className={styles.previewMessageStrip}
-                  >
-                    {TEXT.WARNING_MISSING_ENRICHMENT(previewData.missingEnrichmentCount)}
-                  </MessageStrip>
-                )}
-                {previewData.contextRowCount === 0 && (
-                  <MessageStrip
-                    design="Negative"
-                    hideCloseButton
-                    className={styles.previewMessageStrip}
-                  >
-                    {TEXT.WARNING_NO_CONTEXT}
-                  </MessageStrip>
-                )}
-              </div>
-            </div>
-
-            <div className={styles.previewSection}>
-              <Title level="H5" className={styles.previewSectionTitle}>
-                {TEXT.QUERY_STRUCTURE_TITLE}
-              </Title>
-              <table className={styles.previewTable}>
-                <thead>
-                  <tr>
-                    <th className={styles.previewTableHeader}>
-                      <Text>Attribute</Text>
-                    </th>
-                    <th className={styles.previewTableHeader}>
-                      <Text>Type</Text>
-                    </th>
-                    <th className={styles.previewTableHeader}>
-                      <Text>Value</Text>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {previewData.lockedAttributes.map((attr) => (
-                    <tr key={attr.key}>
-                      <td className={styles.previewTableCell}>
-                        <Text>{attr.displayName}</Text>
-                      </td>
-                      <td className={styles.previewTableCell}>
-                        <Text>{TEXT.TYPE_LOCKED}</Text>
-                      </td>
-                      <td className={styles.previewTableCell}>
-                        <Text>{attr.value}</Text>
-                      </td>
-                    </tr>
-                  ))}
-                  {previewData.aiVariables.map((attr) => (
-                    <tr key={attr.key}>
-                      <td className={styles.previewTableCell}>
-                        <Text>{attr.displayName}</Text>
-                      </td>
-                      <td className={styles.previewTableCell}>
-                        <Text className={styles.previewTableTextAI}>{TEXT.TYPE_AI}</Text>
-                      </td>
-                      <td className={styles.previewTableCell}>
-                        <Text
-                          className={`${styles.previewTableTextAI} ${styles.previewTableTextMonospace}`}
-                        >
-                          {TEXT.PREDICT_VALUE}
-                        </Text>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <details className={styles.previewDetails}>
-              <summary>
-                <Text className={styles.previewDetailsText}>{TEXT.VIEW_RAW_JSON}</Text>
-              </summary>
-              <pre className={styles.previewJson}>
-                {JSON.stringify(previewData.samplePayload, null, 2)}
-              </pre>
-            </details>
-          </div>
-        ) : null}
       </Dialog>
 
       {/* Stale Velocity Warning Dialog */}

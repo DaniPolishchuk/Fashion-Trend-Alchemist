@@ -133,4 +133,4 @@ export const COLORS = {
   AI_BORDER_LIGHT: 'rgba(233, 115, 12, 0.1)',
 } as const;
 
-export const ATTRIBUTE_PREFIX_REGEX = /^(article_|ontology_\w+_)/;
+export const ATTRIBUTE_PREFIX_REGEX = /^(article_|ontology_[^_]+_)/;

@@ -5,7 +5,7 @@
 
 // ==================== PAGINATION ====================
 
-export const ITEMS_PER_PAGE = 25;
+export const ITEMS_PER_PAGE = 10;
 export const POLL_INTERVAL = 5000; // 5 seconds
 
 // ==================== FILTER TYPES ====================
