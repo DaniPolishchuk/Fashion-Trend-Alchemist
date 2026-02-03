@@ -59,8 +59,8 @@
   gap: 0.5rem;
   padding: 1rem;
   border-radius: var(--sapElement_BorderCornerRadius);
-  background: var(--sapInfobar_Background);
-  border: 1px solid var(--sapInfobar_BorderColor);
+  background: #ffffff;
+  border: 1px solid var(--sapList_BorderColor);
 }
 
 .statusLoader {
@@ -68,7 +68,7 @@
 }
 
 .statusText {
-  color: var(--sapInformationColor);
+  color: var(--sapContent_LabelColor);
   font-size: 0.875rem;
   font-style: italic;
 }

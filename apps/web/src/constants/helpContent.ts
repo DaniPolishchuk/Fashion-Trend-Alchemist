@@ -102,7 +102,7 @@ export const HELP_CONTENT: Record<string, HelpContent> = {
     description:
       'View comprehensive design information with multi-angle images and attribute details',
     features: [
-      'View design across multiple angles: front, back, and model views',
+      'View design across multiple angles: front, secondary shot, and model views',
       'Monitor image generation status for each view independently',
       'Compare AI-predicted attributes with given constraints side-by-side',
       'Edit design name manually or generate AI-powered names',

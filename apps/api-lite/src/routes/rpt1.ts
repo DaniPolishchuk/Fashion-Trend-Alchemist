@@ -18,19 +18,17 @@ import {
 } from '@fashion/db';
 import type { GeneratedImages } from '@fashion/db';
 import { rpt1Config } from '@fashion/config';
-import {
-  buildImagePromptForView,
-  generateImageWithRetry,
-  type ImageView,
-} from '../services/imageGeneration.js';
+import { generateImageWithRetry, type ImageView } from '../services/imageGeneration.js';
 import { uploadGeneratedImageForViewWithRetry } from '../services/s3.js';
 import { generateSalesTextWithRetry } from '../services/salesTextGeneration.js';
+import { generateImagePromptsWithFallback } from '../services/promptGeneration.js';
 import { API_LIMITS, CACHE_TTL_MS } from '../constants.js';
 
 interface PredictRequestBody {
   lockedAttributes: Record<string, string>;
   aiVariables: string[];
   successScore: number; // Target success score (0-100)
+  contextAttributes?: Record<string, string>; // Auto-excluded attributes for image generation context
 }
 
 interface RPT1Response {
@@ -67,6 +65,7 @@ const PredictRequestSchema = z.object({
       `Maximum ${API_LIMITS.MAX_AI_VARIABLES} AI variables allowed`
     ),
   successScore: z.number().min(0).max(100).default(100),
+  contextAttributes: z.record(z.string(), z.string()).optional(), // Auto-excluded attributes
 });
 
 /**
@@ -280,7 +279,7 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
 
       // Validate input with Zod schema
       const validated = PredictRequestSchema.parse(request.body);
-      const { lockedAttributes, aiVariables, successScore: targetSuccessScore } = validated;
+      const { lockedAttributes, aiVariables, successScore: targetSuccessScore, contextAttributes } = validated;
 
       // Verify project exists and is active
       const project = await db.query.projects.findFirst({
@@ -588,7 +587,20 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
 
         fastify.log.info({ designId }, 'Starting async multi-image generation (front/back/model)');
 
-        // Generate images sequentially for each view
+        // Generate all prompts via LLM (or fallback) BEFORE generating images
+        // This ensures consistency across all three views
+        fastify.log.info({ designId }, 'Generating image prompts via LLM...');
+        const { prompts, source: promptSource } = await generateImagePromptsWithFallback(
+          lockedAttributes,
+          predictedAttributes,
+          contextAttributes
+        );
+        fastify.log.info(
+          { designId, promptSource },
+          `Image prompts generated via ${promptSource}`
+        );
+
+        // Generate images sequentially for each view using the pre-generated prompts
         for (const view of views) {
           try {
             // Update status to generating for this view
@@ -600,8 +612,10 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
 
             fastify.log.info({ designId, view }, `Starting ${view} image generation`);
 
-            // Build view-specific prompt and generate
-            const prompt = buildImagePromptForView(lockedAttributes, predictedAttributes, view);
+            // Use the LLM-generated prompt for this view
+            const prompt = prompts[view];
+            fastify.log.info({ designId, view, promptLength: prompt.length }, `Using ${promptSource} prompt for ${view}`);
+
             const imageBuffer = await generateImageWithRetry(prompt, 1);
 
             if (imageBuffer) {

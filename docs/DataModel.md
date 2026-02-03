@@ -20,6 +20,7 @@ erDiagram
         date t_dat
         string article_id FK
         string customer_id FK
+        string customer_id FK
         decimal price
     }
 
@@ -85,6 +86,7 @@ erDiagram
         uuid user_id "Owner"
         string name
         timestamp created_at
+        timestamp created_at
     }
 
     COLLECTION_ITEMS {
@@ -94,12 +96,15 @@ erDiagram
 
     ARTICLES ||--o{ TRANSACTIONS : sales
     CUSTOMERS ||--o{ TRANSACTIONS : purchases
+    CUSTOMERS ||--o{ TRANSACTIONS : purchases
     ARTICLES ||--o{ PROJECT_CONTEXT_ITEMS : context_source
     PROJECTS ||--o{ PROJECT_CONTEXT_ITEMS : trains_on
     PROJECTS ||--o{ GENERATED_DESIGNS : generates
     GENERATED_DESIGNS ||--o{ COLLECTION_ITEMS : member_of
     COLLECTIONS ||--o{ COLLECTION_ITEMS : groups
 ```
+
+---
 
 ## JSONB Schema Documentation
 
@@ -109,8 +114,16 @@ Defines which products are included in the trend analysis.
 
 ```typescript
 interface ScopeConfig {
-  productTypes: string[]; // Required: Main product categories
+  productTypes: string[]; // Required: Main product categories (e.g., ["Hoodie", "T-Shirt"])
   productGroups?: string[]; // Optional: Sub-categories within types
+  productFamily?: string[];
+  patternStyle?: string[];
+  colorFamily?: string[];
+  colorIntensity?: string[];
+  specificColor?: string[];
+  customerSegment?: string[];
+  styleConcept?: string[];
+  fabricTypeBase?: string[];
 }
 ```
 
@@ -118,8 +131,9 @@ interface ScopeConfig {
 
 ```json
 {
-  "productTypes": ["Swimwear", "Knitwear"],
-  "productGroups": ["Bikini", "One-piece", "Pullover"]
+  "productTypes": ["Hoodie", "Coat"],
+  "colorFamily": ["Blue", "Black"],
+  "customerSegment": ["Menswear"]
 }
 ```
 
@@ -156,6 +170,7 @@ interface SeasonConfig {
 - Set when user clicks "Confirm Cohort" (lock-context endpoint)
 - Controls date filtering in velocity score calculations
 - Supports cross-year ranges (e.g., "12-01" to "02-28" for winter)
+- **If null/empty**: All data across all years is analyzed (no date filtering)
 
 ---
 
@@ -168,15 +183,20 @@ Stores LLM-generated attribute definitions for the project's product types. Used
 type OntologySchema = Record<string, Record<string, string[]>>;
 ```
 
-**Example (for skirts):**
+**Example (for hoodies and coats):**
 
 ```json
 {
-  "skirt": {
-    "style": ["A-line", "Pencil", "Wrap", "Pleated", "Maxi"],
-    "fit": ["Slim", "Regular", "Loose"],
-    "length": ["Mini", "Midi", "Maxi"],
-    "waist_style": ["High-waisted", "Mid-rise", "Low-rise"]
+  "hoodie": {
+    "style": ["Pullover", "Zip-up", "Half-zip"],
+    "pocket_type": ["Kangaroo", "Side pockets", "No pocket"],
+    "neckline": ["Round", "V-neck", "Funnel"],
+    "hem_style": ["Ribbed", "Straight", "Drawstring"]
+  },
+  "coat": {
+    "style": ["Single-breasted", "Double-breasted", "Wrap"],
+    "collar": ["Notched", "Peak", "Shawl", "Stand"],
+    "length": ["Short", "Mid-length", "Knee-length", "Long"]
   }
 }
 ```
@@ -187,7 +207,7 @@ type OntologySchema = Record<string, Record<string, string[]>>;
 - Saved when user confirms cohort (lock-context endpoint)
 - Used by Vision LLM enrichment to extract attributes from product images
 - Defines the AI Variables available in The Alchemist tab for RPT-1 predictions
-```
+- **Keys become attribute prefixes**: e.g., `ontology_hoodie_style`, `ontology_coat_collar`
 
 ---
 
@@ -196,18 +216,18 @@ type OntologySchema = Record<string, Record<string, string[]>>;
 Stores attributes extracted from product images by the Vision LLM based on the project's ontology schema.
 
 ```typescript
-// Structure matches ontology schema attributes
+// Structure matches ontology schema attributes (without prefixes)
 type EnrichedAttributes = Record<string, string>;
 ```
 
-**Example (for a skirt article):**
+**Example (for a hoodie article):**
 
 ```json
 {
-  "style": "A-line",
-  "fit": "Regular",
-  "length": "Midi",
-  "waist_style": "High-waisted"
+  "style": "Pullover",
+  "pocket_type": "Kangaroo",
+  "neckline": "Round",
+  "hem_style": "Ribbed"
 }
 ```
 
@@ -301,11 +321,157 @@ interface GeneratedImages {
 }
 ```
 
+**Usage:**
+
+- Images are generated sequentially (front → back → model)
+- Frontend polls `/api/projects/:projectId/generated-designs/:designId/image-status` for updates
+- The overall `image_generation_status` field reflects combined status:
+  - `pending` - No images started
+  - `generating` - At least one image in progress
+  - `completed` - All 3 images successful
+  - `partial` - Some images completed, some failed
+  - `failed` - All images failed
+
+---
+
+## Data Flows
+
+### 1. Vision LLM Enrichment Flow
+
+The enrichment process extracts structured attributes from product images using a Vision LLM.
+
+#### Enrichment States
+
+Projects track enrichment progress with these states:
+
+- **idle**: Not started or completed
+- **running**: Currently processing items
+- **completed**: All items processed successfully
+- **failed**: Stopped due to fatal error
+
+#### Mismatch Detection
+
+During enrichment, the Vision LLM also evaluates product type accuracy:
+
+| Confidence Range | Label                | Action             |
+| ---------------- | -------------------- | ------------------ |
+| 0-59             | Likely match         | No flag            |
+| 60-79            | Possible mismatch    | Optional review    |
+| 80-89            | Likely mismatch      | Flagged for review |
+| 90-100           | Very likely mismatch | Flagged for review |
+
+Items with `mismatch_confidence >= 80` trigger the mismatch review workflow in the UI.
+
+#### API Endpoints
+
+| Endpoint                                | Method | Description                                    |
+| --------------------------------------- | ------ | ---------------------------------------------- |
+| `/api/projects/:id/start-enrichment`    | POST   | Start enrichment for all unenriched items      |
+| `/api/projects/:id/enrichment-progress` | GET    | SSE endpoint for real-time progress updates    |
+| `/api/projects/:id/enrichment-status`   | GET    | Get current enrichment state (for page reload) |
+| `/api/projects/:id/retry-enrichment`    | POST   | Retry failed items                             |
+| `/api/projects/:id/context-items`       | GET    | Get all context items with enrichment status   |
+
+#### Processing Logic
+
+1. Items are processed where `enriched_attributes IS NULL AND enrichment_error IS NULL`
+2. Each item: fetch image → call Vision LLM → parse JSON response → store attributes + mismatch confidence
+3. Failed items get `enrichment_error` set (truncated to 1000 chars)
+4. Retry clears `enrichment_error` to `null`, making items eligible for reprocessing
+5. Progress tracked via SSE with `processed`, `total`, and `currentArticleId`
+
+---
+
+### 2. RPT-1 Design Generation Flow
+
+The RPT-1 (Reverse Product Transmutation) flow generates new design predictions and images.
+
+#### Attribute Categories in TheAlchemistTab
+
+| Category      | Purpose                                    | Sent to API As      |
+| ------------- | ------------------------------------------ | ------------------- |
+| Locked        | User-defined constraints                   | `lockedAttributes`  |
+| AI Variables  | Attributes for AI to predict (max 10)      | `aiVariables`       |
+| Not Included  | Excluded from prediction context           | -                   |
+| Auto-Excluded | Single-variant attributes (hidden from UI) | `contextAttributes` |
+
+#### API Request Structure
+
+```typescript
+interface RPT1PredictRequest {
+  lockedAttributes: Record<string, string>; // User-locked values
+  aiVariables: string[]; // Keys for AI to predict
+  successScore: number; // Target performance (0-100)
+  contextAttributes?: Record<string, string>; // Auto-excluded single-variant attributes
+}
+```
+
+#### Image Prompt Generation
+
+Before generating images, the system uses LLM-based prompt generation:
+
+1. **Preprocessing**: Merges `lockedAttributes`, `predictedAttributes`, and `contextAttributes`
+2. **Product Detection**: Extracts product type from `article_product_type` or ontology keys
+3. **Category Mapping**: Maps to Upper Body, Lower Body, Full Body, Footwear, or Accessory
+4. **LLM Generation**: Calls GPT-4.1 with detailed rules for:
+   - Front view (ghost mannequin or flat lay depending on category)
+   - Back view (excludes front-only features)
+   - Model view (determines gender, adds complementary garments)
+5. **Fallback**: If LLM fails twice, uses static templates
+
+#### Image Generation
+
+After prompts are generated, images are created sequentially via SAP AI Core / Z-Image Turbo:
+
+1. Generate front image with view-specific prompt
+2. Generate back image with view-specific prompt
+3. Generate model image with view-specific prompt
+4. Each image is uploaded to S3/SeaweedFS
+5. Status updates stored in `generated_images` JSONB column
+
+---
+
+### 3. Velocity Score Calculation
+
+The velocity score measures sales performance normalized across products.
+
+#### Formula
+
+```
+Velocity = Transaction Count / Days Available
+```
+
+- Days Available = `(last_transaction_date - first_transaction_date + 1)`
+- Measures how quickly items sell relative to their availability period
+
+#### Normalization
+
+At lock time, raw velocity scores are normalized to 0-100:
+
+```
+normalized = (score - min) / (max - min) * 100
+```
+
+- Lowest performer in context = 0
+- Highest performer = 100
+- Stored in `project_context_items.velocity_score`
+- Original calculation preserved in `raw_velocity_score`
+
+#### Recalculation
+
+When articles are excluded, velocity scores can become stale:
+
+1. `is_excluded = true` is set on excluded articles
+2. `velocity_scores_stale = true` is set on the project
+3. User triggers recalculation via "Recalculate" button
+4. Normalization re-runs among included articles only
+5. `velocity_scores_stale = false` after completion
+
 ---
 
 ## Recent Security & Performance Updates
 
-### ✅ SQL Injection Fix Applied (2026-01-20)
+### SQL Injection Fix Applied (2026-01-20)
 
 **Issue:** Season filtering used unsafe array interpolation:
 
@@ -322,7 +488,7 @@ whereClauses.push(sql`(${sql.join(monthConditions, sql` OR `)})`);
 
 **Impact:** Eliminates potential SQL injection vector in season-based filtering.
 
-### 🔧 Drizzle ORM Architecture Standardized
+### Drizzle ORM Architecture Standardized
 
 **Changes Made:**
 
@@ -333,7 +499,9 @@ whereClauses.push(sql`(${sql.join(monthConditions, sql` OR `)})`);
 
 **Result:** Clean TypeScript compilation and consistent query behavior.
 
-### ⚠️ Known Technical Debt (Demo-Appropriate)
+---
+
+## Known Technical Debt (Demo-Appropriate)
 
 1. **Hardcoded User Authentication:** `userId` defaults to `'00000000-0000-0000-0000-000000000000'`
 2. **No JSONB Validation:** Database accepts any JSON structure without schema validation
@@ -351,6 +519,7 @@ The enrichment process extracts structured attributes from product images using 
 ### Enrichment States
 
 Projects track enrichment progress with these states:
+
 - **idle**: Not started or completed
 - **running**: Currently processing items
 - **completed**: All items processed successfully
@@ -361,25 +530,27 @@ Projects track enrichment progress with these states:
 During enrichment, the Vision LLM also assesses whether the product image matches the expected product type:
 
 **Mismatch Confidence Scores (0-100):**
+
 - 0-59: "Likely match" - Image matches expected product type
 - 60-79: "Possible mismatch" - Questionable
 - 80-89: "Likely mismatch" - Probably different product type
 - 90-100: "Very likely mismatch" - Clearly different category
 
 **Review Workflow:**
+
 1. After enrichment, flagged items (≥80 confidence) trigger the mismatch review badge
 2. User reviews and excludes mismatched articles
 3. Velocity scores auto-recalculate for included items only
 
 ### API Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/projects/:id/start-enrichment` | POST | Start enrichment for all unenriched items |
-| `/api/projects/:id/enrichment-progress` | GET | SSE endpoint for real-time progress updates |
-| `/api/projects/:id/enrichment-status` | GET | Get current enrichment state (for page reload recovery) |
-| `/api/projects/:id/retry-enrichment` | POST | Retry failed items (optionally specify articleIds) |
-| `/api/projects/:id/context-items` | GET | Get all context items with enrichment status |
+| Endpoint                                | Method | Description                   |
+| --------------------------------------- | ------ | ----------------------------- |
+| `/api/projects/:id/start-enrichment`    | POST   | Start enrichment              |
+| `/api/projects/:id/enrichment-progress` | GET    | SSE progress updates          |
+| `/api/projects/:id/enrichment-status`   | GET    | Current enrichment state      |
+| `/api/projects/:id/retry-enrichment`    | POST   | Retry failed items            |
+| `/api/projects/:id/context-items`       | GET    | Get context items with status |
 
 ### Processing Logic
 
