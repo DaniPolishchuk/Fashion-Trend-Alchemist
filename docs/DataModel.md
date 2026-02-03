@@ -5,18 +5,27 @@ erDiagram
         string article_id PK
         string product_group
         string product_type
+        string product_family "Mapped from department_name"
+        string style_concept "Mapped from section_name"
+        string pattern_style "Mapped from graphical_appearance_name"
         string fabric_type_base
         string specific_color
         string color_intensity
+        string color_family
+        string customer_segment
         text detail_desc
-        string image_path
     }
 
     TRANSACTIONS {
         date t_dat
         string article_id FK
+        string customer_id FK
         decimal price
-        string sales_channel_id
+    }
+
+    CUSTOMERS {
+        string customer_id PK
+        int age
     }
 
     %% 2. PROJECT STATE
@@ -34,6 +43,10 @@ erDiagram
         string enrichment_current_article_id "Currently processing"
         timestamp enrichment_started_at
         timestamp enrichment_completed_at
+        boolean is_pinned "Project pinning status"
+        timestamp pinned_at "When project was pinned"
+        boolean mismatch_review_completed "Mismatch review status"
+        boolean velocity_scores_stale "Whether velocity needs recalculation"
         timestamp created_at
         timestamp deleted_at "Soft Delete"
     }
@@ -42,18 +55,28 @@ erDiagram
     PROJECT_CONTEXT_ITEMS {
         uuid project_id FK
         string article_id FK
-        decimal velocity_score
-        jsonb enriched_attributes
+        decimal velocity_score "Normalized 0-100"
+        decimal raw_velocity_score "Original velocity for re-normalization"
+        jsonb enriched_attributes "Vision LLM extracted attributes"
         string enrichment_error "Error message if enrichment failed"
+        int mismatch_confidence "0-100 likelihood of product type mismatch"
+        boolean is_excluded "Whether excluded from RPT-1 context"
+        boolean original_is_excluded "Baseline state for change tracking"
     }
 
-    %% 4. RESULTS (The Contract vs Fulfillment)
+    %% 4. RESULTS
     GENERATED_DESIGNS {
         uuid id PK
         uuid project_id FK
-        jsonb input_constraints "User: {fabric: 'Wool'}"
-        jsonb predicted_attributes "AI: {neck: 'V-Neck'}"
-        string generated_image_url
+        string name "Design name (auto-generated or custom)"
+        jsonb input_constraints "User locked attributes + target score"
+        jsonb predicted_attributes "RPT-1 output"
+        string generated_image_url "Legacy single image URL"
+        string image_generation_status "pending | generating | completed | failed | partial"
+        jsonb generated_images "Multi-view: front/back/model with url and status"
+        text sales_text "AI-generated marketing copy"
+        string sales_text_generation_status "pending | generating | completed | failed"
+        timestamp created_at
     }
 
     %% 5. COLLECTIONS
@@ -61,6 +84,7 @@ erDiagram
         uuid id PK
         uuid user_id "Owner"
         string name
+        timestamp created_at
     }
 
     COLLECTION_ITEMS {
@@ -69,6 +93,7 @@ erDiagram
     }
 
     ARTICLES ||--o{ TRANSACTIONS : sales
+    CUSTOMERS ||--o{ TRANSACTIONS : purchases
     ARTICLES ||--o{ PROJECT_CONTEXT_ITEMS : context_source
     PROJECTS ||--o{ PROJECT_CONTEXT_ITEMS : trains_on
     PROJECTS ||--o{ GENERATED_DESIGNS : generates
@@ -198,23 +223,25 @@ type EnrichedAttributes = Record<string, string>;
 
 ---
 
-### 5. `generated_designs.input_constraints` - AI Generation Input
+### 5. `generated_designs.input_constraints` - User-Locked Attributes
 
-User-specified constraints for AI design generation.
+Stores the locked attributes that the user specified for design generation.
 
 ```typescript
 interface InputConstraints {
-  required_attributes: Record<string, string>; // Must-have attributes
-  preferred_attributes?: Record<string, string>; // Nice-to-have attributes
-  excluded_attributes?: Record<string, string[]>; // Forbidden values
-  style_influence?: {
-    reference_articles: string[]; // Article IDs for style reference
-    influence_strength: number; // 0.0 - 1.0
-  };
-  target_market?: {
-    price_range: [number, number];
-    customer_segment: string;
-  };
+  // Article-level attributes (prefixed with article_)
+  article_product_type?: string;
+  article_color_family?: string;
+  article_pattern_style?: string;
+  // ... other article attributes
+
+  // Ontology attributes (prefixed with ontology_productType_)
+  ontology_skirt_style?: string;
+  ontology_skirt_length?: string;
+  // ... other ontology attributes
+
+  // Internal: target success score
+  _targetSuccessScore: number; // 0-100
 }
 ```
 
@@ -222,43 +249,45 @@ interface InputConstraints {
 
 ```json
 {
-  "required_attributes": {
-    "fabric_type_base": "Cotton",
-    "color_family": "Blue"
-  },
-  "preferred_attributes": {
-    "style_concept": "Casual"
-  },
-  "excluded_attributes": {
-    "pattern_style": ["Animal Print", "Graphic"]
-  },
-  "style_influence": {
-    "reference_articles": ["art_001", "art_045"],
-    "influence_strength": 0.7
-  },
-  "target_market": {
-    "price_range": [50, 150],
-    "customer_segment": "Young Adults"
-  }
+  "article_color_family": "Blue",
+  "article_pattern_style": "Solid",
+  "ontology_skirt_style": "A-line",
+  "_targetSuccessScore": 85
 }
 ```
 
 ---
 
-### 6. `generated_designs.predicted_attributes` - AI Generation Output
+### 6. `generated_designs.predicted_attributes` - RPT-1 Output
 
-AI model's predicted attributes for the generated design.
+Stores the AI-predicted attribute values from RPT-1.
 
 ```typescript
-interface PredictedAttributes {
-  generated_attributes: Record<string, string>; // AI predictions
-  confidence_scores: Record<string, number>; // Prediction confidence (0.0-1.0)
-  alternative_suggestions?: Record<string, string[]>; // Other viable options
-  model_metadata: {
-    model_version: string;
-    generation_timestamp: string;
-    processing_time_ms: number;
-  };
+// Keys match the AI Variables selected by the user
+type PredictedAttributes = Record<string, string>;
+```
+
+**Example:**
+
+```json
+{
+  "ontology_skirt_length": "Midi",
+  "ontology_skirt_fit": "Regular",
+  "article_fabric_type_base": "Cotton"
+}
+```
+
+---
+
+### 7. `generated_designs.generated_images` - Multi-View Image Structure
+
+Stores URLs and status for each generated image view.
+
+```typescript
+interface GeneratedImages {
+  front: { url: string | null; status: 'pending' | 'generating' | 'completed' | 'failed' };
+  back: { url: string | null; status: 'pending' | 'generating' | 'completed' | 'failed' };
+  model: { url: string | null; status: 'pending' | 'generating' | 'completed' | 'failed' };
 }
 ```
 
@@ -266,27 +295,9 @@ interface PredictedAttributes {
 
 ```json
 {
-  "generated_attributes": {
-    "product_type": "T-Shirt",
-    "neckline": "V-Neck",
-    "sleeve_length": "Short",
-    "fit": "Regular"
-  },
-  "confidence_scores": {
-    "product_type": 0.95,
-    "neckline": 0.82,
-    "sleeve_length": 0.91,
-    "fit": 0.76
-  },
-  "alternative_suggestions": {
-    "neckline": ["Crew", "Scoop"],
-    "fit": ["Slim", "Loose"]
-  },
-  "model_metadata": {
-    "model_version": "fashion-gpt-v2.1",
-    "generation_timestamp": "2026-01-20T11:30:00Z",
-    "processing_time_ms": 2450
-  }
+  "front": { "url": "https://s3.../design-123-front.png", "status": "completed" },
+  "back": { "url": "https://s3.../design-123-back.png", "status": "completed" },
+  "model": { "url": null, "status": "generating" }
 }
 ```
 
@@ -325,10 +336,9 @@ whereClauses.push(sql`(${sql.join(monthConditions, sql` OR `)})`);
 ### ⚠️ Known Technical Debt (Demo-Appropriate)
 
 1. **Hardcoded User Authentication:** `userId` defaults to `'00000000-0000-0000-0000-000000000000'`
-2. **Race Condition Risk:** Lock-context endpoint checks project status outside transaction
-3. **Missing Indexes:** No database indexes defined for JSONB or foreign key columns
-4. **No JSONB Validation:** Database accepts any JSON structure without schema validation
-5. **Image Storage Dependency:** Images served via SeaweedFS Filer; requires port-forwarding for local dev
+2. **No JSONB Validation:** Database accepts any JSON structure without schema validation
+3. **Image Storage Dependency:** Images served via SeaweedFS Filer; requires port-forwarding for local dev
+4. **Collections Mock Data:** Collections feature uses mock data (see CollectionMock.md)
 
 These items are **documented as acceptable** for current demo phase but should be addressed before production deployment.
 
@@ -336,7 +346,7 @@ These items are **documented as acceptable** for current demo phase but should b
 
 ## Vision LLM Enrichment Flow
 
-The enrichment process extracts structured attributes from product images using a Vision LLM.
+The enrichment process extracts structured attributes from product images using a Vision LLM and detects potential product type mismatches.
 
 ### Enrichment States
 
@@ -345,6 +355,21 @@ Projects track enrichment progress with these states:
 - **running**: Currently processing items
 - **completed**: All items processed successfully
 - **failed**: Stopped due to fatal error
+
+### Mismatch Detection
+
+During enrichment, the Vision LLM also assesses whether the product image matches the expected product type:
+
+**Mismatch Confidence Scores (0-100):**
+- 0-59: "Likely match" - Image matches expected product type
+- 60-79: "Possible mismatch" - Questionable
+- 80-89: "Likely mismatch" - Probably different product type
+- 90-100: "Very likely mismatch" - Clearly different category
+
+**Review Workflow:**
+1. After enrichment, flagged items (≥80 confidence) trigger the mismatch review badge
+2. User reviews and excludes mismatched articles
+3. Velocity scores auto-recalculate for included items only
 
 ### API Endpoints
 
@@ -359,7 +384,8 @@ Projects track enrichment progress with these states:
 ### Processing Logic
 
 1. Items are processed where `enriched_attributes IS NULL AND enrichment_error IS NULL`
-2. Each item: fetch image → call Vision LLM → parse JSON response → store attributes
+2. Each item: fetch image → call Vision LLM → parse JSON response → store attributes + mismatch confidence
 3. Failed items get `enrichment_error` set (truncated to 1000 chars)
 4. Retry clears `enrichment_error` to `null`, making items eligible for reprocessing
 5. Progress tracked via SSE with `processed`, `total`, and `currentArticleId`
+6. Configurable concurrency (default: 5 parallel requests) via `ENRICHMENT_CONCURRENCY` env var

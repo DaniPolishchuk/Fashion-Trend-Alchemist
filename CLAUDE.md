@@ -202,7 +202,13 @@ The API server uses Fastify with modular routes:
 
 #### Collections Routes (`apps/api-lite/src/routes/collections.ts`)
 
-- `GET /api/collections` - List user collections with item counts and preview images (currently using mock data)
+- `GET /api/collections` - List user collections with item counts and preview images
+- `POST /api/collections` - Create a new collection
+- `GET /api/collections/:id` - Get collection details with all designs
+- `PATCH /api/collections/:id` - Rename a collection
+- `DELETE /api/collections/:id` - Delete a collection (keeps designs)
+- `POST /api/collections/:id/items` - Add a design to a collection
+- `DELETE /api/collections/:id/items/:designId` - Remove a design from a collection
 
 #### Design Name Routes (`apps/api-lite/src/routes/design-name.ts`)
 
@@ -238,9 +244,11 @@ The frontend (`apps/web/src/`) uses:
 - `DesignDetail.tsx` - Individual design detail view with:
   - Multi-image support (front/back/model views) with thumbnail strip
   - Collapsible attribute panels (Predicted Attributes expanded, Given Attributes collapsed by default)
+  - Sales text panel with AI-generated marketing copy and regeneration option
   - Magic name generation via LLM (sparkle button)
   - Image download functionality per view
   - Full-size image modal with zoom
+  - "Save to Collection" button with popover for collection selection
   - "Refine Design" button that navigates to TheAlchemistTab with pre-populated attributes
   - Real-time polling for image generation status
 
@@ -308,7 +316,7 @@ Example for skirts: `{ "skirt": { "style": ["A-line", "Pencil", ...], "fit": ["L
 #### Home Page Features
 
 - **Projects Table**: Displays all user projects with status (Ready/Processing), name, time period, product group, generated products count, and pin/delete actions. Supports search filtering and pagination (5 items per page). Pinned projects appear at the top (max 3 pins).
-- **Collections Section**: Shows user collections as cards with 2x2 image thumbnail grids. Only visible when collections exist. Images fall back to product icons when unavailable. **Note: Currently using mock data.**
+- **Collections Section**: Shows user collections as cards with 2x2 image thumbnail grids. Only visible when collections exist. Images fall back to product icons when unavailable. **Note: Backend API fully implemented; frontend partially complete (see docs/CollectionMock.md).**
 
 ### Important Implementation Details
 
@@ -499,13 +507,16 @@ The system is being built in phases (see docs/PRD.md):
   - Multi-image generation: front, back, and model views (sequential generation)
   - Per-view status tracking with real-time polling
   - Design detail page with collapsible attribute panels
+  - Sales text generation with regeneration option
   - Magic name generation via LLM
   - Image download functionality
+  - Save to collection functionality
   - Refine Design flow (pre-populate TheAlchemistTab from existing design)
-  - Project management (pin/delete projects)
+  - Project management (pin/delete projects, inline name editing)
   - Design management (delete/rename designs)
+  - Collections API (fully implemented)
 
-Current focus is on UI polish, collections implementation, and additional image generation features.
+Current focus is on UI polish, collections frontend completion, and additional features.
 
 ## Key Architecture Changes
 
@@ -525,10 +536,11 @@ Current focus is on UI polish, collections implementation, and additional image 
    - Automatic velocity score recalculation when exclusions change
    - VelocityRecalcIndicator for stale score warnings
    - Stale velocity warning in TheAlchemistTab before transmutation
+7. **Collections API**: Full CRUD operations for collections including create, list, update, delete, and adding/removing designs from collections. Backend fully implemented.
 
 ### Known Technical Debt
 
-1. **Mock Collections**: Collections feature uses mock data (see docs/CollectionMock.md)
+1. **Collections Frontend**: Backend API fully implemented; frontend has partial implementation (see docs/CollectionMock.md)
 2. **Hardcoded User**: `userId` defaults to `'00000000-0000-0000-0000-000000000000'`
 3. **No JSONB Validation**: Database accepts any JSON structure without schema validation
 4. **SeaweedFS Dependency**: Images require port-forwarding for local dev

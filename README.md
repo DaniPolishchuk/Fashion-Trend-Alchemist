@@ -140,12 +140,13 @@ fashion-trend-alchemist/
 │           │   ├── enrichment.ts      # Vision LLM enrichment
 │           │   ├── rpt1.ts            # RPT-1 predictions via SAP AI Core
 │           │   ├── context-items.ts   # Context items with enrichment status
-│           │   ├── collections.ts     # Collections (mock data)
+│           │   ├── collections.ts     # Collections CRUD (fully implemented)
 │           │   └── design-name.ts     # LLM-based name generation
 │           └── services/
 │               ├── cache.ts           # Redis caching layer
 │               ├── enrichment.ts      # Vision LLM service
 │               ├── imageGeneration.ts # SAP AI Core image generation
+│               ├── salesTextGeneration.ts # LLM sales text generation
 │               └── s3.ts              # SeaweedFS/S3 storage
 ├── packages/
 │   ├── db/               # Database schemas, queries (Drizzle ORM)
@@ -235,9 +236,11 @@ See [QUICKSTART.md](QUICKSTART.md) for detailed setup instructions.
   - Search filtering and pagination (5 items per page)
   - Pin up to 3 projects to the top for quick access
   - Delete projects (with automatic image cleanup)
+  - Inline project name editing
 - **Collections Grid**:
   - Visual 2x2 image thumbnail grid per collection
-  - Currently using mock data (see docs/CollectionMock.md)
+  - Click to preview collection contents
+  - Backend API fully implemented (see docs/CollectionMock.md for frontend status)
 
 ### 2. Product Selection
 
@@ -337,9 +340,11 @@ Main workspace with 4 tabs for different workflows:
 - **Collapsible Panels**:
   - Predicted Attributes (expanded by default)
   - Given Attributes (collapsed by default)
+- **Sales Text Panel**: AI-generated marketing copy with regeneration option
 - **Magic Name Generation**: LLM-powered creative naming with sparkle button
 - **Image Download**: Download functionality per view
 - **Full-size Modal**: Click to zoom any image
+- **Save to Collection**: Add design to existing or new collection
 - **Refine Design**: Button to navigate to TheAlchemistTab with pre-populated attributes
 - **Real-time Polling**: Updates image generation status automatically
 
@@ -385,16 +390,25 @@ age                 INTEGER
 #### Projects (User Projects)
 
 ```sql
-id                  UUID PRIMARY KEY
-user_id             UUID       -- FK to users (hardcoded for now)
-name                VARCHAR    -- Project name
-status              ENUM       -- draft | active
-scope_config        JSONB      -- Product types and groups
-season_config       JSONB      -- Date range or season
-ontology_schema     JSONB      -- LLM-generated attribute definitions
-is_pinned           BOOLEAN    -- Pin status
-pinned_at           TIMESTAMP  -- Pin timestamp
-created_at          TIMESTAMP
+id                        UUID PRIMARY KEY
+user_id                   UUID       -- FK to users (hardcoded for now)
+name                      VARCHAR    -- Project name
+status                    ENUM       -- draft | active
+scope_config              JSONB      -- Product types and groups
+season_config             JSONB      -- Date range or season
+ontology_schema           JSONB      -- LLM-generated attribute definitions
+enrichment_status         ENUM       -- idle | running | completed | failed
+enrichment_processed      INTEGER    -- Items processed count
+enrichment_total          INTEGER    -- Total items to process
+enrichment_current_article_id VARCHAR -- Currently processing
+enrichment_started_at     TIMESTAMP
+enrichment_completed_at   TIMESTAMP
+is_pinned                 BOOLEAN    -- Pin status
+pinned_at                 TIMESTAMP  -- Pin timestamp
+mismatch_review_completed BOOLEAN    -- Mismatch review status
+velocity_scores_stale     BOOLEAN    -- Whether velocity needs recalculation
+created_at                TIMESTAMP
+deleted_at                TIMESTAMP  -- Soft delete
 ```
 
 #### Project Context Items (Context Articles)
@@ -403,8 +417,12 @@ created_at          TIMESTAMP
 project_id          UUID       -- FK to projects
 article_id          VARCHAR    -- FK to articles
 velocity_score      DECIMAL    -- Normalized 0-100
+raw_velocity_score  DECIMAL    -- Original velocity for re-normalization
 enriched_attributes JSONB      -- Vision LLM extracted attributes
 enrichment_error    TEXT       -- Error message if failed
+mismatch_confidence INTEGER    -- 0-100, likelihood of product type mismatch
+is_excluded         BOOLEAN    -- Whether excluded from RPT-1 context
+original_is_excluded BOOLEAN   -- Baseline state for change tracking
 ```
 
 #### Generated Designs (AI-Generated Outputs)
@@ -418,10 +436,12 @@ predicted_attributes    JSONB      -- RPT-1 predicted attributes
 generated_images        JSONB      -- Multi-view images (front/back/model)
 generated_image_url     VARCHAR    -- Legacy single image URL
 image_generation_status VARCHAR    -- pending/generating/completed/failed/partial
+sales_text              TEXT       -- AI-generated marketing copy
+sales_text_generation_status VARCHAR -- pending/generating/completed/failed
 created_at              TIMESTAMP
 ```
 
-#### Collections (User Collections - Mock Data)
+#### Collections (User Collections)
 
 ```sql
 id          UUID PRIMARY KEY
@@ -560,11 +580,39 @@ Execute RPT-1 prediction via SAP AI Core (generates 3 images: front/back/model).
 
 #### `GET /api/collections`
 
-List user collections with item counts and preview images (currently using mock data).
+List user collections with item counts and preview images.
+
+#### `POST /api/collections`
+
+Create a new collection.
+
+#### `GET /api/collections/:id`
+
+Get collection details with all designs.
+
+#### `PATCH /api/collections/:id`
+
+Rename a collection.
+
+#### `DELETE /api/collections/:id`
+
+Delete a collection.
+
+#### `POST /api/collections/:id/items`
+
+Add a design to a collection.
+
+#### `DELETE /api/collections/:id/items/:designId`
+
+Remove a design from a collection.
 
 #### `POST /api/generate-design-name`
 
 LLM-based creative name generation for designs.
+
+#### `POST /api/projects/:projectId/generated-designs/:designId/regenerate-sales-text`
+
+Regenerate sales text for a design (optionally including image context).
 
 ---
 

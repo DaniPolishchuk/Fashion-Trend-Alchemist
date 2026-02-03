@@ -7,6 +7,8 @@ Get the Fashion Trend Alchemist running in 5 minutes!
 - Node.js 18+ installed
 - pnpm installed (`npm install -g pnpm`)
 - Access to a PostgreSQL database (local or cloud)
+- Redis (optional, for caching)
+- API credentials (OpenAI, SAP AI Core)
 
 ## Installation Steps
 
@@ -24,7 +26,7 @@ This installs all packages across the monorepo workspace.
 cp .env.example .env
 ```
 
-Edit the `.env` file with your database connection details:
+Edit the `.env` file with your configuration:
 
 ```env
 # Database Configuration
@@ -37,6 +39,37 @@ PGDATABASE=fashion_db
 # API Configuration
 API_PORT=3001
 API_HOST=0.0.0.0
+
+# Redis Cache (optional - 15-30x performance boost)
+REDIS_URL=redis://localhost:6379
+
+# LLM Integration (for ontology generation)
+LLM_API_URL=https://api.openai.com/v1
+LLM_API_KEY=your_openai_key
+LLM_MODEL=gpt-4
+
+# Vision LLM (for data enrichment)
+LITELLM_PROXY_URL=your_litellm_proxy_url
+LITELLM_API_KEY=your_litellm_key
+VISION_LLM_MODEL=gpt-4-vision-preview
+
+# Enrichment Processing
+ENRICHMENT_CONCURRENCY=5
+ENRICHMENT_PROGRESS_INTERVAL_MS=500
+
+# RPT-1 / SAP AI Core (for design prediction)
+AI_API_URL=your_sap_ai_core_url
+AUTH_URL=your_oauth_url
+CLIENT_ID=your_client_id
+CLIENT_SECRET=your_client_secret
+RESOURCE_GROUP=generative-ai
+
+# S3/SeaweedFS (for image storage)
+S3_ENDPOINT=your_s3_endpoint
+S3_REGION=us-east-1
+S3_ACCESS_KEY_ID=your_access_key
+S3_SECRET_ACCESS_KEY=your_secret_key
+S3_BUCKET=fashion-images
 ```
 
 ### 3. Database Setup
@@ -51,10 +84,10 @@ This application uses a cloud-hosted PostgreSQL database:
 
 **SSH Tunnel / Port Forwarding Example:**
 
-If your database is behind a firewall, set up an SSH tunnel:
+If your database is behind a firewall, set up a tunnel:
 
 ```bash
-# Example: Forward remote PostgreSQL to local port 5432
+# Example using kubectl:
 caffeinate kubectl port-forward statefulset/yourdatabaseinstance 5432:5432 -n yournamespace
 
 # Keep this terminal open while using the application
@@ -91,34 +124,62 @@ cd apps/web
 pnpm run dev
 ```
 
+Or start both at once from root:
+
+```bash
+pnpm run dev
+```
+
 The application will be available at:
 - **Web App**: http://localhost:5173
 - **API Server**: http://localhost:3001
+
+### 6. Optional: Start Redis
+
+For 15-30x faster repeated queries:
+
+```bash
+# Using Docker
+docker run -d -p 6379:6379 --name fashion-redis redis:7-alpine
+```
 
 ---
 
 ## Current Features
 
-### Product Selection Page
+### Home Dashboard
+- Projects table with search, pagination, and pinning (max 3)
+- Collections grid with 2x2 image thumbnails
+- Quick access to create new projects
+
+### Product Selection
 - Browse and select product types from the taxonomy hierarchy
 - Visual card-based interface with product type icons
 - Selection persists in browser localStorage
 
-### Analysis Page
+### Context Builder (Unified Workflow)
 - **Date Range Filtering**: Enter start/end dates (DD/MM format) with validation
-  - Validates days per month (Feb: 28, Apr/Jun/Sep/Nov: 30, others: 31)
-  - Red border indicates invalid input
 - **Season Filtering**: Quick-select buttons for Spring/Summer/Autumn/Winter
-- **Multi-Attribute Filtering**: 
+- **Multi-Attribute Filtering**:
   - Pattern/Style, Color Family, Color Intensity, Specific Color
   - Customer Segment, Product Family, Style Concept, Fabric Type
-  - Multi-select with checkboxes in dialogs
-  - Options dynamically update based on filtered dataset
-- **Product Table**: 
-  - Displays filtered products with all attributes
-  - Detail Description column at the end with full text wrapping
-  - Shows product count and active filter count
-- **Pagination**: Navigate through product pages (10 items per page)
+- **Context Preview Table**: See matching articles with velocity scores
+- **Attribute Generation**: LLM-powered ontology generation for selected product types
+- **Project Creation**: One-click project creation with automatic velocity calculation
+
+### Project Hub (4 Tabs)
+1. **The Alchemist**: Configure locked/AI attributes, set success score, run RPT-1
+2. **Result Overview**: View generated designs with multi-image support
+3. **Enhanced Table**: Monitor enrichment, review mismatches, manage exclusions
+4. **Data Analysis**: Placeholder for future analytics
+
+### Design Detail
+- Multi-image display (front/back/model views)
+- Collapsible attribute panels
+- Sales text with regeneration option
+- Magic name generation
+- Save to collection
+- Refine design flow
 
 ---
 
@@ -128,120 +189,62 @@ The system uses the following core tables:
 
 ### Articles
 - `article_id` (varchar, PK) - Unique product identifier
-- `product_type` (varchar) - Product type category (e.g., Dress, Sweater)
-- `product_group` (varchar) - Product group classification
-- `product_family` (varchar) - Product family grouping
-- `style_concept` (varchar) - Style concept category
-- `pattern_style` (varchar) - Pattern/style identifier
-- `specific_color` (varchar) - Specific color name
-- `color_intensity` (varchar) - Color intensity level (Dark, Light, etc.)
-- `color_family` (varchar) - Color family classification
-- `customer_segment` (varchar) - Target customer segment
-- `fabric_type_base` (varchar) - Base fabric type
+- `product_type`, `product_group`, `product_family` - Classification
+- `pattern_style`, `color_family`, `color_intensity`, `specific_color` - Visual attributes
+- `customer_segment`, `style_concept`, `fabric_type_base` - Context attributes
 - `detail_desc` (text) - Detailed product description
 
 ### Transactions Train
-- `t_date` (date) - Transaction date
-- `customer_id` (varchar) - Customer identifier
-- `article_id` (varchar, FK) - Article identifier
-- `price` (numeric) - Transaction price
+- `t_date` (date), `customer_id`, `article_id`, `price`
 
-### Customers
-- `customer_id` (varchar, PK) - Unique customer identifier
-- `age` (integer) - Customer age
+### Projects
+- Scope, season config, ontology schema
+- Enrichment tracking (status, progress, timestamps)
+- Pinning and mismatch review status
 
-### Indexes
-Performance-optimized indexes on:
-- `transactions_train(article_id)`
-- `transactions_train(t_date)`
-- `transactions_train(customer_id)`
+### Project Context Items
+- Velocity scores (normalized and raw)
+- Enriched attributes and mismatch confidence
+- Exclusion tracking
+
+### Generated Designs
+- Multi-image support (front/back/model)
+- Predicted attributes and sales text
+- Status tracking for async generation
+
+### Collections
+- User-created collections with design references
 
 ---
 
 ## API Endpoints
 
-The API server provides the following endpoints:
+### Core
+- `GET /health` - Health check
+- `GET /api/taxonomy` - Product type hierarchy
+- `GET /api/filters/attributes` - Dynamic filter options
+- `GET /api/products` - Paginated product list
+- `POST /api/generate-attributes` - LLM ontology generation
 
-### GET /health
-Health check endpoint
+### Projects
+- Full CRUD operations
+- Context preview and locking
+- Pin management (max 3)
+- Generated designs management
+- Mismatch review and velocity recalculation
 
-### GET /taxonomy
-Returns the product type hierarchy grouped by product groups
+### Enrichment
+- Start/retry enrichment
+- SSE progress streaming
+- Status polling
 
-### GET /transactions/count
-Count transactions for selected product types
-- Query params: `types` (comma-separated product types)
+### RPT-1
+- Preview and prediction endpoints
+- Multi-image generation
 
-### GET /filters/attributes
-Get available filter options based on current filters
-- Query params: `types`, `season`, `mdFrom`, `mdTo`
-- Returns distinct values for all filter attributes
-
-### GET /products
-Get paginated product list with filters
-- Query params: `types`, `season`, `mdFrom`, `mdTo`, `limit`, `offset`
-- Filter params: `filter_productGroup`, `filter_colorFamily`, etc.
-- Returns paginated product data with total count
-
----
-
-## Development Workflow
-
-### Running in Development Mode
-
-```bash
-# Start API server (Terminal 1)
-cd apps/api-lite && pnpm run dev
-
-# Start web app (Terminal 2)  
-cd apps/web && pnpm run dev
-```
-
-### Code Quality
-
-```bash
-# Format code
-pnpm format
-
-# Build all packages
-pnpm build
-```
-
-### Database Management
-
-```bash
-# Generate migrations after schema changes
-pnpm db:generate
-
-# Apply migrations
-pnpm db:migrate
-
-# Open Drizzle Studio (database GUI)
-pnpm db:studio
-```
-
----
-
-## Package Structure
-
-### @fashion/db
-Database schemas, queries, and connection management.
-- PostgreSQL connection with connection pooling
-- Drizzle ORM schemas for articles, customers, transactions
-- Query functions for taxonomy and analytics
-
-### @fashion/types
-Shared TypeScript type definitions.
-- `FiltersResponse` - Available filter options
-- `ProductsResponse` - Paginated product data
-- `Taxonomy` - Product type hierarchy
-- `AttributeFilters` - Filter selections
-
-### @fashion/config
-Configuration and environment variable management.
-- Environment variable loading and validation
-- Database connection configuration
-- API server configuration
+### Collections
+- Full CRUD operations
+- Add/remove designs
 
 ---
 
@@ -253,17 +256,11 @@ Configuration and environment variable management.
 # Test connection manually
 psql -h localhost -p 5432 -U postgres -d fashion_db
 
-# If using port forwarding to cloud DB, ensure the tunnel is active
-# Example: ssh -L 5432:remote-db-host:5432 user@jumphost
+# If using port forwarding, ensure the tunnel is active
 ```
-
-### Port Already in Use
-
-If port 5173 (web) or 3001 (API) is in use, Vite/Fastify will automatically try the next available port.
 
 ### API Not Responding
 
-Check that the API server is running:
 ```bash
 curl http://localhost:3001/health
 ```
@@ -273,18 +270,36 @@ Expected response:
 {
   "status": "ok",
   "service": "api-lite",
-  "timestamp": "2026-01-19T..."
+  "timestamp": "2026-..."
 }
+```
+
+### Redis Cache Issues
+
+```bash
+# Check if Redis is running
+redis-cli ping
+
+# View cache statistics
+redis-cli info stats
 ```
 
 ---
 
 ## Next Steps
 
-- Explore the **Product Selection** page to choose product types
-- Use the **Analysis** page to filter and analyze products
-- Review [docs/PRD.md](docs/PRD.md) for the full product vision
-- Check [docs/Data-summary.md](docs/Data-summary.md) for data model details
+1. Create a new project via **Home** → **Create New Project**
+2. Select product types in **Product Selection**
+3. Configure filters and generate attributes in **Context Builder**
+4. Start enrichment in **Enhanced Table** tab
+5. Configure and run RPT-1 in **The Alchemist** tab
+6. View generated designs in **Result Overview**
+
+For detailed documentation:
+- [README.md](README.md) - Full feature documentation
+- [CLAUDE.md](CLAUDE.md) - Development guide
+- [docs/PRD.md](docs/PRD.md) - Product requirements
+- [docs/DataModel.md](docs/DataModel.md) - Database schema details
 
 ---
 
