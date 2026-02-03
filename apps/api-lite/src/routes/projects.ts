@@ -315,7 +315,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
       const transformedOntologySchema = validatedInput.ontologySchema
         ? Object.entries(validatedInput.ontologySchema).reduce(
             (acc, [productTypeKey, attributes]) => {
-              const transformedKey = productTypeKey.replace(/[_\/]/g, '-');
+              const transformedKey = productTypeKey.replace(/[_\/\s,\.]/g, '-');
               acc[transformedKey] = attributes; // Keep attributes unchanged
               return acc;
             },

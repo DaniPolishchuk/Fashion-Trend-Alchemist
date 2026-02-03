@@ -5,8 +5,6 @@
 
 import {
   ARTICLE_ATTRIBUTES,
-  DEFAULT_LOCKED,
-  DEFAULT_NOT_INCLUDED,
   ATTRIBUTE_CATEGORIES,
   API_ENDPOINTS,
   getSessionStorageKey,
@@ -18,6 +16,7 @@ import type {
   PersistedAlchemistState,
   GeneratedDesign,
 } from '../types/theAlchemistTab';
+import type { ContextItem } from '../types/enhancedTableTab';
 import { fetchAPI } from '../services/api/client';
 
 /**
@@ -31,55 +30,93 @@ export const formatAttributeName = (name: string): string => {
 };
 
 /**
+ * Analyze if an attribute has variation across context items
+ * Returns true if attribute has multiple unique values, false if all same
+ */
+const hasAttributeVariation = (
+  attributeKey: string,
+  contextItems: ContextItem[],
+  isArticleLevel: boolean
+): boolean => {
+  if (contextItems.length === 0) return true; // Default to variation if no items
+
+  const values = new Set<string>();
+
+  if (isArticleLevel) {
+    // Article-level attributes: check all items
+    const cleanKey = attributeKey.replace(/^article_/, '');
+    const mappedKey = cleanKey
+      .split('_')
+      .map((word, i) => (i === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1)))
+      .join('') as keyof ContextItem;
+
+    for (const item of contextItems) {
+      const value = item[mappedKey] as string | null;
+      values.add(value || '__NULL__');
+      if (values.size > 1) return true; // Early exit
+    }
+
+    return values.size > 1;
+  } else {
+    // Ontology attributes: only check enriched items
+    const enrichedItems = contextItems.filter((item) => item.enrichedAttributes !== null);
+
+    // Need at least 2 enriched items to determine variation, otherwise default to "has variation"
+    if (enrichedItems.length < 2) {
+      return true;
+    }
+
+    // For ontology attributes, strip the "ontology_productType_" prefix to match DB structure
+    // e.g., "ontology_shirt_style" -> "style"
+    const cleanKey = attributeKey.replace(/^ontology_[^_]+_/, '');
+
+    for (const item of enrichedItems) {
+      const value = item.enrichedAttributes![cleanKey] || null;
+      values.add(value || '__NULL__');
+      if (values.size > 1) return true; // Early exit
+    }
+
+    return values.size > 1;
+  }
+};
+
+/**
  * Initialize attributes from article options and ontology schema
+ * Excludes attributes with no variation, then splits remaining 50/50 between Locked and AI
  */
 export const initializeAttributes = (
   articleAttributeOptions: Record<string, string[]>,
-  ontologySchema: Record<string, Record<string, string[]>> | null
+  ontologySchema: Record<string, Record<string, string[]>> | null,
+  contextItems?: ContextItem[]
 ): AttributeConfig[] => {
-  const initialAttributes: AttributeConfig[] = [];
+  const allAttributes: AttributeConfig[] = [];
 
-  // Add article-level attributes
+  // Collect all article-level attributes
   ARTICLE_ATTRIBUTES.forEach((attrKey) => {
     const variants = articleAttributeOptions[attrKey] || [];
     if (variants.length > 0) {
-      const isLocked = (DEFAULT_LOCKED as readonly string[]).includes(attrKey);
-      const isNotIncluded = (DEFAULT_NOT_INCLUDED as readonly string[]).includes(attrKey);
-
-      let category: AttributeCategory;
-      let selectedValue: string | null = null;
-
-      if (isLocked) {
-        category = ATTRIBUTE_CATEGORIES.LOCKED;
-        selectedValue = variants[0] || null;
-      } else if (isNotIncluded) {
-        category = ATTRIBUTE_CATEGORIES.NOT_INCLUDED;
-      } else {
-        category = ATTRIBUTE_CATEGORIES.AI;
-      }
-
-      initialAttributes.push({
+      allAttributes.push({
         key: `article_${attrKey}`,
         displayName: formatAttributeName(attrKey),
         variants,
-        category,
-        selectedValue,
+        category: ATTRIBUTE_CATEGORIES.AI, // Temporary, will be assigned later
+        selectedValue: null,
         isArticleLevel: true,
       });
     }
   });
 
-  // Add ontology-generated attributes
+  // Collect all ontology-generated attributes
   if (ontologySchema) {
     Object.entries(ontologySchema).forEach(([productType, productAttributes]) => {
       if (typeof productAttributes === 'object' && productAttributes !== null) {
         Object.entries(productAttributes).forEach(([attrKey, variants]) => {
           if (Array.isArray(variants) && variants.length > 0) {
-            initialAttributes.push({
+            allAttributes.push({
               key: `ontology_${productType}_${attrKey}`,
               displayName: formatAttributeName(attrKey),
               variants,
-              category: ATTRIBUTE_CATEGORIES.AI,
+              category: ATTRIBUTE_CATEGORIES.AI, // Temporary
               selectedValue: null,
               isArticleLevel: false,
             });
@@ -89,7 +126,43 @@ export const initializeAttributes = (
     });
   }
 
-  return initialAttributes;
+  // If no context items, split all attributes 50/50
+  if (!contextItems || contextItems.length === 0) {
+    const midpoint = Math.floor(allAttributes.length / 2);
+    return allAttributes.map((attr, index) => {
+      if (index < midpoint) {
+        return { ...attr, category: ATTRIBUTE_CATEGORIES.LOCKED, selectedValue: attr.variants[0] };
+      }
+      return { ...attr, category: ATTRIBUTE_CATEGORIES.AI };
+    });
+  }
+
+  // Separate attributes by variation
+  const withVariation: AttributeConfig[] = [];
+  const withoutVariation: AttributeConfig[] = [];
+
+  allAttributes.forEach((attr) => {
+    const hasVariation = hasAttributeVariation(attr.key, contextItems, attr.isArticleLevel);
+    if (hasVariation) {
+      withVariation.push(attr);
+    } else {
+      withoutVariation.push({ ...attr, category: ATTRIBUTE_CATEGORIES.NOT_INCLUDED });
+    }
+  });
+
+  // Split varying attributes 50/50: first half to Locked, second half to AI
+  const midpoint = Math.floor(withVariation.length / 2);
+  const finalAttributes = withVariation.map((attr, index) => {
+    if (index < midpoint) {
+      // First half: Locked with first variant selected
+      return { ...attr, category: ATTRIBUTE_CATEGORIES.LOCKED, selectedValue: attr.variants[0] };
+    }
+    // Second half: AI Variables
+    return { ...attr, category: ATTRIBUTE_CATEGORIES.AI };
+  });
+
+  // Add non-varying attributes to the end
+  return [...finalAttributes, ...withoutVariation];
 };
 
 /**
@@ -166,10 +239,7 @@ export const buildAIVariables = (attributes: AttributeConfig[]): string[] => {
 /**
  * Save attributes to sessionStorage
  */
-export const saveAttributesToSession = (
-  projectId: string,
-  attributes: AttributeConfig[]
-): void => {
+export const saveAttributesToSession = (projectId: string, attributes: AttributeConfig[]): void => {
   try {
     const persistedState: PersistedAlchemistState = {
       projectId,
@@ -189,9 +259,7 @@ export const saveAttributesToSession = (
  * Load attributes from sessionStorage
  * Returns null if no valid state found
  */
-export const loadAttributesFromSession = (
-  projectId: string
-): PersistedAlchemistState | null => {
+export const loadAttributesFromSession = (projectId: string): PersistedAlchemistState | null => {
   try {
     const stored = sessionStorage.getItem(getSessionStorageKey(projectId));
     if (!stored) return null;

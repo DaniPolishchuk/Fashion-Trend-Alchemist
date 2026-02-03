@@ -47,6 +47,7 @@ import {
   fetchArticleAttributes,
   validateAndMergeAttributes,
   transformDesignToAttributes,
+  clearAttributesFromSession,
 } from '../utils/theAlchemistHelpers';
 import styles from '../styles/pages/ProjectHub.module.css';
 
@@ -290,6 +291,14 @@ function ProjectHub() {
     }
   }, [projectId, fetchMismatchData]);
 
+  // Reset Alchemist attributes to force re-analysis with fresh data
+  const resetAlchemistAttributes = useCallback(() => {
+    if (projectId) {
+      clearAttributesFromSession(projectId);
+      setAlchemistAttributes(null);
+    }
+  }, [projectId]);
+
   // Handle SSE updates
   const handleProgress = useCallback(
     (progress: { processed: number; total: number }, articleId: string | null) => {
@@ -302,7 +311,9 @@ function ProjectHub() {
   const handleCompleted = useCallback(() => {
     setEnrichmentStatus('completed');
     setCurrentArticleId(null);
-  }, [setEnrichmentStatus, setCurrentArticleId]);
+    // Reset attributes to re-analyze with newly enriched data
+    resetAlchemistAttributes();
+  }, [setEnrichmentStatus, setCurrentArticleId, resetAlchemistAttributes]);
 
   const handleError = useCallback(() => {
     setEnrichmentStatus('failed');
@@ -342,7 +353,9 @@ function ProjectHub() {
     fetchMismatchData(); // Refresh data after review
     setVelocityScoresStale(false); // Backend auto-recalculates, so clear warning
     setRefreshTrigger((prev) => prev + 1); // Force table refresh
-  }, [fetchMismatchData]);
+    // Reset attributes to re-analyze with updated context
+    resetAlchemistAttributes();
+  }, [fetchMismatchData, resetAlchemistAttributes]);
 
   // Handle velocity recalculation
   const handleVelocityRecalculated = useCallback(() => {
@@ -351,7 +364,9 @@ function ProjectHub() {
     fetchMismatchData();
     // Increment refresh trigger to force EnhancedTableTab to re-fetch
     setRefreshTrigger((prev) => prev + 1);
-  }, [fetchMismatchData]);
+    // Reset attributes to re-analyze with updated velocity scores
+    resetAlchemistAttributes();
+  }, [fetchMismatchData, resetAlchemistAttributes]);
 
   // Render tab content
   const renderTabContent = () => {

@@ -65,6 +65,7 @@ function TheAlchemistTab({
     string,
     string[]
   > | null>(null);
+  const [contextItems, setContextItems] = useState<any[] | null>(null);
   const [internalInitialized, setInternalInitialized] = useState(false);
 
   // UI state (local to this component)
@@ -97,9 +98,33 @@ function TheAlchemistTab({
     };
   }, [productTypesKey, project.scopeConfig?.productTypes]);
 
+  // Fetch context items (needed for auto-exclusion of non-varying attributes)
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadContextItems = async () => {
+      try {
+        const result = await fetchAPI<{ items: any[] }>(
+          `/api/projects/${project.id}/context-items`
+        );
+        if (!isCancelled && result.data) {
+          setContextItems(result.data.items);
+        }
+      } catch (error) {
+        console.error('Failed to fetch context items:', error);
+        if (!isCancelled) setContextItems([]);
+      }
+    };
+
+    loadContextItems();
+    return () => {
+      isCancelled = true;
+    };
+  }, [project.id]);
+
   // Initialize attributes if not provided by parent (null means initialize with defaults)
   useEffect(() => {
-    if (articleAttributeOptions === null) return;
+    if (articleAttributeOptions === null || contextItems === null) return;
 
     // If parent provided attributes, don't initialize
     if (attributes !== null) {
@@ -107,14 +132,19 @@ function TheAlchemistTab({
       return;
     }
 
-    // Parent didn't provide attributes - initialize with defaults
+    // Parent didn't provide attributes - initialize with defaults and auto-exclude non-varying
     if (!internalInitialized) {
-      const initialized = initializeAttributes(articleAttributeOptions, project.ontologySchema);
+      const initialized = initializeAttributes(
+        articleAttributeOptions,
+        project.ontologySchema,
+        contextItems
+      );
       onAttributesChange(initialized);
       setInternalInitialized(true);
     }
   }, [
     articleAttributeOptions,
+    contextItems,
     attributes,
     internalInitialized,
     project.ontologySchema,
