@@ -64,13 +64,13 @@ export const ERROR_MESSAGES = {
 
 export const MESSAGES = {
   GENERATING_FRONT: 'Generating front view...',
-  GENERATING_BACK: 'Generating back view...',
+  GENERATING_BACK: 'Generating secondary shot...',
   GENERATING_MODEL: 'Generating model view...',
   WAITING_FRONT: 'Waiting to generate front view...',
-  WAITING_BACK: 'Waiting to generate back view...',
+  WAITING_BACK: 'Waiting to generate secondary shot...',
   WAITING_MODEL: 'Waiting to generate model view...',
   GENERATION_FAILED_FRONT: 'Front view generation failed',
-  GENERATION_FAILED_BACK: 'Back view generation failed',
+  GENERATION_FAILED_BACK: 'Secondary shot generation failed',
   GENERATION_FAILED_MODEL: 'Model view generation failed',
   SAVED_SUCCESS: 'Saved to',
   SAVED_FAILURE: 'Failed to save:',
@@ -83,7 +83,7 @@ export const POLLING = {
 
 export const IMAGE_VIEWS = {
   FRONT: 'front',
-  BACK: 'back',
+  BACK: 'secondary',
   MODEL: 'model',
 } as const;
 

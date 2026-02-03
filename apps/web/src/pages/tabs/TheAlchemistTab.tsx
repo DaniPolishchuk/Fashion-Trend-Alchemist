@@ -48,6 +48,7 @@ import {
   initializeAttributes,
   buildLockedAttributes,
   buildAIVariables,
+  buildContextAttributes,
 } from '../../utils/theAlchemistHelpers';
 import styles from '../../styles/pages/TheAlchemistTab.module.css';
 
@@ -245,6 +246,7 @@ function TheAlchemistTab({
             lockedAttributes: buildLockedAttributes(currentAttributes),
             aiVariables: buildAIVariables(currentAttributes),
             successScore,
+            contextAttributes: buildContextAttributes(currentAttributes), // Auto-excluded attributes for image generation
           }),
         }
       );

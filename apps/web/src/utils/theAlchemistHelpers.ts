@@ -238,6 +238,27 @@ export const buildAIVariables = (attributes: AttributeConfig[]): string[] => {
     .map((attr) => attr.key);
 };
 
+/**
+ * Build context attributes object for API request
+ * These are auto-excluded attributes (only 1 variant) that provide context for image generation
+ * but are not used in RPT-1 context building
+ */
+export const buildContextAttributes = (attributes: AttributeConfig[]): Record<string, string> => {
+  return attributes
+    .filter((attr) => attr.category === ATTRIBUTE_CATEGORIES.NOT_INCLUDED && attr.autoExcluded)
+    .reduce(
+      (acc, attr) => {
+        // For auto-excluded attributes, use the single variant value
+        const value = attr.selectedValue || attr.variants[0] || '';
+        if (value) {
+          acc[attr.key] = value;
+        }
+        return acc;
+      },
+      {} as Record<string, string>
+    );
+};
+
 // ==================== SESSION STORAGE FUNCTIONS ====================
 
 /**
