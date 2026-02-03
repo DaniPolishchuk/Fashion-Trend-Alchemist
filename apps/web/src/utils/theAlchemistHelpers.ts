@@ -146,7 +146,11 @@ export const initializeAttributes = (
     if (hasVariation) {
       withVariation.push(attr);
     } else {
-      withoutVariation.push({ ...attr, category: ATTRIBUTE_CATEGORIES.NOT_INCLUDED });
+      withoutVariation.push({
+        ...attr,
+        category: ATTRIBUTE_CATEGORIES.NOT_INCLUDED,
+        autoExcluded: true, // Mark as auto-excluded (hidden from UI)
+      });
     }
   });
 
@@ -247,6 +251,7 @@ export const saveAttributesToSession = (projectId: string, attributes: Attribute
         key: attr.key,
         category: attr.category,
         selectedValue: attr.selectedValue,
+        autoExcluded: attr.autoExcluded, // Persist auto-exclusion flag
       })),
     };
     sessionStorage.setItem(getSessionStorageKey(projectId), JSON.stringify(persistedState));
@@ -343,6 +348,7 @@ export const validateAndMergeAttributes = (
       ...currentAttr,
       category,
       selectedValue,
+      autoExcluded: storedAttr.autoExcluded, // Restore auto-exclusion flag
     });
   }
 

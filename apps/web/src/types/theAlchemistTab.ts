@@ -22,6 +22,7 @@ export interface AttributeConfig {
   category: AttributeCategory;
   selectedValue: string | null;
   isArticleLevel: boolean;
+  autoExcluded?: boolean; // True if excluded by variation check (hidden from UI)
 }
 
 export interface PreviewData {
@@ -49,6 +50,7 @@ export interface PersistedAttribute {
   key: string;
   category: AttributeCategory;
   selectedValue: string | null;
+  autoExcluded?: boolean; // Persist auto-exclusion status
 }
 
 export interface PersistedAlchemistState {

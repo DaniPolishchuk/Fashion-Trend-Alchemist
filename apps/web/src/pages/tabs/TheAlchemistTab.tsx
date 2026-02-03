@@ -156,6 +156,14 @@ function TheAlchemistTab({
     setInternalInitialized(false);
   }, [project.id]);
 
+  // Detect when attributes are reset to null (e.g., after data changes) and allow re-initialization
+  useEffect(() => {
+    if (attributes === null && internalInitialized) {
+      // Attributes were reset by parent - trigger re-initialization
+      setInternalInitialized(false);
+    }
+  }, [attributes, internalInitialized]);
+
   // Use attributes from props, or empty array while loading
   const currentAttributes = attributes ?? [];
 
@@ -268,7 +276,10 @@ function TheAlchemistTab({
     [currentAttributes]
   );
   const notIncludedAttributes = useMemo(
-    () => currentAttributes.filter((attr) => attr.category === ATTRIBUTE_CATEGORIES.NOT_INCLUDED),
+    () =>
+      currentAttributes.filter(
+        (attr) => attr.category === ATTRIBUTE_CATEGORIES.NOT_INCLUDED && !attr.autoExcluded
+      ),
     [currentAttributes]
   );
 
@@ -451,12 +462,7 @@ function TheAlchemistTab({
                   {lockedAttributes.map((attr) => (
                     <div key={attr.key} className={styles.lockedCard}>
                       <div className={styles.lockedCardHeader}>
-                        <Text className={styles.lockedCardTitle}>
-                          {attr.displayName}
-                          {attr.isArticleLevel && (
-                            <span className={styles.lockedCardBadge}>{TEXT.ARTICLE_BADGE}</span>
-                          )}
-                        </Text>
+                        <Text className={styles.lockedCardTitle}>{attr.displayName}</Text>
                         <Button
                           icon={ICONS.DECLINE}
                           design="Transparent"
@@ -519,12 +525,7 @@ function TheAlchemistTab({
                         className={`${styles.aiCardContent} ${isOverLimit ? styles.aiCardContentOverLimit : ''}`}
                       >
                         <Icon name={ICONS.AI} className={styles.aiCardIcon} />
-                        <Text className={styles.aiCardTitle}>
-                          {attr.displayName}
-                          {attr.isArticleLevel && (
-                            <span className={styles.lockedCardBadge}>{TEXT.ARTICLE_BADGE}</span>
-                          )}
-                        </Text>
+                        <Text className={styles.aiCardTitle}>{attr.displayName}</Text>
                       </div>
                       <Button
                         icon={ICONS.DECLINE}
@@ -564,12 +565,7 @@ function TheAlchemistTab({
                         onClick={() => handleMoveToAIVariable(attr.key)}
                       />
                       <div className={styles.notIncludedCardContent}>
-                        <Text className={styles.notIncludedCardTitle}>
-                          {attr.displayName}
-                          {attr.isArticleLevel && (
-                            <span className={styles.lockedCardBadge}>{TEXT.ARTICLE_BADGE}</span>
-                          )}
-                        </Text>
+                        <Text className={styles.notIncludedCardTitle}>{attr.displayName}</Text>
                       </div>
                     </div>
                   ))}
