@@ -14,11 +14,15 @@ import {
   Icon,
   Breadcrumbs,
   BreadcrumbsItem,
+  Input,
 } from '@ui5/webcomponents-react';
 import '@ui5/webcomponents-icons/dist/ai.js';
 import '@ui5/webcomponents-icons/dist/table-chart.js';
 import '@ui5/webcomponents-icons/dist/grid.js';
 import '@ui5/webcomponents-icons/dist/business-objects-experience.js';
+import '@ui5/webcomponents-icons/dist/edit.js';
+import '@ui5/webcomponents-icons/dist/accept.js';
+import '@ui5/webcomponents-icons/dist/decline.js';
 
 // Tab components
 import TheAlchemistTab from './tabs/TheAlchemistTab';
@@ -99,6 +103,11 @@ function ProjectHub() {
   const [mismatchDialogOpen, setMismatchDialogOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
+  // Project name editing state
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState('');
+  const [savingName, setSavingName] = useState(false);
+
   // ==================== ALCHEMIST TAB STATE MANAGEMENT ====================
 
   // Lifted state for TheAlchemistTab - survives tab switches
@@ -120,6 +129,7 @@ function ProjectHub() {
     setEnrichmentStatus,
     setEnrichmentProgress,
     setCurrentArticleId,
+    setProject,
   } = useProjectData(projectId);
 
   // Handle attribute changes from TheAlchemistTab
@@ -368,6 +378,43 @@ function ProjectHub() {
     resetAlchemistAttributes();
   }, [fetchMismatchData, resetAlchemistAttributes]);
 
+  // Handle project name editing
+  const handleStartEditName = useCallback(() => {
+    if (project) {
+      setEditedName(project.name);
+      setIsEditingName(true);
+    }
+  }, [project]);
+
+  const handleCancelEditName = useCallback(() => {
+    setIsEditingName(false);
+    setEditedName('');
+  }, []);
+
+  const handleSaveName = useCallback(async () => {
+    if (!projectId || !editedName.trim()) return;
+
+    try {
+      setSavingName(true);
+      const result = await fetchAPI(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: editedName.trim() }),
+      });
+
+      if (result.error) {
+        console.error('Failed to update project name:', result.error);
+      } else if (result.data) {
+        // Update project state immediately with returned data
+        setProject(result.data as any);
+        setIsEditingName(false);
+      }
+    } catch (err) {
+      console.error('Failed to update project name:', err);
+    } finally {
+      setSavingName(false);
+    }
+  }, [projectId, editedName, setProject]);
+
   // Render tab content
   const renderTabContent = () => {
     if (!project) return null;
@@ -449,9 +496,42 @@ function ProjectHub() {
       <div className={styles.header}>
         <div className={styles.headerLeft}>
           <div className={styles.headerTitleRow}>
-            <Title level="H2" className={styles.headerTitle}>
-              {project.name}
-            </Title>
+            {isEditingName ? (
+              <>
+                <Input
+                  value={editedName}
+                  onInput={(e: any) => setEditedName(e.target.value)}
+                  style={{ minWidth: '300px', marginRight: '0.5rem' }}
+                  disabled={savingName}
+                />
+                <Button
+                  icon="accept"
+                  design="Positive"
+                  onClick={handleSaveName}
+                  disabled={savingName || !editedName.trim()}
+                  tooltip="Save"
+                />
+                <Button
+                  icon="decline"
+                  design="Negative"
+                  onClick={handleCancelEditName}
+                  disabled={savingName}
+                  tooltip="Cancel"
+                />
+              </>
+            ) : (
+              <>
+                <Title level="H2" className={styles.headerTitle}>
+                  {project.name}
+                </Title>
+                <Button
+                  icon="edit"
+                  design="Transparent"
+                  onClick={handleStartEditName}
+                  tooltip="Edit project name"
+                />
+              </>
+            )}
           </div>
           <Text className={styles.headerSubtext}>
             {TEXT.CREATED_ON} {formatCreationDate(project.createdAt)}

@@ -33,6 +33,7 @@ interface UseProjectDataReturn {
   setEnrichmentStatus: (status: EnrichmentStatus) => void;
   setEnrichmentProgress: (progress: { processed: number; total: number }) => void;
   setCurrentArticleId: (id: string | null) => void;
+  setProject: (project: ProjectData | null) => void;
 }
 
 export function useProjectData(projectId: string | undefined): UseProjectDataReturn {
@@ -99,5 +100,6 @@ export function useProjectData(projectId: string | undefined): UseProjectDataRet
     setEnrichmentStatus,
     setEnrichmentProgress,
     setCurrentArticleId,
+    setProject,
   };
 }

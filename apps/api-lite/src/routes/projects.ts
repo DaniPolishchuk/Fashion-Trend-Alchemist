@@ -618,6 +618,57 @@ export default async function projectRoutes(fastify: FastifyInstance) {
   });
 
   /**
+   * PATCH /api/projects/:id
+   * Update project details (e.g., name)
+   */
+  fastify.patch<{ Params: { id: string }; Body: { name?: string } }>(
+    '/projects/:id',
+    async (request, reply) => {
+      try {
+        const { id: projectId } = request.params;
+        const { name } = request.body;
+
+        // Verify project exists
+        const project = await db.query.projects.findFirst({
+          where: eq(projects.id, projectId),
+        });
+
+        if (!project) {
+          return reply.status(404).send({ error: 'Project not found' });
+        }
+
+        // Build update object
+        const updates: { name?: string } = {};
+        if (name !== undefined) {
+          const trimmedName = name.trim();
+          if (trimmedName.length === 0) {
+            return reply.status(400).send({ error: 'Project name cannot be empty' });
+          }
+          updates.name = trimmedName;
+        }
+
+        if (Object.keys(updates).length === 0) {
+          return reply.status(400).send({ error: 'No valid fields to update' });
+        }
+
+        // Update the project
+        const [updatedProject] = await db
+          .update(projects)
+          .set(updates)
+          .where(eq(projects.id, projectId))
+          .returning();
+
+        fastify.log.info({ projectId, updates }, 'Project updated successfully');
+
+        return reply.status(200).send(updatedProject);
+      } catch (error: any) {
+        fastify.log.error({ error }, 'Failed to update project');
+        return reply.status(500).send({ error: 'Internal Server Error' });
+      }
+    }
+  );
+
+  /**
    * GET /api/projects/:id/generated-designs
    * Get all generated designs for a specific project
    */
