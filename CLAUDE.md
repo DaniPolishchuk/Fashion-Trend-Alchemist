@@ -68,20 +68,26 @@ This is a **pnpm workspace monorepo** with the following structure:
 - `src/main.ts` - Main API server with core endpoints
 - `src/constants.ts` - Backend constants and configuration
 - `src/routes/` - Modular API routes (projects, enrichment, rpt1, context-items, collections, design-name)
-- `src/services/` - Service layer (cache, enrichment, imageGeneration, s3)
+- `src/services/` - Service layer:
+  - `cache.ts` - Redis caching service
+  - `enrichment.ts` - Vision LLM enrichment processing
+  - `imageGeneration.ts` - Z-Image Turbo API integration
+  - `promptGeneration.ts` - LLM-based image prompt generation (NEW)
+  - `salesTextGeneration.ts` - LLM-based sales text generation
+  - `s3.ts` - S3/SeaweedFS image storage
 
 **Frontend (`apps/web/`):**
 
 - `public/` - Static assets (logo.svg)
 - `src/pages/` - Page components (Home, ProductSelection, ContextBuilder, ProjectHub, DesignDetail)
 - `src/pages/tabs/` - ProjectHub tab components (TheAlchemistTab, ResultOverviewTab, EnhancedTableTab, DataAnalysisTab)
-- `src/components/` - Reusable components (AppShell, AttributeGenerationDialog, AttributeSkeletonLoader, EnrichmentStatusCard, FilterCardItem)
-- `src/constants/` - Centralized constants per feature (11 files: appShell, attributeDialog, contextBuilder, designDetail, enhancedTableTab, helpContent, home, productSelection, projectHub, resultOverviewTab, skeletonLoader, theAlchemistTab)
-- `src/hooks/` - Custom React hooks (13 files including useAttributeEditor, useContextFilters, useDateRange, useDebounce, useEnrichmentSSE, useFilterOptions, useOptionsManager, usePersistedSelection, useProducts, useProjectData, useTheme)
-- `src/services/api/` - API client layer (8 files: client, attributes, collections, filters, products, projects, taxonomy, transactions)
+- `src/components/` - Reusable components (AppShell, AttributeGenerationDialog, AttributeSkeletonLoader, EnrichmentStatusCard, FilterCardItem, HelpDialog)
+- `src/constants/` - Centralized constants per feature
+- `src/hooks/` - Custom React hooks
+- `src/services/api/` - API client layer
 - `src/styles/` - CSS Modules organized by components/ and pages/
-- `src/types/` - Frontend-specific TypeScript types (5 files)
-- `src/utils/` - Helper functions and utilities (8 files: attributeFormatting, dateValidation, enhancedTableHelpers, helpUtils, projectTransformers, resultOverviewHelpers, theAlchemistHelpers, urlParams)
+- `src/types/` - Frontend-specific TypeScript types
+- `src/utils/` - Helper functions and utilities
 - `src/config/` - Frontend configuration (routes, etc.)
 
 **Shared Packages:**
@@ -96,7 +102,10 @@ This is a **pnpm workspace monorepo** with the following structure:
 - **Backend**: Node.js 18+ with Fastify
 - **Database**: PostgreSQL 16 (cloud-hosted, typically accessed via port forwarding)
 - **ORM**: Drizzle ORM 0.29.5 (version pinned in root package.json)
-- **AI Integration**: OpenAI API for LLM-based attribute generation
+- **AI Integration**:
+  - OpenAI/GPT-4.1 via LiteLLM proxy for attribute generation and image prompts
+  - SAP AI Core for RPT-1 predictions
+  - Z-Image Turbo for image generation
 - **Package Manager**: pnpm with workspaces
 - **Caching**: Redis (optional) for 15-30x performance improvement
 
@@ -126,23 +135,36 @@ The application connects to a cloud-hosted PostgreSQL database. Typical workflow
 - **articles** - Static product catalog with attributes (article_id, product_type, product_group, color_family, pattern_style, etc.)
 - **transactions_train** - Sales data linking articles to customers and dates (t_date, customer_id, article_id, price)
 - **customers** - Customer demographics (customer_id, age)
-- **projects** - User projects with scope, status, and pinning support (draft/active, isPinned, pinnedAt, mismatchReviewCompleted, velocityScoresStale)
-- **project_context_items** - Context articles per project: top 25 and worst 25 articles (by velocity score) when >50 total results, otherwise all matching articles (up to 50). Includes mismatch detection fields (mismatchConfidence, isExcluded)
-- **generated_designs** - AI-generated design outputs with multi-image support:
+- **projects** - User projects with scope, status, and pinning support:
+  - `id`, `user_id`, `name`, `status` (draft/active)
+  - `scope_config` (JSONB) - Product type selection
+  - `season_config` (JSONB) - Date/season filtering
+  - `ontology_schema` (JSONB) - LLM-generated attribute definitions
+  - Enrichment tracking: `enrichment_status`, `enrichment_processed`, `enrichment_total`
+  - Pinning: `is_pinned`, `pinned_at`
+  - Mismatch review: `mismatch_review_completed`, `velocity_scores_stale`
+- **project_context_items** - Context articles per project:
+  - `project_id`, `article_id` (composite PK)
+  - `velocity_score` (normalized 0-100), `raw_velocity_score`
+  - `enriched_attributes` (JSONB) - Vision LLM extracted attributes
+  - `enrichment_error` - Error message if enrichment failed
+  - `mismatch_confidence` (0-100) - Product type mismatch likelihood
+  - `is_excluded`, `original_is_excluded` - Exclusion tracking
+- **generated_designs** - AI-generated design outputs:
   - `project_id`, `name`, `input_constraints`, `predicted_attributes`
   - `generated_images` (JSONB) - Multi-view images: `{ front: { url, status }, back: { url, status }, model: { url, status } }`
   - `generated_image_url` (legacy) - Single image URL for backward compatibility
   - `image_generation_status` - Overall status: pending/generating/completed/failed/partial
+  - `sales_text`, `sales_text_generation_status` - Generated marketing copy
   - `created_at` - Timestamp for sorting
-- **collections** - User-created collections grouping generated designs (id, user_id, name, created_at)
-- **collection_items** - Junction table linking collections to generated designs (collection_id, generated_design_id)
+- **collections** - User-created collections (id, user_id, name, created_at)
+- **collection_items** - Junction table linking collections to generated designs
 
 #### Important Indexes
 
 - `idx_transactions_article_id` on `transactions_train(article_id)`
 - `idx_transactions_t_date` on `transactions_train(t_date)`
 - `idx_transactions_customer_id` on `transactions_train(customer_id)`
-- Performance indexes on articles table for faster filtering (see PERFORMANCE_OPTIMIZATION.md)
 
 ### Data Flow Architecture
 
@@ -151,7 +173,13 @@ The application connects to a cloud-hosted PostgreSQL database. Typical workflow
 3. **Project Flow**: Project created in active status → navigate to ProjectHub
 4. **LLM Enrichment Flow**: Project context items are processed in parallel (configurable concurrency) → Vision LLM extracts attributes from product images AND detects product type mismatches → enriched attributes and mismatch confidence stored in DB with SSE progress updates
 5. **Mismatch Review Flow**: After enrichment, flagged items (mismatchConfidence >= 80) can be reviewed → users exclude mismatched articles → velocity scores recalculated for included items only
-6. **RPT-1 Generation Flow**: User configures locked/AI attributes → calls SAP AI Core → generates 3 images sequentially (front/back/model). Excluded articles are filtered out from context.
+6. **RPT-1 Generation Flow**:
+   - User configures locked/AI attributes in TheAlchemistTab
+   - Frontend sends: `lockedAttributes`, `aiVariables`, `successScore`, `contextAttributes` (auto-excluded attributes)
+   - Backend calls SAP AI Core RPT-1 for attribute prediction
+   - LLM generates view-specific image prompts (front/back/model)
+   - Z-Image Turbo generates 3 images sequentially
+   - Images uploaded to S3/SeaweedFS
 
 ### API Structure
 
@@ -165,48 +193,89 @@ The API server uses Fastify with modular routes:
 - `/api/articles/count` - Count distinct articles by product type
 - `/api/filters/attributes` - Dynamic filter options based on current filters
 - `/api/products` - Paginated product listing with filters
-- `/api/generate-attributes` - LLM-based attribute generation (uses OpenAI)
+- `/api/generate-attributes` - LLM-based ontology attribute generation
 
 #### Project Routes (`apps/api-lite/src/routes/projects.ts`)
 
 - `GET /api/projects` - List all projects with generated designs count and pin status
 - `POST /api/projects` - Create new project (draft status)
 - `GET /api/projects/:id` - Get single project by ID
-- `GET /api/projects/:id/preview-context` - Calculate velocity scores for context preview (top 25 + worst 25)
-- `POST /api/projects/:id/lock-context` - Lock project context and save articles with normalized velocity scores
-- `DELETE /api/projects/:id` - Delete project and cleanup images from SeaweedFS
+- `GET /api/projects/:id/preview-context` - Calculate velocity scores for context preview
+- `POST /api/projects/:id/lock-context` - Lock project context and save articles
+- `DELETE /api/projects/:id` - Delete project and cleanup images
 - `PATCH /api/projects/:id/pin` - Toggle project pin status (max 3 pinned)
-- `GET /api/projects/:id/generated-designs` - Get all generated designs for a project
-- `DELETE /api/projects/:projectId/generated-designs/:designId` - Delete specific design and its images
-- `PATCH /api/projects/:projectId/generated-designs/:designId` - Update design (e.g., rename)
-- `GET /api/projects/:projectId/generated-designs/:designId/image-status` - Get multi-image generation status
-- `PATCH /api/projects/:id/mismatch-review` - Bulk update article exclusions and mark review complete
-- `PATCH /api/projects/:id/context-items/:articleId/exclude` - Toggle single article exclusion
-- `POST /api/projects/:id/recalculate-velocity` - Re-normalize velocity scores for included articles
+- `GET /api/projects/:id/generated-designs` - Get all generated designs
+- `DELETE /api/projects/:projectId/generated-designs/:designId` - Delete design
+- `PATCH /api/projects/:projectId/generated-designs/:designId` - Update design (rename)
+- `GET /api/projects/:projectId/generated-designs/:designId/image-status` - Get image status
+- `PATCH /api/projects/:id/mismatch-review` - Bulk update article exclusions
+- `PATCH /api/projects/:id/context-items/:articleId/exclude` - Toggle single exclusion
+- `POST /api/projects/:id/recalculate-velocity` - Re-normalize velocity scores
 
 #### Enrichment Routes (`apps/api-lite/src/routes/enrichment.ts`)
 
-- `POST /api/projects/:id/start-enrichment` - Start enrichment for all unenriched items
-- `GET /api/projects/:id/enrichment-progress` - SSE endpoint for real-time progress updates
-- `GET /api/projects/:id/enrichment-status` - Get current enrichment state (for page reload recovery)
-- `POST /api/projects/:id/retry-enrichment` - Retry failed enrichment items
+- `POST /api/projects/:id/start-enrichment` - Start enrichment
+- `GET /api/projects/:id/enrichment-progress` - SSE endpoint for progress
+- `GET /api/projects/:id/enrichment-status` - Get current state
+- `POST /api/projects/:id/retry-enrichment` - Retry failed items
 
 #### Context Items Routes (`apps/api-lite/src/routes/context-items.ts`)
 
-- `GET /api/projects/:id/context-items` - Get all context items with enrichment status, mismatch confidence, exclusion status, and mismatch summary for Enhanced Table
+- `GET /api/projects/:id/context-items` - Get all context items with enrichment status
 
 #### RPT-1 Routes (`apps/api-lite/src/routes/rpt1.ts`)
 
-- `GET /api/projects/:id/rpt1-preview` - Get context row counts for RPT-1 preview
-- `POST /api/projects/:id/rpt1-predict` - Execute RPT-1 prediction via SAP AI Core (generates 3 images: front/back/model). Excludes articles marked as excluded from context.
+- `GET /api/projects/:id/rpt1-preview` - Get context row counts
+- `POST /api/projects/:id/rpt1-predict` - Execute RPT-1 prediction with image generation
+  - Request body includes: `lockedAttributes`, `aiVariables`, `successScore`, `contextAttributes`
+  - `contextAttributes` contains auto-excluded attributes (single-variant) for image prompt context
 
 #### Collections Routes (`apps/api-lite/src/routes/collections.ts`)
 
-- `GET /api/collections` - List user collections with item counts and preview images (currently using mock data)
+- `GET /api/collections` - List user collections (currently using mock data)
 
 #### Design Name Routes (`apps/api-lite/src/routes/design-name.ts`)
 
-- `POST /api/generate-design-name` - LLM-based creative name generation for designs
+- `POST /api/generate-design-name` - LLM-based name generation
+
+### Image Generation System
+
+#### Architecture
+
+```
+RPT-1 Prediction
+       │
+       ▼
+promptGeneration.ts
+├── preprocessAttributes() - Extract product type, category, customer segment
+├── generateImagePromptsWithFallback() - LLM call with retry + fallback
+└── Returns { front, back, model } prompts
+       │
+       ▼
+imageGeneration.ts
+├── generateImageWithRetry() - Call Z-Image Turbo API
+└── Returns image buffer
+       │
+       ▼
+s3.ts
+├── uploadGeneratedImageForViewWithRetry() - Upload to SeaweedFS
+└── Returns public URL
+```
+
+#### Prompt Generation (`apps/api-lite/src/services/promptGeneration.ts`)
+
+The LLM-based prompt generation system:
+
+1. **Preprocessing**: Extracts product type from ontology keys or `article_product_type`, determines product category (Upper Body, Lower Body, Full Body, Footwear, Accessory), and infers model gender from customer segment
+2. **LLM Call**: GPT-4.1 generates view-specific prompts following Z-Image Turbo best practices
+3. **Fallback**: If LLM fails after 2 retries, uses static template-based prompts
+
+**View-Specific Rules**:
+- **Front**: Ghost mannequin (garments) or flat lay (pants/bottoms)
+- **Back**: Excludes front-only features (buttons, lapels, neckline)
+- **Model**: Adds complementary garments based on product category
+
+**Product Category Mapping**: Hardcoded map from product type → category (Upper Body, Lower Body, etc.)
 
 ### Frontend Structure
 
@@ -217,174 +286,62 @@ The frontend (`apps/web/src/`) uses:
 - **State**: Local state + localStorage for persistence
 - **API Communication**: Fetch API with manual state management
 
-#### Key Components (`src/components/`)
+#### Key Pages
 
-- `AppShell.tsx` - Unified SAP Fiori-style shell wrapper with header (ShellBar), logo, search, notifications popover, help button (triggers context-sensitive help), and user profile popover with menu. Wraps all pages via App.tsx.
-- `AttributeGenerationDialog.tsx` - LLM attribute generation UI with conversation history
-- `AttributeSkeletonLoader.tsx` - Loading skeleton for attribute cards
-- `CollectionPreviewDialog.tsx` - Preview collection with design thumbnails before viewing details
-- `CreateCollectionDialog.tsx` - Dialog for creating new collections with name input
-- `EnrichmentStatusCard.tsx` - Status card for enrichment monitoring
-- `FilterCardItem.tsx` - Reusable filter card component
-- `HelpDialog.tsx` - Context-sensitive help dialog that displays page-specific features, tips, and available tabs. Content dynamically loads based on current page/route.
-- `SaveToCollectionPopover.tsx` - Popover for adding designs to collections with collection selection
-
-#### Key Pages (`src/pages/`)
-
-- `Home.tsx` - Dashboard with searchable/paginated projects table (with pin/delete actions) and collections grid
+- `Home.tsx` - Dashboard with projects table and collections grid
 - `ProductSelection.tsx` - Product type taxonomy browser
-- `ContextBuilder.tsx` - **New unified page** for context configuration, filter preview, attribute generation, and project creation (replaces Analysis.tsx workflow)
-- `ProjectHub.tsx` - Project workspace hub with tabbed navigation (see below)
-- `DesignDetail.tsx` - Individual design detail view with:
-  - Multi-image support (front/back/model views) with thumbnail strip
-  - Collapsible attribute panels (Predicted Attributes expanded, Given Attributes collapsed by default)
-  - Magic name generation via LLM (sparkle button)
-  - Image download functionality per view
-  - Full-size image modal with zoom
-  - "Refine Design" button that navigates to TheAlchemistTab with pre-populated attributes
-  - Real-time polling for image generation status
+- `ContextBuilder.tsx` - Context configuration and project creation
+- `ProjectHub.tsx` - Project workspace with tabbed navigation
+- `DesignDetail.tsx` - Design detail view with multi-image support
 
-#### ProjectHub Page (`/project/:projectId`)
-
-The ProjectHub is the main workspace for working with a project after it's created. It features:
-
-- **Header**: Project name, status badge (ACTIVE), enrichment progress indicator, mismatch review badge (when flagged items exist), and velocity recalculation indicator (when scores are stale)
-- **Tab Navigation**: Four tabs for different workflows
-
-**Tab Components** (located in `src/pages/tabs/`):
+#### ProjectHub Tabs
 
 1. **TheAlchemistTab** - Transmutation Parameters configuration
    - Three-column layout: Locked Attributes | AI Variables | Not Included
-   - Combines article-level attributes (from DB) and ontology-generated attributes
-   - Article attributes (product_type, color_family, etc.) get options from existing data
-   - Ontology attributes come from project's `ontologySchema`
-   - Maximum 10 AI Variables allowed (RPT-1 Large limit)
-   - Success Score slider (0-100%) on the right panel to set target performance
-   - "Preview Request" button shows context summary and query structure
-   - "Transmute (Run RPT-1)" button calls SAP AI Core to generate predictions
-   - **Stale Velocity Warning**: Shows warning dialog if velocity scores are stale before transmutation
-   - **Refine Design Flow**: Supports `?refineFrom=<designId>` URL parameter to pre-populate attributes from an existing design (locked attributes stay locked, predicted become AI variables)
-2. **ResultOverviewTab** - Generated designs display
-   - Paginated list of generated designs with search
-   - Shows design name, given/predicted attributes preview, front image thumbnail
-   - Supports multi-image format (uses `generatedImages.front` with fallback to legacy `generatedImageUrl`)
-   - Delete and rename functionality for designs
+   - Auto-excluded attributes (single variant) are hidden but sent as `contextAttributes`
+   - Success Score slider (0-100%)
+   - "Transmute" button triggers RPT-1 + image generation
+
+2. **ResultOverviewTab** - Generated designs display with pagination
+
 3. **EnhancedTableTab** - Context items table with enrichment monitoring
-   - Displays all project context items joined with article data
-   - Shows enrichment status (successful/pending/failed) per item
-   - **Include checkbox column**: Toggle article inclusion/exclusion from RPT-1 context
-   - **Match Confidence column**: Shows mismatch likelihood (Likely match/Possible mismatch/Likely mismatch/Very likely mismatch) with color coding
-   - Collapsible control panel with status summary and retry controls
-   - Filter chips (All/Successful/Pending/Failed) for quick filtering
-   - Sortable columns (velocity score, article ID, product type, match confidence)
-   - Dynamic columns for LLM-enriched attributes from ontology schema
-   - Image thumbnails with fallback placeholder on load error
-   - Single item retry and bulk "Retry All Failed" functionality
-   - CSV export with all base and enriched attributes
-   - Processing row highlight animation during active enrichment
-   - **Excluded row styling**: Red tint and reduced opacity for excluded articles
-   - Pagination (25 items per page)
-   - **Expandable rows**: Click any row to expand and see full article details, larger image, all enriched attributes, and error messages (accordion behavior - only one row expanded at a time)
-   - **Image modal**: Click zoom icon on expanded image to view full-size in dialog
-   - **Real-time updates**: 5-second polling during enrichment (when tab is visible)
-   - **Color-coded velocity scores**: Green (≥70), gray (40-69), red (<40)
-4. **DataAnalysisTab** - Placeholder (displays "Data Analysis")
+   - Include/exclude checkbox column
+   - Match confidence column with color coding
+   - Expandable rows for full details
 
-#### Ontology Schema Structure
-
-The `ontologySchema` in projects is a nested structure:
-
-```json
-{
-  "productType": {
-    "attributeName": ["variant1", "variant2", ...],
-    ...
-  }
-}
-```
-
-Example for skirts: `{ "skirt": { "style": ["A-line", "Pencil", ...], "fit": ["Loose", "Slim", ...] } }`
-
-#### Home Page Features
-
-- **Projects Table**: Displays all user projects with status (Ready/Processing), name, time period, product group, generated products count, and pin/delete actions. Supports search filtering and pagination (5 items per page). Pinned projects appear at the top (max 3 pins).
-- **Collections Section**: Shows user collections as cards with 2x2 image thumbnail grids. Only visible when collections exist. Images fall back to product icons when unavailable. **Note: Currently using mock data.**
+4. **DataAnalysisTab** - Placeholder
 
 ### Important Implementation Details
 
-#### Date/Season Filtering
+#### Attribute Categories
 
-The system uses **MM-DD format** for date ranges that apply across all years:
+Attributes in TheAlchemistTab have three categories:
+- **LOCKED**: User-specified values sent to RPT-1 query row
+- **AI**: Attributes for RPT-1 to predict (marked as `[PREDICT]`)
+- **NOT_INCLUDED**: Excluded from RPT-1 (may be auto-excluded if single variant)
 
-- Season filters map to months: spring (3,4,5), summer (6,7,8), autumn (9,10,11), winter (12,1,2)
-- Date range filtering uses EXTRACT(MONTH/DAY) to work across years
-- Cross-year ranges (e.g., Dec 15 - Jan 15) are handled with OR logic
-- **If no date/season is selected**: All data across all years is analyzed (no date filtering applied)
-
-#### Multi-Attribute Filtering
-
-- 9 filter categories: productGroup, productFamily, styleConcept, patternStyle, colorFamily, colorIntensity, specificColor, customerSegment, fabricTypeBase
-- Filter options dynamically update based on current dataset
-- Frontend sends comma-separated values like `filter_colorFamily=Blue,Red`
-- Backend converts camelCase to snake_case for SQL column names
-- All filters use parameterized queries to prevent SQL injection
+Auto-excluded attributes (single variant) are:
+- Marked with `autoExcluded: true`
+- Hidden from UI
+- Sent via `contextAttributes` parameter for image prompt generation
+- NOT used in RPT-1 context building
 
 #### Velocity Score Calculation
 
-The velocity score measures sales performance normalized across products:
-
 **Formula:** `Velocity = Transaction Count / Days Available`
 
-- Days Available is approximated by `(last_transaction_date - first_transaction_date + 1)`
-- This measures how quickly items sell relative to their availability period
-
-**Normalization:** At lock time, raw velocity scores are normalized to 0-100:
-
+**Normalization:** At lock time, normalized to 0-100:
 - `normalized = (score - min) / (max - min) * 100`
-- The lowest performer in context = 0, highest = 100
-- Stored in `project_context_items.velocityScore`
 
-**Usage in RPT-1:** The normalized score is sent as `success_score` (first column) to RPT-1, allowing users to target specific performance levels when generating new designs.
+**Usage in RPT-1:** Sent as `success_score` (first column) to target specific performance levels.
 
 #### Product Type Mismatch Detection
 
-During Vision LLM enrichment, the system also detects potential product type mismatches:
-
-**Mismatch Confidence Scores (0-100):**
-
-- 0-59: "Likely match" - Image matches expected product type
-- 60-79: "Possible mismatch" - Questionable, could fit but uncertain
-- 80-89: "Likely mismatch" - Probably a different product type
-- 90-100: "Very likely mismatch" - Clearly different category
-
-**Review Workflow:**
-
-1. After enrichment completes, flagged items (confidence >= 80) trigger the mismatch review badge
-2. Users click the badge to open the review dialog showing all flagged items
-3. Users can include/exclude individual items or use bulk actions
-4. On confirm, exclusions are saved and velocity scores are automatically recalculated
-
-**Velocity Score Recalculation:**
-
-- When articles are excluded via the Enhanced Table checkbox, `velocityScoresStale` is set to true
-- The VelocityRecalcIndicator shows a warning with a "Recalculate" button
-- Recalculation re-normalizes velocity scores among included items only (does not re-query transactions)
-- TheAlchemistTab shows a warning dialog if trying to transmute with stale velocity scores
-
-#### Project Lifecycle
-
-1. **Product Selection**: User selects product types from taxonomy
-2. **Context Builder**: User configures date/season filters, attribute filters, previews context, generates ontology attributes via LLM, then clicks "Confirm & Create Project"
-3. **Lock Context**: System creates project (active status), calculates velocity scores for all matching articles
-   - If >50 articles match: selects top 25 and worst 25 by velocity score
-   - If ≤50 articles match: includes all matching articles
-   - Normalizes velocity scores to 0-100 scale
-   - Saves articles to `project_context_items` with normalized scores
-   - Saves `ontologySchema` to project
-   - Redirects to ProjectHub
-4. **Active Status**: Context is locked, user can now enrich attributes and generate designs via RPT-1
-
-**Important**: Navigation to ProjectHub happens **after** lock-context completes to ensure `ontologySchema` is available when TheAlchemistTab loads. This prevents a race condition where the tab would only show article attributes without ontology attributes.
+During Vision LLM enrichment:
+- **0-59**: "Likely match"
+- **60-79**: "Possible mismatch"
+- **80-89**: "Likely mismatch"
+- **90-100**: "Very likely mismatch"
 
 ### Environment Configuration
 
@@ -401,23 +358,24 @@ API_HOST (default: 0.0.0.0)
 # Redis Cache (optional)
 REDIS_URL (e.g., redis://localhost:6379)
 
-# LLM Integration (for ontology generation)
+# LLM Integration (for ontology generation and image prompts)
 LLM_API_URL, LLM_API_KEY, LLM_MODEL
 
 # Vision LLM (for data enrichment)
 LITELLM_PROXY_URL, LITELLM_API_KEY, VISION_LLM_MODEL
 
 # Enrichment Processing
-ENRICHMENT_CONCURRENCY (default: 5) - Number of parallel Vision LLM requests
-ENRICHMENT_PROGRESS_INTERVAL_MS (default: 500) - Progress update batching interval
+ENRICHMENT_CONCURRENCY (default: 5)
+ENRICHMENT_PROGRESS_INTERVAL_MS (default: 500)
 
-# RPT-1 / SAP AI Core (for design prediction)
-AI_API_URL - SAP AI Core API endpoint
-AUTH_URL - OAuth2 authentication endpoint
-CLIENT_ID, CLIENT_SECRET - Service credentials
-RESOURCE_GROUP - AI Core resource group (e.g., "generative-ai")
+# RPT-1 / SAP AI Core
+AI_API_URL, AUTH_URL, CLIENT_ID, CLIENT_SECRET, RESOURCE_GROUP
 
-# S3/SeaweedFS (for image storage)
+# Image Generation (Z-Image Turbo)
+IMAGE_GEN_TOKEN_URL, IMAGE_GEN_CLIENT_ID, IMAGE_GEN_CLIENT_SECRET
+IMAGE_GEN_API_URL, IMAGE_GEN_WIDTH, IMAGE_GEN_HEIGHT
+
+# S3/SeaweedFS
 S3_ENDPOINT, S3_REGION, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET
 ```
 
@@ -436,7 +394,7 @@ All packages use workspace protocol (`workspace:*`) for internal dependencies:
 - `@fashion/types` exports shared TypeScript types and Zod schemas
 - `@fashion/config` exports environment configuration
 
-The monorepo enforces Drizzle ORM version 0.29.5 via pnpm overrides in root package.json.
+The monorepo enforces Drizzle ORM version 0.29.5 via pnpm overrides.
 
 ## Common Development Patterns
 
@@ -446,11 +404,11 @@ The monorepo enforces Drizzle ORM version 0.29.5 via pnpm overrides in root pack
 2. Register route in `apps/api-lite/src/main.ts` using `fastify.register()`
 3. Define request/response types in `packages/types/src/`
 4. Add database queries in `packages/db/src/queries/` if needed
-5. Use parameterized queries for all user input to prevent SQL injection
+5. Use parameterized queries for all user input
 
 ### Adding a New Database Table
 
-1. Define schema in `packages/db/src/schema/[table-name].ts` using Drizzle syntax
+1. Define schema in `packages/db/src/schema/[table-name].ts`
 2. Export from `packages/db/src/schema/index.ts`
 3. Run `pnpm db:generate` to create migration
 4. Run `pnpm db:migrate` to apply migration
@@ -459,76 +417,36 @@ The monorepo enforces Drizzle ORM version 0.29.5 via pnpm overrides in root pack
 ### Adding a New Filter Attribute
 
 1. Add column to articles table schema
-2. Update `/api/filters/attributes` endpoint to include new attribute in SELECT
-3. Update `/api/products` endpoint to add filter key to `filterKeys` array and `validColumns` set
-4. Update `FiltersResponse` type in `packages/types/`
-5. Add UI controls in `apps/web/src/pages/ContextBuilder.tsx`
-
-## Testing & Validation
-
-### Manual Testing Workflow
-
-1. Ensure database port forwarding is active
-2. Start API server and verify `/health` endpoint responds
-3. Start web app and verify it loads at http://localhost:5173
-4. Test product selection → context builder → project creation flow
-5. Test enrichment → RPT-1 generation flow
-
-### Database Connection Testing
-
-```bash
-# Test direct connection
-psql -h localhost -p 5432 -U postgres -d fashion_db
-
-# Test API connection
-curl http://localhost:3001/health
-```
+2. Update `/api/filters/attributes` endpoint
+3. Update `/api/products` endpoint
+4. Update `FiltersResponse` type
+5. Add UI controls in ContextBuilder
 
 ## Project Phases
 
-The system is being built in phases (see docs/PRD.md):
-
-- **Phase 1 (COMPLETE)**: Product analysis with filtering and pagination (now integrated into ContextBuilder)
-- **Phase 2 (COMPLETE)**: LLM-based attribute enrichment for top performers
-- **Phase 3 (COMPLETE)**: RPT-1 inverse design engine for predicting attributes
-  - Three-column attribute management (Locked/AI/Not Included)
-  - Success score targeting (0-100%)
-  - SAP AI Core integration with OAuth2 authentication
-  - Velocity-based context with normalized scores
-- **Phase 4 (IN PROGRESS)**: AI image generation for design visualization
-  - Multi-image generation: front, back, and model views (sequential generation)
-  - Per-view status tracking with real-time polling
-  - Design detail page with collapsible attribute panels
-  - Magic name generation via LLM
-  - Image download functionality
-  - Refine Design flow (pre-populate TheAlchemistTab from existing design)
-  - Project management (pin/delete projects)
-  - Design management (delete/rename designs)
-
-Current focus is on UI polish, collections implementation, and additional image generation features.
+- **Phase 1 (COMPLETE)**: Product analysis with filtering and pagination
+- **Phase 2 (COMPLETE)**: LLM-based attribute enrichment
+- **Phase 3 (COMPLETE)**: RPT-1 inverse design engine
+- **Phase 4 (IN PROGRESS)**: AI image generation
+  - Multi-image generation (front/back/model) ✅
+  - LLM-based prompt generation ✅
+  - Design detail page ✅
+  - Magic name generation ✅
+  - Project/design management ✅
+  - Collections (mock data only)
 
 ## Key Architecture Changes
 
 ### Recent Updates
 
-1. **ContextBuilder Page**: Unified page replacing the previous Analysis page workflow. Combines product filtering, context preview, attribute generation, and project creation in a single streamlined interface.
-2. **Project Pinning**: Users can pin up to 3 projects to the top of the projects list for quick access.
-3. **Multi-Image Generation**: Designs now support 3 views (front/back/model) generated sequentially via SAP AI Core.
-4. **Design Management**: Users can delete and rename generated designs directly from ResultOverviewTab.
-5. **Modular API Routes**: API routes are now organized in separate files under `apps/api-lite/src/routes/` for better maintainability.
-6. **Product Type Mismatch Detection**: Vision LLM now detects potential product type mismatches during enrichment. Flagged items can be reviewed and excluded from the RPT-1 context. Features include:
-   - Mismatch confidence scoring (0-100) with labeled categories
-   - MismatchReviewBadge in ProjectHub header (red=needs review, green=reviewed)
-   - MismatchReviewDialog for bulk review of flagged items
-   - Include/exclude checkbox column in EnhancedTableTab
-   - Match Confidence column with color-coded labels
-   - Automatic velocity score recalculation when exclusions change
-   - VelocityRecalcIndicator for stale score warnings
-   - Stale velocity warning in TheAlchemistTab before transmutation
+1. **LLM-Based Image Prompt Generation**: New `promptGeneration.ts` service generates optimized prompts for Z-Image Turbo using GPT-4.1
+2. **Context Attributes**: Auto-excluded attributes (single variant) are now sent to the API for image generation context
+3. **View-Specific Prompts**: Different photography styles for different views (ghost mannequin vs flat lay)
+4. **Product Category Awareness**: Automatic determination of product category for appropriate styling
 
 ### Known Technical Debt
 
-1. **Mock Collections**: Collections feature uses mock data (see docs/CollectionMock.md)
+1. **Mock Collections**: Collections feature uses mock data
 2. **Hardcoded User**: `userId` defaults to `'00000000-0000-0000-0000-000000000000'`
-3. **No JSONB Validation**: Database accepts any JSON structure without schema validation
+3. **No JSONB Validation**: Database accepts any JSON structure
 4. **SeaweedFS Dependency**: Images require port-forwarding for local dev

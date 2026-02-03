@@ -59,6 +59,13 @@ interface ImageViewData {
 
 interface GeneratedImages {
   front: ImageViewData;
+  secondary: ImageViewData;
+  model: ImageViewData;
+}
+
+// Backend response type (still uses 'back')
+interface BackendGeneratedImages {
+  front: ImageViewData;
   back: ImageViewData;
   model: ImageViewData;
 }
@@ -70,10 +77,22 @@ interface GeneratedDesign {
   inputConstraints: Record<string, string> | null;
   generatedImageUrl: string | null;
   imageGenerationStatus?: OverallImageStatus;
-  generatedImages?: GeneratedImages | null;
+  generatedImages?: BackendGeneratedImages | null;
   salesText?: string | null;
   salesTextGenerationStatus?: 'pending' | 'generating' | 'completed' | 'failed' | null;
   createdAt?: string;
+}
+
+// Helper function to transform backend data to frontend format
+function transformGeneratedImages(
+  backendImages: BackendGeneratedImages | null | undefined
+): GeneratedImages | null {
+  if (!backendImages) return null;
+  return {
+    front: backendImages.front,
+    secondary: backendImages.back, // Map 'back' to 'secondary'
+    model: backendImages.model,
+  };
 }
 
 function DesignDetail() {
@@ -205,7 +224,7 @@ function DesignDetail() {
         setOverallStatus(currentDesign.imageGenerationStatus || 'pending');
 
         if (currentDesign.generatedImages) {
-          setGeneratedImages(currentDesign.generatedImages);
+          setGeneratedImages(transformGeneratedImages(currentDesign.generatedImages));
         } else {
           const legacyStatus = currentDesign.imageGenerationStatus;
           const viewStatus: ImageViewStatus =
@@ -215,7 +234,7 @@ function DesignDetail() {
 
           setGeneratedImages({
             front: { url: currentDesign.generatedImageUrl || null, status: viewStatus },
-            back: { url: null, status: 'pending' },
+            secondary: { url: null, status: 'pending' },
             model: { url: null, status: 'pending' },
           });
         }
@@ -253,13 +272,13 @@ function DesignDetail() {
       try {
         const result = await fetchAPI<{
           status: string;
-          generatedImages?: GeneratedImages;
+          generatedImages?: BackendGeneratedImages;
         }>(`/api/projects/${projectId}/generated-designs/${designId}/image-status`);
 
         if (result.data) {
           setOverallStatus(result.data.status);
           if (result.data.generatedImages) {
-            setGeneratedImages(result.data.generatedImages);
+            setGeneratedImages(transformGeneratedImages(result.data.generatedImages));
           }
         }
       } catch (err) {
