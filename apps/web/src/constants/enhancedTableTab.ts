@@ -155,7 +155,7 @@ export const TEXT = {
   FILTER_FAILED: 'Failed',
 
   // Sort Labels
-  SORT_VELOCITY: 'Velocity Score',
+  SORT_VELOCITY: 'Success Score',
   SORT_ARTICLE: 'Article ID',
   SORT_PRODUCT: 'Product Type',
   SORT_MATCH_CONFIDENCE: 'Match Confidence',
@@ -179,7 +179,7 @@ export const TEXT = {
   COL_IMAGE: 'Image',
   COL_ARTICLE_ID: 'Article ID',
   COL_PRODUCT_TYPE: 'Product Type',
-  COL_VELOCITY: 'Velocity Score',
+  COL_VELOCITY: 'Success Score',
   COL_PATTERN: 'Pattern Style',
   COL_COLOR_FAMILY: 'Color Family',
   COL_SPECIFIC_COLOR: 'Specific Color',

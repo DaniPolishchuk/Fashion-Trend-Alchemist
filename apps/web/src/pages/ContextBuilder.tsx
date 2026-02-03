@@ -714,6 +714,9 @@ function ContextBuilder() {
           <div className={styles.filterCard}>
             {/* Date Section */}
             <div className={styles.dateSection}>
+              <div>
+                <Text className={styles.dateHint}>Select Transaction Date Range</Text>
+              </div>
               <div className={styles.dateSectionInner}>
                 <div className={styles.dateInputsColumn}>
                   <div className={styles.dateInputRow}>

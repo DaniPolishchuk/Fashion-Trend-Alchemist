@@ -50,6 +50,14 @@
   padding: 0.75rem;
   display: flex;
   align-items: center;
+  flex-direction: column;
+}
+
+.dateHint {
+  font-family: var(--sapFontFamily);
+  font-size: 1rem;
+  color: var(--sapContent_LabelColor);
+  line-height: 1.4;
 }
 
 .dateSectionInner {
