@@ -72,7 +72,8 @@ This is a **pnpm workspace monorepo** with the following structure:
   - `cache.ts` - Redis caching service
   - `enrichment.ts` - Vision LLM enrichment processing
   - `imageGeneration.ts` - Z-Image Turbo API integration
-  - `promptGeneration.ts` - LLM-based image prompt generation (NEW)
+  - `promptGeneration.ts` - LLM-based image prompt generation
+  - `promptConfig/` - Prompt generation configuration modules
   - `salesTextGeneration.ts` - LLM-based sales text generation
   - `s3.ts` - S3/SeaweedFS image storage
 
@@ -232,7 +233,6 @@ The API server uses Fastify with modular routes:
 
 #### Collections Routes (`apps/api-lite/src/routes/collections.ts`)
 
-<<<<<<< HEAD
 - `GET /api/collections` - List user collections with item counts and preview images
 - `POST /api/collections` - Create a new collection
 - `GET /api/collections/:id` - Get collection details with all designs
@@ -240,9 +240,6 @@ The API server uses Fastify with modular routes:
 - `DELETE /api/collections/:id` - Delete a collection (keeps designs)
 - `POST /api/collections/:id/items` - Add a design to a collection
 - `DELETE /api/collections/:id/items/:designId` - Remove a design from a collection
-=======
-- `GET /api/collections` - List user collections (currently using mock data)
->>>>>>> 792cafcbfedbec6c5ba2dcd799f14cf530e27c41
 
 #### Design Name Routes (`apps/api-lite/src/routes/design-name.ts`)
 
@@ -257,8 +254,9 @@ RPT-1 Prediction
        │
        ▼
 promptGeneration.ts
-├── preprocessAttributes() - Extract product type, category, customer segment
-├── generateImagePromptsWithFallback() - LLM call with retry + fallback
+├── preprocessProductData() - Extract product group, type, segment
+├── generatePromptComponents() - LLM generates structured components
+├── assemblePrompts() - Combine components with quality suffix
 └── Returns { front, back, model } prompts
        │
        ▼
@@ -272,20 +270,48 @@ s3.ts
 └── Returns public URL
 ```
 
-#### Prompt Generation (`apps/api-lite/src/services/promptGeneration.ts`)
+#### Prompt Generation System (`apps/api-lite/src/services/promptGeneration.ts`)
 
-The LLM-based prompt generation system:
+The prompt generation system uses a **component-based architecture** for visual consistency across views.
 
-1. **Preprocessing**: Extracts product type from ontology keys or `article_product_type`, determines product category (Upper Body, Lower Body, Full Body, Footwear, Accessory), and infers model gender from customer segment
-2. **LLM Call**: GPT-4.1 generates view-specific prompts following Z-Image Turbo best practices
-3. **Fallback**: If LLM fails after 2 retries, uses static template-based prompts
+**Key Design Principle**: All three prompts (front, back, model) share an **identical product description** to maximize visual similarity in generated images.
 
-**View-Specific Rules**:
-- **Front**: Ghost mannequin (garments) or flat lay (pants/bottoms)
-- **Back**: Excludes front-only features (buttons, lapels, neckline)
-- **Model**: Adds complementary garments based on product category
+**Photography Categories** (4 categories derived from 18 product groups):
 
-**Product Category Mapping**: Hardcoded map from product type → category (Upper Body, Lower Body, etc.)
+| Category | Product Groups | Front/Back Style | Model View |
+|----------|---------------|------------------|------------|
+| **Wearable** | Garment Upper/Lower/Full body, Nightwear, Swimwear, Underwear, Underwear/nightwear | Ghost mannequin (flat lay for pants) | Full body wearing |
+| **Footwear** | Shoes, Socks & Tights | Product pair shot | Cropped legs |
+| **Accessories** | Bags, Accessories | Product shot | Styled with item |
+| **Non-Wearable** | Interior textile, Furniture, Cosmetic, Garment and Shoe care, Items, Fun, Stationery | Product shot | Lifestyle context |
+
+**Customer Segment → Model Profile**:
+
+| Segment | Model Descriptor |
+|---------|------------------|
+| Baby/Children | "a child model" |
+| Divided | "an adult model" |
+| Ladieswear | "an adult female model" |
+| Menswear | "an adult male model" |
+| Sport | "an adult model" |
+
+**Prompt Structure**:
+```
+[viewPrefix] [productDescription]. [viewDetails]. [qualitySuffix]
+```
+
+The LLM generates structured components:
+- `productDescription` - Shared across all views (color, material, type, features)
+- `frontPrefix`, `backPrefix`, `modelPrefix` - View-specific photography style
+- `frontDetails`, `backDetails`, `modelDetails` - View-specific composition
+
+**Configuration Files** (`apps/api-lite/src/services/promptConfig/`):
+- `categoryMapping.ts` - Product group → photography category
+- `modelProfiles.ts` - Customer segment → model profile
+- `systemPrompts.ts` - Base and category-specific LLM prompts
+- `index.ts` - Exports
+
+**Fallback**: If LLM fails after 2 retries, uses template-based component generation with same category/profile logic.
 
 ### Frontend Structure
 
@@ -300,24 +326,9 @@ The frontend (`apps/web/src/`) uses:
 
 - `Home.tsx` - Dashboard with projects table and collections grid
 - `ProductSelection.tsx` - Product type taxonomy browser
-<<<<<<< HEAD
-- `ContextBuilder.tsx` - **New unified page** for context configuration, filter preview, attribute generation, and project creation (replaces Analysis.tsx workflow)
-- `ProjectHub.tsx` - Project workspace hub with tabbed navigation (see below)
-- `DesignDetail.tsx` - Individual design detail view with:
-  - Multi-image support (front/back/model views) with thumbnail strip
-  - Collapsible attribute panels (Predicted Attributes expanded, Given Attributes collapsed by default)
-  - Sales text panel with AI-generated marketing copy and regeneration option
-  - Magic name generation via LLM (sparkle button)
-  - Image download functionality per view
-  - Full-size image modal with zoom
-  - "Save to Collection" button with popover for collection selection
-  - "Refine Design" button that navigates to TheAlchemistTab with pre-populated attributes
-  - Real-time polling for image generation status
-=======
-- `ContextBuilder.tsx` - Context configuration and project creation
-- `ProjectHub.tsx` - Project workspace with tabbed navigation
-- `DesignDetail.tsx` - Design detail view with multi-image support
->>>>>>> 792cafcbfedbec6c5ba2dcd799f14cf530e27c41
+- `ContextBuilder.tsx` - Context configuration, filter preview, attribute generation, and project creation
+- `ProjectHub.tsx` - Project workspace hub with tabbed navigation
+- `DesignDetail.tsx` - Design detail view with multi-image support (front/back/lifestyle sample)
 
 #### ProjectHub Tabs
 
@@ -334,29 +345,11 @@ The frontend (`apps/web/src/`) uses:
    - Match confidence column with color coding
    - Expandable rows for full details
 
-<<<<<<< HEAD
-#### Ontology Schema Structure
-
-The `ontologySchema` in projects is a nested structure:
-
-```json
-{
-  "productType": {
-    "attributeName": ["variant1", "variant2", ...],
-    ...
-  }
-}
-```
-
-Example for skirts: `{ "skirt": { "style": ["A-line", "Pencil", ...], "fit": ["Loose", "Slim", ...] } }`
-
-#### Home Page Features
-
-- **Projects Table**: Displays all user projects with status (Ready/Processing), name, time period, product group, generated products count, and pin/delete actions. Supports search filtering and pagination (5 items per page). Pinned projects appear at the top (max 3 pins).
-- **Collections Section**: Shows user collections as cards with 2x2 image thumbnail grids. Only visible when collections exist. Images fall back to product icons when unavailable. **Note: Backend API fully implemented; frontend partially complete (see docs/CollectionMock.md).**
-=======
 4. **DataAnalysisTab** - Placeholder
->>>>>>> 792cafcbfedbec6c5ba2dcd799f14cf530e27c41
+
+#### Frontend Display Names
+
+The third generated image view is called "model" in the backend but displayed as **"Lifestyle Sample"** in the frontend to better represent non-wearable items.
 
 ### Important Implementation Details
 
@@ -471,77 +464,34 @@ The monorepo enforces Drizzle ORM version 0.29.5 via pnpm overrides.
 
 ## Project Phases
 
-<<<<<<< HEAD
 The system is being built in phases (see docs/PRD.md):
 
-- **Phase 1 (COMPLETE)**: Product analysis with filtering and pagination (now integrated into ContextBuilder)
+- **Phase 1 (COMPLETE)**: Product analysis with filtering and pagination
 - **Phase 2 (COMPLETE)**: LLM-based attribute enrichment for top performers
 - **Phase 3 (COMPLETE)**: RPT-1 inverse design engine for predicting attributes
-  - Three-column attribute management (Locked/AI/Not Included)
-  - Success score targeting (0-100%)
-  - SAP AI Core integration with OAuth2 authentication
-  - Velocity-based context with normalized scores
 - **Phase 4 (IN PROGRESS)**: AI image generation for design visualization
-  - Multi-image generation: front, back, and model views (sequential generation)
-  - Per-view status tracking with real-time polling
-  - Design detail page with collapsible attribute panels
-  - Sales text generation with regeneration option
-  - Magic name generation via LLM
-  - Image download functionality
-  - Save to collection functionality
-  - Refine Design flow (pre-populate TheAlchemistTab from existing design)
-  - Project management (pin/delete projects, inline name editing)
-  - Design management (delete/rename designs)
-  - Collections API (fully implemented)
-
-Current focus is on UI polish, collections frontend completion, and additional features.
-=======
-- **Phase 1 (COMPLETE)**: Product analysis with filtering and pagination
-- **Phase 2 (COMPLETE)**: LLM-based attribute enrichment
-- **Phase 3 (COMPLETE)**: RPT-1 inverse design engine
-- **Phase 4 (IN PROGRESS)**: AI image generation
   - Multi-image generation (front/back/model) ✅
-  - LLM-based prompt generation ✅
+  - Component-based prompt generation system ✅
   - Design detail page ✅
   - Magic name generation ✅
   - Project/design management ✅
-  - Collections (mock data only)
->>>>>>> 792cafcbfedbec6c5ba2dcd799f14cf530e27c41
+  - Collections API ✅
 
 ## Key Architecture Changes
 
 ### Recent Updates
 
-<<<<<<< HEAD
-1. **ContextBuilder Page**: Unified page replacing the previous Analysis page workflow. Combines product filtering, context preview, attribute generation, and project creation in a single streamlined interface.
-2. **Project Pinning**: Users can pin up to 3 projects to the top of the projects list for quick access.
-3. **Multi-Image Generation**: Designs now support 3 views (front/back/model) generated sequentially via SAP AI Core.
-4. **Design Management**: Users can delete and rename generated designs directly from ResultOverviewTab.
-5. **Modular API Routes**: API routes are now organized in separate files under `apps/api-lite/src/routes/` for better maintainability.
-6. **Product Type Mismatch Detection**: Vision LLM now detects potential product type mismatches during enrichment. Flagged items can be reviewed and excluded from the RPT-1 context. Features include:
-   - Mismatch confidence scoring (0-100) with labeled categories
-   - MismatchReviewBadge in ProjectHub header (red=needs review, green=reviewed)
-   - MismatchReviewDialog for bulk review of flagged items
-   - Include/exclude checkbox column in EnhancedTableTab
-   - Match Confidence column with color-coded labels
-   - Automatic velocity score recalculation when exclusions change
-   - VelocityRecalcIndicator for stale score warnings
-   - Stale velocity warning in TheAlchemistTab before transmutation
-7. **Collections API**: Full CRUD operations for collections including create, list, update, delete, and adding/removing designs from collections. Backend fully implemented.
+1. **Component-Based Prompt Generation**: Redesigned prompt generation system using structured components with shared product description for visual consistency across views. See `docs/image-prompt-system-design.md` for full details.
+
+2. **Photography Category System**: Products are now classified into 4 photography categories (Wearable, Footwear, Accessories, Non-Wearable) based on their product group, with category-specific LLM prompts and examples.
+
+3. **Customer Segment Model Profiles**: Explicit mapping from 5 customer segments (Baby/Children, Divided, Ladieswear, Menswear, Sport) to model descriptors for appropriate age/gender representation.
+
+4. **Modular Prompt Configuration**: Prompt generation configuration split into separate modules under `promptConfig/` for maintainability.
 
 ### Known Technical Debt
 
-1. **Collections Frontend**: Backend API fully implemented; frontend has partial implementation (see docs/CollectionMock.md)
-=======
-1. **LLM-Based Image Prompt Generation**: New `promptGeneration.ts` service generates optimized prompts for Z-Image Turbo using GPT-4.1
-2. **Context Attributes**: Auto-excluded attributes (single variant) are now sent to the API for image generation context
-3. **View-Specific Prompts**: Different photography styles for different views (ghost mannequin vs flat lay)
-4. **Product Category Awareness**: Automatic determination of product category for appropriate styling
-
-### Known Technical Debt
-
-1. **Mock Collections**: Collections feature uses mock data
->>>>>>> 792cafcbfedbec6c5ba2dcd799f14cf530e27c41
+1. **Collections Frontend**: Backend API fully implemented; frontend has partial implementation
 2. **Hardcoded User**: `userId` defaults to `'00000000-0000-0000-0000-000000000000'`
 3. **No JSONB Validation**: Database accepts any JSON structure
 4. **SeaweedFS Dependency**: Images require port-forwarding for local dev
