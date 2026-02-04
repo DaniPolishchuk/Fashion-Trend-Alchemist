@@ -10,7 +10,8 @@ import type { PhotographyCategory } from './categoryMapping.js';
 /**
  * Quality suffix appended to all generated prompts
  */
-export const QUALITY_SUFFIX = 'Plain white studio background, shadowless, 4K quality, sharp focus, no text, no watermarks, no logos, high-end e-commerce photography.';
+export const QUALITY_SUFFIX =
+  'Plain white studio background, shadowless, 4K quality, sharp focus, no text, no watermarks, no logos, high-end e-commerce photography.';
 
 // ==================== BASE SYSTEM PROMPT ====================
 
@@ -40,10 +41,17 @@ Return ONLY valid JSON with this exact structure (no markdown, no explanation):
 
 ## CRITICAL RULES
 
-### RULE 1: PRODUCT DESCRIPTION CONSISTENCY
+### RULE 1: MODEL AGE RESTRICTION
+**ABSOLUTELY CRITICAL**: You MUST use the exact model descriptor provided in the MODEL PROFILE section below. 
+- If the descriptor says "an adult model" or "an adult female/male model" → USE ONLY ADULT MODELS
+- If the descriptor says "a child model" → USE ONLY CHILD MODELS
+- NEVER substitute or change the model age from what is specified in the descriptor
+- This is a strict business requirement that must be followed exactly
+
+### RULE 2: PRODUCT DESCRIPTION CONSISTENCY
 The productDescription must capture the complete product identity. This EXACT text will be used in all three prompts to ensure visual consistency across generated images. This is critical - the same product description ensures the generated images look like the same product.
 
-### RULE 2: PRODUCT DESCRIPTION STRUCTURE
+### RULE 3: PRODUCT DESCRIPTION STRUCTURE
 Order the productDescription from most important to specific details:
 [Color] [Material] [Product Type] with [key distinctive features], [fit/silhouette], [secondary details]
 
@@ -51,18 +59,18 @@ Include ALL provided attributes. Do not omit any details.
 
 Example: "Navy Blue Wool Blend Slim Fit Trousers with pleated front, mid-rise waist, belt loops, and side pockets"
 
-### RULE 3: ATTRIBUTE SPLITTING
+### RULE 4: ATTRIBUTE SPLITTING
 - productDescription: Features visible from ANY angle (color, material, type, silhouette, fit)
 - frontDetails: Features ONLY visible/relevant from front (front pockets, buttons, front prints, neckline)
 - backDetails: Features ONLY visible/relevant from back (back pockets, back closure, rear vents)
 
-### RULE 4: PREFIX STRUCTURE
+### RULE 5: PREFIX STRUCTURE
 Prefixes must establish the photography style and view. They should end in a way that flows naturally into the productDescription.
 
 Example flow: "[frontPrefix] [productDescription]. [frontDetails]. [suffix]"
 Result: "Ghost mannequin fashion photography, front view of Navy Blue Wool Trousers with pleated front. Displaying front crease and side pockets. Plain white..."
 
-### RULE 5: NO QUALITY SUFFIX
+### RULE 6: NO QUALITY SUFFIX
 Do NOT include any quality/background specifications in your output. The following will be appended automatically:
 "Plain white studio background, shadowless, 4K quality, sharp focus, no text, no watermarks, no logos, high-end e-commerce photography."`;
 
@@ -188,7 +196,7 @@ export const CATEGORY_RULES: Record<PhotographyCategory, string> = {
 - Lifestyle/context shot showing the product in use or in an appropriate setting
 - For home items: Styled in room setting
 - For cosmetics: Application context or beauty shot
-- For toys: Child interacting with product
+- For lifestyle items: Appropriate context showing product use
 - Focus on the product with context providing scale and use-case
 
 ### Example Output (Cushion):
@@ -211,7 +219,7 @@ export const CATEGORY_RULES: Record<PhotographyCategory, string> = {
   "frontDetails": "Product standing upright with cap removed beside it, showing rose pink shade and bullet shape",
   "backDetails": "Showing metal case construction, twist mechanism base and gold cap detail",
   "modelDetails": "Close-up of lips wearing the rose pink satin lipstick, focus on color payoff and finish, product visible in soft focus beside"
-}`
+}`,
 };
 
 // ==================== HELPER FUNCTIONS ====================
@@ -219,21 +227,23 @@ export const CATEGORY_RULES: Record<PhotographyCategory, string> = {
 /**
  * Build complete system prompt with category-specific rules and model profile
  */
-export function buildSystemPrompt(
-  category: PhotographyCategory,
-  modelDescriptor: string
-): string {
+export function buildSystemPrompt(category: PhotographyCategory, modelDescriptor: string): string {
   const categoryRules = CATEGORY_RULES[category];
 
   const modelProfileRules = `
-## MODEL PROFILE
+## MODEL PROFILE - STRICTLY ENFORCED
 
-For the model view, use this model descriptor: "${modelDescriptor}"
+**CRITICAL**: You MUST use EXACTLY this model descriptor for ALL model view prompts: "${modelDescriptor}"
+
+${modelDescriptor.includes('adult') ? '⚠️ This product requires an ADULT model. DO NOT use child models under any circumstances.' : ''}
+${modelDescriptor.includes('child') ? '⚠️ This product requires a CHILD model. Use appropriate child model in the generated prompt.' : ''}
 
 Incorporate the model descriptor naturally into the modelPrefix. For example:
 - "Fashion photography, full body shot of ${modelDescriptor} wearing"
 - "Fashion photography, cropped shot from mid-thigh down of ${modelDescriptor} wearing"
-- "Fashion photography, head and shoulders shot of ${modelDescriptor} wearing"`;
+- "Fashion photography, head and shoulders shot of ${modelDescriptor} wearing"
+
+Remember: The model age (adult vs child) is determined by the customer segment attribute in the product data and MUST be strictly followed.`;
 
   return `${BASE_SYSTEM_PROMPT}
 
