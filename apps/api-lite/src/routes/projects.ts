@@ -25,7 +25,7 @@ import {
   type PreviewContextQuery,
   type LockContextInput,
 } from '@fashion/types';
-import { API_LIMITS } from '../constants.js';
+import { API_LIMITS, CONTEXT_CONFIG } from '../constants.js';
 
 const HARDCODED_USER_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -115,7 +115,8 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
   /**
    * GET /api/projects/:id/preview-context
-   * The Velocity Engine - calculates top 25 and worst 25 articles by velocity score
+   * The Velocity Engine - calculates top and worst performing articles by velocity score
+   * Supports configurable context size via topCount and worstCount query parameters
    */
   fastify.get<{
     Params: { id: string };
@@ -124,6 +125,11 @@ export default async function projectRoutes(fastify: FastifyInstance) {
     try {
       const { id: projectId } = request.params;
       const queryParams = PreviewContextQuerySchema.parse(request.query);
+
+      // Extract context configuration from query params with defaults
+      const topCount = queryParams.topCount ?? Math.round(CONTEXT_CONFIG.DEFAULT_ITEMS * CONTEXT_CONFIG.DEFAULT_TOP_PERCENTAGE / 100);
+      const worstCount = queryParams.worstCount ?? Math.round(CONTEXT_CONFIG.DEFAULT_ITEMS * CONTEXT_CONFIG.DEFAULT_WORST_PERCENTAGE / 100);
+      const totalRequested = topCount + worstCount;
 
       // Get project to extract scope configuration
       const project = await db.query.projects.findFirst({
@@ -200,11 +206,11 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
       Object.entries(filterMap).forEach(([queryKey, column]) => {
         const filterValue = queryParams[queryKey as keyof PreviewContextQuery];
-        if (filterValue) {
+        if (filterValue && typeof filterValue === 'string') {
           const values = filterValue
             .split(',')
-            .map((v) => v.trim())
-            .filter((v) => v.length > 0);
+            .map((v: string) => v.trim())
+            .filter((v: string) => v.length > 0);
           if (values.length > 0) {
             whereClauses.push(inArray(column, values));
           }
@@ -261,16 +267,21 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
       const allResults = await allArticlesQuery;
 
-      // Performance optimization: If we have more than MAX_PREVIEW_RESULTS,
-      // return top PREVIEW_TOP_COUNT and worst PREVIEW_WORST_COUNT
-      // This maintains the same business logic but uses named constants
+      // Apply context configuration: select top N and worst M performers
+      // If total results <= requested amount, return all
       let results;
-      if (allResults.length > API_LIMITS.MAX_PREVIEW_RESULTS) {
-        const top25 = allResults.slice(0, API_LIMITS.PREVIEW_TOP_COUNT);
-        const worst25 = allResults.slice(-API_LIMITS.PREVIEW_WORST_COUNT);
-        results = [...top25, ...worst25];
+      if (allResults.length > totalRequested) {
+        // Ensure we don't request more than available
+        const effectiveTopCount = Math.min(topCount, allResults.length);
+        const effectiveWorstCount = Math.min(worstCount, allResults.length - effectiveTopCount);
+
+        const topPerformers = allResults.slice(0, effectiveTopCount);
+        const worstPerformers = effectiveWorstCount > 0
+          ? allResults.slice(-effectiveWorstCount)
+          : [];
+        results = [...topPerformers, ...worstPerformers];
       } else {
-        // If MAX_PREVIEW_RESULTS or fewer, return all
+        // If requested amount or fewer, return all
         results = allResults;
       }
 
@@ -286,7 +297,8 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
   /**
    * POST /api/projects/:id/lock-context
-   * Locks the project context and saves articles (top 25 + worst 25 if >50 total)
+   * Locks the project context and saves articles with velocity scores
+   * Accepts 3-2000 articles based on user-configured context size
    */
   fastify.post<{
     Params: { id: string };

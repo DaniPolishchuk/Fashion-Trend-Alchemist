@@ -61,6 +61,9 @@ export const PreviewContextQuerySchema = z.object({
   season: z.enum(['spring', 'summer', 'autumn', 'winter']).optional(),
   mdFrom: z.string().optional(), // MM-DD format
   mdTo: z.string().optional(), // MM-DD format
+  // Context configuration
+  topCount: z.coerce.number().int().min(0).optional(), // Number of top performers to include
+  worstCount: z.coerce.number().int().min(0).optional(), // Number of worst performers to include
   // Attribute filters
   filter_productGroup: z.string().optional(),
   filter_productFamily: z.string().optional(),
@@ -84,8 +87,8 @@ export const LockContextInputSchema = z.object({
         velocity_score: z.number(),
       })
     )
-    .min(1) // Require at least 1 article
-    .max(50), // Allow up to 50 articles (top 25 + worst 25)
+    .min(3, 'A minimum of 3 context products is required')
+    .max(2000, 'Maximum 2000 context items allowed'),
   seasonConfig: z
     .object({
       season: z.enum(['spring', 'summer', 'autumn', 'winter']).optional(),

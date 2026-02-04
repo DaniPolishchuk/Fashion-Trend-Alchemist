@@ -1,0 +1,158 @@
+/**
+ * Context Configuration Dialog Styles
+ */
+
+.dialog {
+  min-width: 500px;
+}
+
+.dialogContent {
+  padding: 1rem 1.5rem 1.5rem;
+  min-width: 450px;
+}
+
+.dialogFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  min-height: 50px !important;
+  width: 100%;
+}
+
+.loadingSpinner {
+  margin-right: 0.5rem;
+}
+
+.sectionTitle {
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--sapList_BorderColor);
+}
+
+.section {
+  margin-bottom: 1.5rem;
+}
+
+.section:last-child {
+  margin-bottom: 0.5rem;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.label {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--sapTextColor);
+}
+
+.availableText {
+  font-size: 0.8125rem;
+  color: var(--sapContent_LabelColor);
+}
+
+/* Preset Buttons */
+.presetsContainer {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.presetsLabel {
+  font-size: 0.8125rem;
+  color: var(--sapContent_LabelColor);
+  white-space: nowrap;
+}
+
+.presetButtons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.presetButton {
+  min-width: 50px;
+  height: 32px;
+}
+
+/* Slider Row */
+.sliderRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.slider {
+  flex: 1;
+}
+
+.sliderInput {
+  width: 80px;
+  text-align: center;
+}
+
+.sliderLabels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.25rem;
+  padding: 0 0.25rem;
+}
+
+.sliderLabelMin,
+.sliderLabelMax {
+  font-size: 0.75rem;
+  color: var(--sapContent_LabelColor);
+}
+
+/* Percentage Input */
+.percentageInputWrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.percentageInput {
+  width: 60px;
+  text-align: center;
+}
+
+.percentageSymbol {
+  font-size: 0.875rem;
+  color: var(--sapContent_LabelColor);
+}
+
+/* Distribution Preview */
+.distributionPreview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--sapList_Background);
+  border: 1px solid var(--sapList_BorderColor);
+  border-radius: 0.375rem;
+}
+
+.distributionItem {
+  font-size: 0.875rem;
+}
+
+.distributionLabel {
+  color: var(--sapContent_LabelColor);
+}
+
+.distributionValue {
+  font-weight: 600;
+  color: var(--sapTextColor);
+}
+
+.distributionDivider {
+  color: var(--sapList_BorderColor);
+}

@@ -292,6 +292,11 @@
   padding: 0 2rem;
 }
 
+/* Context Info Banner */
+.contextInfoBanner {
+  margin: 0 2rem 1rem;
+}
+
 .tableWrapper {
   overflow-x: auto;
   max-height: 600px;

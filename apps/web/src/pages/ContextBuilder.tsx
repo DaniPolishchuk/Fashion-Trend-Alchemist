@@ -39,6 +39,7 @@ import '@ui5/webcomponents-fiori/dist/illustrations/NoData.js';
 
 import type { FiltersResponse } from '@fashion/types';
 import { AttributeGenerationDialog } from '../components/AttributeGenerationDialog';
+import { ContextConfigDialog, type ContextConfigValues } from '../components/ContextConfigDialog';
 import { FilterCardItem } from '../components/FilterCardItem';
 import { api } from '../services/api';
 import { useDateRange } from '../hooks/useDateRange';
@@ -59,6 +60,7 @@ import {
   ERROR_MESSAGES,
   MESSAGES,
   TABLE,
+  CONTEXT_CONFIG,
 } from '../constants/contextBuilder';
 import styles from '../styles/pages/ContextBuilder.module.css';
 
@@ -143,6 +145,9 @@ function ContextBuilder() {
   // --- Image Modal State ---
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [imageModalUrl, setImageModalUrl] = useState<string>('');
+
+  // --- Context Config Dialog State ---
+  const [contextConfigDialogOpen, setContextConfigDialogOpen] = useState(false);
 
   // --- Initial Load ---
   useEffect(() => {
@@ -475,8 +480,18 @@ function ContextBuilder() {
     [project, conversationHistory]
   );
 
-  // --- Handler: Lock Context ---
-  const handleLockContext = useCallback(async () => {
+  // --- Handler: Open Context Config Dialog ---
+  const handleOpenContextConfigDialog = useCallback(() => {
+    setContextConfigDialogOpen(true);
+  }, []);
+
+  // --- Handler: Close Context Config Dialog ---
+  const handleCloseContextConfigDialog = useCallback(() => {
+    setContextConfigDialogOpen(false);
+  }, []);
+
+  // --- Handler: Lock Context (with config) ---
+  const handleLockContext = useCallback(async (config: ContextConfigValues) => {
     if (!project?.name || !project?.scopeConfig) return;
 
     try {
@@ -494,6 +509,10 @@ function ContextBuilder() {
       const createdProject = createResult.data;
       console.log('Project created successfully:', createdProject);
 
+      // Calculate top and worst counts from config
+      const topCount = Math.round(config.totalItems * config.topPercentage / 100);
+      const worstCount = config.totalItems - topCount;
+
       const params = new URLSearchParams();
       addDateParams(
         params,
@@ -504,13 +523,17 @@ function ContextBuilder() {
       );
       addFilterParams(params, filters.getAllFilters());
 
+      // Add context configuration parameters
+      params.set('topCount', String(topCount));
+      params.set('worstCount', String(worstCount));
+
       const previewResult = await api.projects.previewContext(createdProject.id, params);
 
       if (previewResult.error) throw new Error(previewResult.error);
       if (!previewResult.data) throw new Error(ERROR_MESSAGES.PREVIEW_CONTEXT_FAILED);
 
       const articles = previewResult.data;
-      console.log('Retrieved articles for locking:', articles.length);
+      console.log('Retrieved articles for locking:', articles.length, `(top: ${topCount}, worst: ${worstCount})`);
 
       const seasonConfig = dateRange.selectedSeason
         ? { season: dateRange.selectedSeason }
@@ -540,6 +563,7 @@ function ContextBuilder() {
         scopeConfig: project.scopeConfig,
       });
 
+      setContextConfigDialogOpen(false);
       navigate(`/project/${createdProject.id}`);
     } catch (err) {
       console.error('Failed to create project and lock context:', err);
@@ -922,12 +946,24 @@ function ContextBuilder() {
 
           <Button
             design="Emphasized"
-            onClick={handleLockContext}
-            disabled={lockingContext || totalProducts === 0 || !ontologySchema}
+            onClick={handleOpenContextConfigDialog}
+            disabled={lockingContext || totalProducts < CONTEXT_CONFIG.MIN_ITEMS || !ontologySchema}
           >
-            {lockingContext ? BUTTONS.CREATING_PROJECT : BUTTONS.CONFIRM_CREATE}
+            {BUTTONS.CONFIRM_CREATE}
           </Button>
         </div>
+      </div>
+
+      {/* Context Info Banner */}
+      <div className={styles.contextInfoBanner}>
+        <MessageStrip
+          design={totalProducts < CONTEXT_CONFIG.MIN_ITEMS ? 'Negative' : 'Information'}
+          hideCloseButton
+        >
+          {totalProducts < CONTEXT_CONFIG.MIN_ITEMS
+            ? MESSAGES.CONTEXT_ERROR_MIN_ITEMS
+            : MESSAGES.CONTEXT_INFO}
+        </MessageStrip>
       </div>
 
       {/* Table Section */}
@@ -1246,6 +1282,15 @@ function ContextBuilder() {
           <img src={imageModalUrl} alt="Product" className={styles.modalImage} />
         </div>
       </Dialog>
+
+      {/* Context Configuration Dialog */}
+      <ContextConfigDialog
+        open={contextConfigDialogOpen}
+        totalAvailable={totalProducts}
+        onClose={handleCloseContextConfigDialog}
+        onConfirm={handleLockContext}
+        isCreating={lockingContext}
+      />
     </Page>
   );
 }

@@ -10,6 +10,33 @@ export const PAGINATION = {
   DEBOUNCE_MS: 300,
 } as const;
 
+/**
+ * Context Configuration
+ * Settings for context item selection in project creation
+ */
+export const CONTEXT_CONFIG = {
+  /** Minimum number of context items required */
+  MIN_ITEMS: 3,
+
+  /** Maximum number of context items allowed (technical limit) */
+  MAX_ITEMS: 2000,
+
+  /** Default number of context items when not specified */
+  DEFAULT_ITEMS: 50,
+
+  /** Default percentage of top performers (0-100) */
+  DEFAULT_TOP_PERCENTAGE: 80,
+
+  /** Optimal minimum for high quality predictions */
+  OPTIMAL_MIN: 100,
+
+  /** Optimal maximum for high quality predictions */
+  OPTIMAL_MAX: 2000,
+
+  /** Quick select presets */
+  PRESETS: [50, 100, 200, 500] as const,
+} as const;
+
 export const SEASONS = {
   SPRING: 'spring',
   SUMMER: 'summer',
@@ -62,6 +89,8 @@ export const BUTTONS = {
   GENERATE_ATTRIBUTES: 'Generate Attributes',
   CONFIRM_CREATE: 'Confirm & create Project',
   CREATING_PROJECT: 'Creating Project...',
+  CREATE_PROJECT: 'Create Project',
+  ALL: 'All',
   OK: 'OK',
 } as const;
 
@@ -113,6 +142,10 @@ export const ERROR_MESSAGES = {
 export const MESSAGES = {
   GENERATE_ATTRIBUTES_BEFORE_CONFIRM:
     'Please generate attributes before confirming and saving the project',
+  CONTEXT_INFO:
+    'Optimal range for high quality predictions is between 100 and 2000 items. Higher numbers will increase loading times during enrichment.',
+  CONTEXT_ERROR_MIN_ITEMS:
+    'A minimum of 3 context products is required to create a project.',
 } as const;
 
 export const TABLE = {
