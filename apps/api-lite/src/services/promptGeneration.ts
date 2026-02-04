@@ -1,209 +1,71 @@
 /**
  * Prompt Generation Service
  * Generates optimized image prompts for Z-Image Turbo using LLM
+ *
+ * This service uses a structured component-based approach where the LLM generates
+ * separate components that are assembled with a shared product description to
+ * ensure visual consistency across front, back, and model views.
  */
 
 import OpenAI from 'openai';
 import { visionLlmConfig } from '@fashion/config';
+import {
+  type PhotographyCategory,
+  type ModelProfile,
+  getPhotographyCategory,
+  getModelProfile,
+  buildSystemPrompt,
+  QUALITY_SUFFIX,
+} from './promptConfig/index.js';
+
+// Re-export types for consumers
+export type { PhotographyCategory, ModelProfile };
 
 // ==================== TYPES ====================
 
-export interface CleanedProductData {
-  productType: string;
-  productCategory: ProductCategory;
-  customerSegment: string | null;
-  attributes: Record<string, string>;
+/**
+ * Structured components returned by the LLM
+ */
+export interface PromptComponents {
+  productDescription: string;
+  frontPrefix: string;
+  backPrefix: string;
+  modelPrefix: string;
+  frontDetails: string;
+  backDetails: string;
+  modelDetails: string;
 }
 
+/**
+ * Final assembled prompts for image generation
+ */
 export interface GeneratedPrompts {
   front: string;
   back: string;
   model: string;
 }
 
-export type ProductCategory =
-  | 'Upper Body'
-  | 'Lower Body'
-  | 'Full Body'
-  | 'Footwear'
-  | 'Accessory'
-  | 'Unknown';
+/**
+ * Preprocessed product data for prompt generation
+ */
+export interface ProductData {
+  productGroup: string | null;
+  productType: string;
+  customerSegment: string | null;
+  photographyCategory: PhotographyCategory;
+  modelProfile: ModelProfile;
+  attributes: Record<string, string>;
+}
+
+/**
+ * Result type for prompt generation with source info
+ */
+export interface PromptGenerationResult {
+  prompts: GeneratedPrompts;
+  source: 'llm' | 'fallback';
+}
 
 export type ImageView = 'front' | 'back' | 'model';
-
-// ==================== PRODUCT CATEGORY MAPPING ====================
-
-const PRODUCT_CATEGORY_MAP: Record<string, ProductCategory> = {
-  // Upper Body
-  hoodie: 'Upper Body',
-  shirt: 'Upper Body',
-  't-shirt': 'Upper Body',
-  tshirt: 'Upper Body',
-  coat: 'Upper Body',
-  jacket: 'Upper Body',
-  blazer: 'Upper Body',
-  sweater: 'Upper Body',
-  cardigan: 'Upper Body',
-  blouse: 'Upper Body',
-  top: 'Upper Body',
-  vest: 'Upper Body',
-  polo: 'Upper Body',
-  sweatshirt: 'Upper Body',
-  pullover: 'Upper Body',
-  tank: 'Upper Body',
-  'tank-top': 'Upper Body',
-  tunic: 'Upper Body',
-
-  // Lower Body
-  trousers: 'Lower Body',
-  pants: 'Lower Body',
-  jeans: 'Lower Body',
-  skirt: 'Lower Body',
-  shorts: 'Lower Body',
-  leggings: 'Lower Body',
-  chinos: 'Lower Body',
-  culottes: 'Lower Body',
-
-  // Full Body
-  dress: 'Full Body',
-  jumpsuit: 'Full Body',
-  romper: 'Full Body',
-  overalls: 'Full Body',
-  bodysuit: 'Full Body',
-  gown: 'Full Body',
-  playsuit: 'Full Body',
-
-  // Footwear
-  shoes: 'Footwear',
-  sneakers: 'Footwear',
-  boots: 'Footwear',
-  sandals: 'Footwear',
-  heels: 'Footwear',
-  loafers: 'Footwear',
-  flats: 'Footwear',
-  pumps: 'Footwear',
-  mules: 'Footwear',
-  slippers: 'Footwear',
-
-  // Accessories
-  bag: 'Accessory',
-  handbag: 'Accessory',
-  hat: 'Accessory',
-  cap: 'Accessory',
-  scarf: 'Accessory',
-  belt: 'Accessory',
-  gloves: 'Accessory',
-  tie: 'Accessory',
-  watch: 'Accessory',
-  jewelry: 'Accessory',
-  sunglasses: 'Accessory',
-};
-
-// ==================== LLM SYSTEM PROMPT ====================
-
-const SYSTEM_PROMPT = `You are a fashion e-commerce image prompt specialist for Z-Image Turbo text-to-image AI.
-
-## YOUR TASK
-Generate exactly 3 image prompts (front, back, model) for a fashion product. Each prompt must follow the specific rules below.
-
-## CRITICAL RULES
-
-### RULE 1: PROMPT STRUCTURE
-The first words must immediately establish the photography type and product. Never start with "Please generate" or similar phrasing.
-
-### RULE 2: VIEW-SPECIFIC FORMATS
-
-**FRONT VIEW:**
-- For Upper Body garments: Use "Ghost mannequin fashion photography, front view of a [Color] [Material] [ProductType]"
-- For Lower Body (pants/trousers/skirts): Use "Professional flat lay photography, overhead view of [Color] [Material] [ProductType]"
-- For Full Body (dresses/jumpsuits): Use "Ghost mannequin fashion photography, front view of a [Color] [Material] [ProductType]"
-- For Footwear: Use "Professional product photography, front three-quarter view of [Color] [Material] [ProductType]"
-- Include: All front-facing details (buttons, pockets, collar, neckline, etc.)
-- End with: "strictly clothing only, no human skin" (for ghost mannequin) or "Neatly arranged, strictly clothing only" (for flat lay)
-
-**BACK VIEW:**
-- For Upper Body garments: Use "Ghost mannequin fashion photography, back view of a [Color] [Material] [ProductType]"
-- For Lower Body: Use "Professional flat lay photography, overhead back view of [Color] [Material] [ProductType]. The pants are laid flat face down"
-- For Full Body: Use "Ghost mannequin fashion photography, back view of a [Color] [Material] [ProductType]"
-- For Footwear: Use "Professional product photography, back view of [Color] [Material] [ProductType]"
-- Include: Back panel, rear seams, back pockets (if applicable), hem
-- MUST EXCLUDE: Front-only features (buttons, lapels, front pockets, fly, collar details, neckline)
-- Add: "Strictly the back side, no front [relevant items] visible"
-
-**MODEL VIEW:**
-- Start with: "Fashion catalog photography, full body shot of a professional adult [male/female] model"
-- Determine gender from customer_segment or style attributes:
-  - Contains "Men" / "Male" / "Boys" / "Menswear" → male model
-  - Contains "Women" / "Female" / "Girls" / "Ladies" / "Womenswear" → female model
-  - Otherwise → make reasonable assumption based on product type
-- CRITICAL - Add complementary garments based on product category:
-  - Upper Body (hoodie, shirt, coat, jacket, sweater): Add "styled with neutral black trousers and dress shoes" (male) OR "styled with dark tailored trousers and heels" (female)
-  - Lower Body (pants, trousers, skirt, shorts): Add "styled with a white dress shirt" (male) OR "styled with a white silk blouse" (female)
-  - Full Body (dress, jumpsuit, romper): No additional clothing needed, but add appropriate footwear
-  - Footwear: Add "styled with neutral dark jeans and a simple white top"
-- Pose: "standing in a confident [casual/office/neutral] pose"
-
-### RULE 3: MANDATORY SUFFIX
-EVERY prompt must end with exactly:
-"plain white studio background, shadowless, 4K quality, sharp focus, no text, no watermarks, no logos, high-end e-commerce photography."
-
-### RULE 4: ATTRIBUTE TRANSLATION
-- Translate attribute keys to natural language (e.g., "pocket_type" → "pocket")
-- Group related attributes into flowing sentences
-- Use fashion terminology appropriately
-- Prioritize visually important attributes (color, material, style, fit)
-
-## OUTPUT FORMAT
-Return ONLY valid JSON with this exact structure (no markdown code blocks, no explanation):
-{
-  "front": "...",
-  "back": "...",
-  "model": "..."
-}
-
-## EXAMPLES
-
-### Example 1: Hoodie (Upper Body, Men)
-Input:
-- Product Type: Hoodie
-- Category: Upper Body
-- Customer Segment: Men Project
-- Attributes: specific_color=Black, material=Cotton, fit=Regular fit, style=Classic Pullover, neckline=Round Neck, pocket_type=Kangaroo Pocket, hem_style=Ribbed Hem
-
-Output:
-{
-  "front": "Ghost mannequin fashion photography, front view of a Black Cotton Hoodie. Classic pullover style with round neckline, featuring a kangaroo pocket. Regular fit with ribbed hem. Displayed on an invisible body to show natural drape and volume, strictly clothing only, no human skin. plain white studio background, shadowless, 4K quality, sharp focus, no text, no watermarks, no logos, high-end e-commerce photography.",
-  "back": "Ghost mannequin fashion photography, back view of a Black Cotton Hoodie. Displayed on an invisible body, showing the solid rear fabric panel, back seams, and ribbed hem. Strictly the back side, no front pocket visible, smooth cotton texture. plain white studio background, shadowless, 4K quality, sharp focus, no text, no watermarks, no logos, high-end e-commerce photography.",
-  "model": "Fashion catalog photography, full body shot of a professional adult male model. He is styled with neutral black trousers and dress shoes, wearing a Black Cotton Hoodie which features a classic pullover style with round neckline and kangaroo pocket. Standing in a confident casual pose. plain white studio background, shadowless, 4K quality, sharp focus, no text, no watermarks, no logos, high-end e-commerce photography."
-}
-
-### Example 2: Trousers (Lower Body, Women)
-Input:
-- Product Type: Trousers
-- Category: Lower Body
-- Customer Segment: Women Casual
-- Attributes: specific_color=Charcoal Grey, material=Wool Blend, fit=High-waisted, style=Wide-leg, details=Front pleats, back_pockets=Rear welt pockets
-
-Output:
-{
-  "front": "Professional flat lay photography, overhead view of Charcoal Grey Wool Blend Trousers. The pants are laid flat on a white surface, smoothed out to show the High-waisted cut and Wide-leg silhouette. Front pleats and waistband details are clearly visible. Neatly arranged, strictly clothing only. plain white studio background, shadowless, 4K quality, sharp focus, no text, no watermarks, no logos, high-end e-commerce photography.",
-  "back": "Professional flat lay photography, overhead back view of Charcoal Grey Wool Blend Trousers. The pants are laid flat face down, showing the rear welt pockets and the clean fabric drape over the seat. Wide-leg silhouette visible. Strictly the back side, no front fly visible, no buttons visible. plain white studio background, shadowless, 4K quality, sharp focus, no text, no watermarks, no logos, high-end e-commerce photography.",
-  "model": "Fashion catalog photography, full body shot of a professional adult female model. She is styled with a white silk blouse, wearing Charcoal Grey Wool Blend Trousers. The trousers have a High-waisted fit and wide leg. She is standing in a confident office pose. plain white studio background, shadowless, 4K quality, sharp focus, no text, no watermarks, no logos, high-end e-commerce photography."
-}
-
-### Example 3: Coat (Upper Body, Men)
-Input:
-- Product Type: Coat
-- Category: Upper Body
-- Customer Segment: Menswear
-- Attributes: specific_color=Dark Blue, material=Wool, style=Double-breasted, collar=Notched Collar, sleeve_length=Long sleeves, length=Knee-length, fit=Regular fit
-
-Output:
-{
-  "front": "Ghost mannequin fashion photography, front view of a Dark Blue Wool Coat. The garment features Double-breasted buttons, a Notched Collar, and Long sleeves. It has a Knee-length cut and Regular fit. Displayed on an invisible body to show natural drape and volume, strictly clothing only, no human skin. plain white studio background, shadowless, 4K quality, sharp focus, no text, no watermarks, no logos, high-end e-commerce photography.",
-  "back": "Ghost mannequin fashion photography, back view of a Dark Blue Wool Coat. Displayed on an invisible body, showing the solid rear fabric panel, back seams, and Knee-length hem. Strictly the back side, no buttons visible, no lapels visible, smooth wool texture. plain white studio background, shadowless, 4K quality, sharp focus, no text, no watermarks, no logos, high-end e-commerce photography.",
-  "model": "Fashion catalog photography, full body shot of a professional adult male model. The model is styled with neutral black trousers and dress shoes, wearing a Dark Blue Wool Coat which features Double-breasted buttons and a Notched Collar. Standing in a confident neutral pose, hands by sides, looking at camera. plain white studio background, shadowless, 4K quality, sharp focus, no text, no watermarks, no logos, high-end e-commerce photography."
-}`;
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -219,25 +81,28 @@ function formatProductType(key: string): string {
 }
 
 /**
- * Get product category from product type
- * Falls back to 'Unknown' if not in map
+ * Extract product group from attributes
  */
-function getProductCategory(productType: string): ProductCategory {
-  const normalizedType = productType.toLowerCase().replace(/\s+/g, '-');
+function extractProductGroup(
+  lockedAttributes: Record<string, string>,
+  predictedAttributes: Record<string, string>,
+  contextAttributes?: Record<string, string>
+): string | null {
+  const allAttributes = {
+    ...contextAttributes,
+    ...lockedAttributes,
+    ...predictedAttributes,
+  };
 
-  // Direct lookup
-  if (PRODUCT_CATEGORY_MAP[normalizedType]) {
-    return PRODUCT_CATEGORY_MAP[normalizedType];
-  }
-
-  // Partial match (e.g., "slim fit jeans" should match "jeans")
-  for (const [key, category] of Object.entries(PRODUCT_CATEGORY_MAP)) {
-    if (normalizedType.includes(key) || key.includes(normalizedType)) {
-      return category;
+  // Check for product group in attributes
+  const groupKeys = ['article_product_group', 'product_group'];
+  for (const key of groupKeys) {
+    if (allAttributes[key]) {
+      return allAttributes[key];
     }
   }
 
-  return 'Unknown';
+  return null;
 }
 
 /**
@@ -248,7 +113,7 @@ function extractProductType(
   lockedAttributes: Record<string, string>,
   predictedAttributes: Record<string, string>,
   contextAttributes?: Record<string, string>
-): { productType: string; confidence: 'high' | 'medium' | 'low'; allFound: string[] } {
+): string {
   const allAttributes = {
     ...contextAttributes,
     ...lockedAttributes,
@@ -261,11 +126,7 @@ function extractProductType(
   // Method 1: Check article_product_type (highest priority - explicit)
   const articleProductType = allAttributes['article_product_type'];
   if (articleProductType) {
-    return {
-      productType: articleProductType,
-      confidence: 'high',
-      allFound: [articleProductType],
-    };
+    return articleProductType;
   }
 
   // Method 2: Extract from ontology keys and count frequency
@@ -274,7 +135,6 @@ function extractProductType(
 
   for (const key of ontologyKeys) {
     // Pattern: ontology_{productType}_{attribute}
-    // productType can contain hyphens but not underscores
     const match = key.match(/^ontology_([^_]+(?:-[^_]+)*)_/);
     if (match) {
       const pt = match[1];
@@ -285,38 +145,25 @@ function extractProductType(
   const foundTypes = Object.keys(productTypeCounts);
 
   if (foundTypes.length === 0) {
-    // No ontology keys found
     console.warn('[PromptGen] Could not determine product type, using fallback');
-    return { productType: 'Fashion Item', confidence: 'low', allFound: [] };
+    return 'Fashion Item';
   }
 
   if (foundTypes.length === 1) {
-    // Single product type - ideal case
-    const pt = foundTypes[0];
-    return {
-      productType: formatProductType(pt),
-      confidence: 'high',
-      allFound: foundTypes.map(formatProductType),
-    };
+    return formatProductType(foundTypes[0]);
   }
 
   // Multiple product types found - take the most frequent
   const sorted = foundTypes.sort((a, b) => productTypeCounts[b] - productTypeCounts[a]);
-  const winner = sorted[0];
-
   console.warn(
-    `[PromptGen] Multiple product types found: ${foundTypes.join(', ')}. Using most frequent: ${winner}`
+    `[PromptGen] Multiple product types found: ${foundTypes.join(', ')}. Using most frequent: ${sorted[0]}`
   );
 
-  return {
-    productType: formatProductType(winner),
-    confidence: 'medium',
-    allFound: foundTypes.map(formatProductType),
-  };
+  return formatProductType(sorted[0]);
 }
 
 /**
- * Extract customer segment for model gender inference
+ * Extract customer segment for model profile
  */
 function extractCustomerSegment(
   lockedAttributes: Record<string, string>,
@@ -329,12 +176,9 @@ function extractCustomerSegment(
     ...predictedAttributes,
   };
 
-  // Check various possible keys
   const segmentKeys = [
     'article_customer_segment',
     'customer_segment',
-    'article_style_concept',
-    'style_concept',
   ];
 
   for (const key of segmentKeys) {
@@ -366,48 +210,30 @@ function cleanAttributeKey(key: string): string {
   return key;
 }
 
-// ==================== MAIN FUNCTIONS ====================
-
 /**
- * Preprocess attributes into a clean structure for LLM prompt generation
+ * Clean all attributes and remove internal/metadata keys
  */
-export function preprocessAttributes(
+function cleanAttributes(
   lockedAttributes: Record<string, string>,
   predictedAttributes: Record<string, string>,
   contextAttributes?: Record<string, string>
-): CleanedProductData {
-  // Extract product type
-  const { productType } = extractProductType(lockedAttributes, predictedAttributes, contextAttributes);
-
-  // Get product category
-  const productCategory = getProductCategory(productType);
-
-  // Extract customer segment
-  const customerSegment = extractCustomerSegment(
-    lockedAttributes,
-    predictedAttributes,
-    contextAttributes
-  );
-
-  // Merge all attributes and clean keys
+): Record<string, string> {
   const allAttributes = {
     ...contextAttributes,
     ...lockedAttributes,
     ...predictedAttributes,
   };
 
-  // Clean attributes: remove prefixes and internal keys
   const cleanedAttributes: Record<string, string> = {};
 
   for (const [key, value] of Object.entries(allAttributes)) {
     // Skip internal keys
     if (key.startsWith('_')) continue;
 
-    // Skip product type (already extracted)
+    // Skip product type/group/segment (handled separately)
     if (key === 'article_product_type') continue;
-
-    // Skip customer segment (already extracted)
-    if (key === 'article_customer_segment' || key === 'article_style_concept') continue;
+    if (key === 'article_product_group') continue;
+    if (key === 'article_customer_segment') continue;
 
     // Clean the key and add to attributes
     const cleanKey = cleanAttributeKey(key);
@@ -416,49 +242,90 @@ export function preprocessAttributes(
     }
   }
 
+  return cleanedAttributes;
+}
+
+// ==================== MAIN FUNCTIONS ====================
+
+/**
+ * Preprocess attributes into a structured ProductData object
+ */
+export function preprocessProductData(
+  lockedAttributes: Record<string, string>,
+  predictedAttributes: Record<string, string>,
+  contextAttributes?: Record<string, string>
+): ProductData {
+  const productGroup = extractProductGroup(lockedAttributes, predictedAttributes, contextAttributes);
+  const productType = extractProductType(lockedAttributes, predictedAttributes, contextAttributes);
+  const customerSegment = extractCustomerSegment(lockedAttributes, predictedAttributes, contextAttributes);
+
+  const photographyCategory = getPhotographyCategory(productGroup, productType);
+  const modelProfile = getModelProfile(customerSegment);
+
+  const attributes = cleanAttributes(lockedAttributes, predictedAttributes, contextAttributes);
+
   return {
+    productGroup,
     productType,
-    productCategory,
     customerSegment,
-    attributes: cleanedAttributes,
+    photographyCategory,
+    modelProfile,
+    attributes,
   };
 }
 
 /**
- * Generate image prompts using LLM
+ * Assemble final prompts from components
  */
-export async function generateImagePrompts(
-  productData: CleanedProductData
-): Promise<GeneratedPrompts> {
-  // Initialize OpenAI client (using same config as enrichment)
+export function assemblePrompts(components: PromptComponents): GeneratedPrompts {
+  return {
+    front: `${components.frontPrefix} ${components.productDescription}. ${components.frontDetails}. ${QUALITY_SUFFIX}`,
+    back: `${components.backPrefix} ${components.productDescription}. ${components.backDetails}. ${QUALITY_SUFFIX}`,
+    model: `${components.modelPrefix} ${components.productDescription}. ${components.modelDetails}. ${QUALITY_SUFFIX}`,
+  };
+}
+
+/**
+ * Generate prompt components using LLM
+ */
+async function generatePromptComponents(productData: ProductData): Promise<PromptComponents> {
   const openai = new OpenAI({
     apiKey: visionLlmConfig.apiKey,
     baseURL: visionLlmConfig.proxyUrl,
   });
+
+  // Build system prompt with category-specific rules
+  const systemPrompt = buildSystemPrompt(
+    productData.photographyCategory,
+    productData.modelProfile.descriptor
+  );
 
   // Build user prompt with product data
   const attributesList = Object.entries(productData.attributes)
     .map(([key, value]) => `- ${key}: ${value}`)
     .join('\n');
 
-  const userPrompt = `Generate image prompts for this product:
+  const userPrompt = `Generate prompt components for this product:
 
+Product Group: ${productData.productGroup || 'Unknown'}
 Product Type: ${productData.productType}
-Product Category: ${productData.productCategory}
-${productData.customerSegment ? `Customer Segment: ${productData.customerSegment}` : ''}
+Customer Segment: ${productData.customerSegment || 'Unknown'}
+Photography Category: ${productData.photographyCategory}
 
-Attributes:
+All Attributes (include ALL in productDescription):
 ${attributesList || '- No specific attributes provided'}
 
-Return ONLY the JSON object with front, back, and model prompts.`;
+Return ONLY the JSON object with the structured components.`;
 
   console.log('[PromptGen] Calling LLM for prompt generation...');
-  console.log('[PromptGen] Product:', productData.productType, '| Category:', productData.productCategory);
+  console.log('[PromptGen] Product:', productData.productType);
+  console.log('[PromptGen] Category:', productData.photographyCategory);
+  console.log('[PromptGen] Model Profile:', productData.modelProfile.descriptor);
 
   const completion = await openai.chat.completions.create({
     model: visionLlmConfig.model,
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
     ],
     temperature: 0.7,
@@ -467,7 +334,6 @@ Return ONLY the JSON object with front, back, and model prompts.`;
   const responseContent = completion.choices[0]?.message?.content || '';
 
   // Parse JSON from response
-  // Try to extract JSON if wrapped in markdown code blocks
   let jsonString = responseContent.trim();
 
   // Remove markdown code blocks if present
@@ -476,90 +342,123 @@ Return ONLY the JSON object with front, back, and model prompts.`;
     jsonString = jsonMatch[1].trim();
   }
 
-  const prompts = JSON.parse(jsonString) as GeneratedPrompts;
+  const components = JSON.parse(jsonString) as PromptComponents;
 
   // Validate structure
-  if (!prompts.front || !prompts.back || !prompts.model) {
-    throw new Error('Invalid prompt structure: missing front, back, or model');
+  const requiredFields: (keyof PromptComponents)[] = [
+    'productDescription',
+    'frontPrefix',
+    'backPrefix',
+    'modelPrefix',
+    'frontDetails',
+    'backDetails',
+    'modelDetails',
+  ];
+
+  for (const field of requiredFields) {
+    if (!components[field]) {
+      throw new Error(`Invalid component structure: missing ${field}`);
+    }
   }
 
-  console.log('[PromptGen] LLM prompts generated successfully');
+  console.log('[PromptGen] LLM components generated successfully');
+  const truncatedDesc = components.productDescription.length > 100
+    ? components.productDescription.substring(0, 100) + '...'
+    : components.productDescription;
+  console.log('[PromptGen] Product description:', truncatedDesc);
 
-  return prompts;
+  return components;
 }
 
 /**
- * Build fallback prompts when LLM fails
+ * Build fallback prompt components when LLM fails
  */
-function buildFallbackPrompts(productData: CleanedProductData): GeneratedPrompts {
-  const { productType, productCategory, customerSegment, attributes } = productData;
+function buildFallbackComponents(productData: ProductData): PromptComponents {
+  const { productType, photographyCategory, modelProfile, attributes } = productData;
 
   // Extract key visual attributes
-  const color =
-    attributes.specific_color ||
-    attributes.color_family ||
-    attributes.color ||
-    '';
-  const material =
-    attributes.material ||
-    attributes.fabric_type_base ||
-    attributes.fabric ||
-    '';
+  const color = attributes.specific_color || attributes.color_family || attributes.color || '';
+  const material = attributes.material || attributes.fabric_type_base || attributes.fabric || '';
+  const fit = attributes.fit || '';
+  const style = attributes.style || '';
 
-  const productDesc = [color, material, productType].filter(Boolean).join(' ');
+  // Build product description from attributes
+  const descParts = [color, material, fit, style, productType].filter(Boolean);
+  const productDescription = descParts.join(' ');
 
-  const suffix =
-    'plain white studio background, shadowless, 4K quality, sharp focus, no text, no watermarks, no logos, high-end e-commerce photography.';
+  // Build remaining attribute details
+  const otherAttrs = Object.entries(attributes)
+    .filter(([key]) => !['specific_color', 'color_family', 'color', 'material', 'fabric_type_base', 'fabric', 'fit', 'style'].includes(key))
+    .map(([key, value]) => `${key.replace(/_/g, ' ')}: ${value}`)
+    .join(', ');
 
-  // Determine model gender
-  const isMale =
-    customerSegment?.toLowerCase().includes('men') ||
-    customerSegment?.toLowerCase().includes('male') ||
-    customerSegment?.toLowerCase().includes('boy');
-  const gender = isMale ? 'male' : 'female';
-  const pronoun = isMale ? 'He' : 'She';
+  const productDescWithDetails = otherAttrs
+    ? `${productDescription} with ${otherAttrs}`
+    : productDescription;
 
-  // Build view-specific prompts based on category
-  let front: string;
-  let back: string;
-  let model: string;
+  // Category-specific prefixes and details
+  switch (photographyCategory) {
+    case 'footwear':
+      return {
+        productDescription: productDescWithDetails,
+        frontPrefix: 'Professional footwear photography, front three-quarter view of',
+        backPrefix: 'Professional footwear photography, back view of',
+        modelPrefix: `Fashion photography, cropped shot from mid-thigh down of ${modelProfile.descriptor} wearing`,
+        frontDetails: 'Displayed as a pair with one shoe slightly forward',
+        backDetails: 'Pair shown from behind highlighting heel and sole profile',
+        modelDetails: 'Styled with dark jeans, standing in a natural pose',
+      };
 
-  switch (productCategory) {
-    case 'Lower Body':
-      front = `Professional flat lay photography, overhead view of ${productDesc}. The pants are laid flat on a white surface, showing the front details. Neatly arranged, strictly clothing only. ${suffix}`;
-      back = `Professional flat lay photography, overhead back view of ${productDesc}. The pants are laid flat face down, showing the back panel. Strictly the back side. ${suffix}`;
-      model = `Fashion catalog photography, full body shot of a professional adult ${gender} model. ${pronoun} is styled with a white ${isMale ? 'dress shirt' : 'silk blouse'}, wearing ${productDesc}. Standing in a confident pose. ${suffix}`;
-      break;
+    case 'accessories':
+      return {
+        productDescription: productDescWithDetails,
+        frontPrefix: 'Professional product photography, front three-quarter view of',
+        backPrefix: 'Professional product photography, back view of',
+        modelPrefix: `Fashion photography, shot of ${modelProfile.descriptor} styled with`,
+        frontDetails: 'Showing main design details and construction',
+        backDetails: 'Showing rear panel and construction details',
+        modelDetails: 'Accessory as focal point, clean minimal styling',
+      };
 
-    case 'Full Body':
-      front = `Ghost mannequin fashion photography, front view of a ${productDesc}. Displayed on an invisible body to show natural drape and silhouette, strictly clothing only, no human skin. ${suffix}`;
-      back = `Ghost mannequin fashion photography, back view of a ${productDesc}. Displayed on an invisible body, showing the back panel and details. Strictly the back side. ${suffix}`;
-      model = `Fashion catalog photography, full body shot of a professional adult ${gender} model wearing ${productDesc}. Standing in an elegant pose. ${suffix}`;
-      break;
+    case 'non_wearable':
+      return {
+        productDescription: productDescWithDetails,
+        frontPrefix: 'Professional product photography, front view of',
+        backPrefix: 'Professional product photography, alternate angle of',
+        modelPrefix: 'Lifestyle photography featuring',
+        frontDetails: 'Clean product shot showing main features',
+        backDetails: 'Showing back panel and secondary details',
+        modelDetails: 'Product styled in appropriate context, warm natural lighting',
+      };
 
-    case 'Footwear':
-      front = `Professional product photography, front three-quarter view of ${productDesc}. Clean presentation showing design details. ${suffix}`;
-      back = `Professional product photography, back view of ${productDesc}. Showing heel and back details. ${suffix}`;
-      model = `Fashion catalog photography, cropped shot focusing on feet of a model wearing ${productDesc}, styled with neutral dark jeans. ${suffix}`;
-      break;
+    case 'wearable':
+    default: {
+      // Check if it's pants/trousers for flat lay
+      const isLowerBody = productType.toLowerCase().match(/trouser|pant|jean|short|skirt|legging/);
 
-    case 'Upper Body':
-    default:
-      front = `Ghost mannequin fashion photography, front view of a ${productDesc}. Displayed on an invisible body to show natural drape and volume, strictly clothing only, no human skin. ${suffix}`;
-      back = `Ghost mannequin fashion photography, back view of a ${productDesc}. Displayed on an invisible body, showing the rear panel. Strictly the back side, no front details visible. ${suffix}`;
-      model = `Fashion catalog photography, full body shot of a professional adult ${gender} model. ${pronoun} is styled with neutral black trousers, wearing ${productDesc}. Standing in a confident pose. ${suffix}`;
-      break;
+      if (isLowerBody) {
+        return {
+          productDescription: productDescWithDetails,
+          frontPrefix: 'Professional flat lay photography, overhead view of',
+          backPrefix: 'Professional flat lay photography, overhead back view of',
+          modelPrefix: `Fashion photography, full body shot of ${modelProfile.descriptor} wearing`,
+          frontDetails: 'Laid flat on white surface, neatly pressed, strictly product only',
+          backDetails: 'Laid flat face down on white surface, strictly the back side',
+          modelDetails: 'Styled with a neutral top, standing in a natural pose',
+        };
+      }
+
+      return {
+        productDescription: productDescWithDetails,
+        frontPrefix: 'Ghost mannequin fashion photography, front view of',
+        backPrefix: 'Ghost mannequin fashion photography, back view of',
+        modelPrefix: `Fashion photography, full body shot of ${modelProfile.descriptor} wearing`,
+        frontDetails: 'Displayed on invisible form, strictly product only, no human skin visible',
+        backDetails: 'Displayed on invisible form showing rear panel, strictly the back side',
+        modelDetails: 'Styled with neutral complementary garments, standing in a natural pose',
+      };
+    }
   }
-
-  return { front, back, model };
-}
-
-/**
- * Result type for prompt generation with source info
- */
-export interface PromptGenerationResult {
-  prompts: GeneratedPrompts;
-  source: 'llm' | 'fallback';
 }
 
 /**
@@ -571,17 +470,19 @@ export async function generateImagePromptsWithFallback(
   predictedAttributes: Record<string, string>,
   contextAttributes?: Record<string, string>
 ): Promise<PromptGenerationResult> {
-  // Preprocess attributes
-  const productData = preprocessAttributes(
+  // Preprocess product data
+  const productData = preprocessProductData(
     lockedAttributes,
     predictedAttributes,
     contextAttributes
   );
 
   console.log('[PromptGen] Preprocessed product data:', {
+    productGroup: productData.productGroup,
     productType: productData.productType,
-    productCategory: productData.productCategory,
     customerSegment: productData.customerSegment,
+    photographyCategory: productData.photographyCategory,
+    modelDescriptor: productData.modelProfile.descriptor,
     attributeCount: Object.keys(productData.attributes).length,
   });
 
@@ -590,20 +491,51 @@ export async function generateImagePromptsWithFallback(
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const prompts = await generateImagePrompts(productData);
+      const components = await generatePromptComponents(productData);
+      const prompts = assemblePrompts(components);
       return { prompts, source: 'llm' };
     } catch (error) {
       console.error(`[PromptGen] LLM attempt ${attempt}/${MAX_RETRIES} failed:`, error);
 
       if (attempt < MAX_RETRIES) {
         console.log('[PromptGen] Retrying...');
-        // Small delay before retry
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
   }
 
-  // Fallback to static prompts
+  // Fallback to template-based prompts
   console.warn('[PromptGen] LLM failed after retries, using fallback prompts');
-  return { prompts: buildFallbackPrompts(productData), source: 'fallback' };
+  const fallbackComponents = buildFallbackComponents(productData);
+  const prompts = assemblePrompts(fallbackComponents);
+  return { prompts, source: 'fallback' };
+}
+
+// ==================== LEGACY EXPORTS (for backward compatibility) ====================
+
+/**
+ * @deprecated Use preprocessProductData instead
+ */
+export function preprocessAttributes(
+  lockedAttributes: Record<string, string>,
+  predictedAttributes: Record<string, string>,
+  contextAttributes?: Record<string, string>
+) {
+  const productData = preprocessProductData(lockedAttributes, predictedAttributes, contextAttributes);
+
+  // Map to legacy format
+  type LegacyCategory = 'Upper Body' | 'Lower Body' | 'Full Body' | 'Footwear' | 'Accessory' | 'Unknown';
+  const categoryMap: Record<PhotographyCategory, LegacyCategory> = {
+    wearable: 'Upper Body',
+    footwear: 'Footwear',
+    accessories: 'Accessory',
+    non_wearable: 'Unknown',
+  };
+
+  return {
+    productType: productData.productType,
+    productCategory: categoryMap[productData.photographyCategory],
+    customerSegment: productData.customerSegment,
+    attributes: productData.attributes,
+  };
 }
