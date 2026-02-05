@@ -127,8 +127,12 @@ export default async function projectRoutes(fastify: FastifyInstance) {
       const queryParams = PreviewContextQuerySchema.parse(request.query);
 
       // Extract context configuration from query params with defaults
-      const topCount = queryParams.topCount ?? Math.round(CONTEXT_CONFIG.DEFAULT_ITEMS * CONTEXT_CONFIG.DEFAULT_TOP_PERCENTAGE / 100);
-      const worstCount = queryParams.worstCount ?? Math.round(CONTEXT_CONFIG.DEFAULT_ITEMS * CONTEXT_CONFIG.DEFAULT_WORST_PERCENTAGE / 100);
+      const topCount =
+        queryParams.topCount ??
+        Math.round((CONTEXT_CONFIG.DEFAULT_ITEMS * CONTEXT_CONFIG.DEFAULT_TOP_PERCENTAGE) / 100);
+      const worstCount =
+        queryParams.worstCount ??
+        Math.round((CONTEXT_CONFIG.DEFAULT_ITEMS * CONTEXT_CONFIG.DEFAULT_WORST_PERCENTAGE) / 100);
       const totalRequested = topCount + worstCount;
 
       // Get project to extract scope configuration
@@ -276,9 +280,8 @@ export default async function projectRoutes(fastify: FastifyInstance) {
         const effectiveWorstCount = Math.min(worstCount, allResults.length - effectiveTopCount);
 
         const topPerformers = allResults.slice(0, effectiveTopCount);
-        const worstPerformers = effectiveWorstCount > 0
-          ? allResults.slice(-effectiveWorstCount)
-          : [];
+        const worstPerformers =
+          effectiveWorstCount > 0 ? allResults.slice(-effectiveWorstCount) : [];
         results = [...topPerformers, ...worstPerformers];
       } else {
         // If requested amount or fewer, return all
@@ -925,6 +928,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
   /**
    * GET /api/projects/:projectId/generated-designs/:designId/image-status
    * Get the image generation status for a specific design (supports multi-image)
+   * Also includes sales text generation status
    */
   fastify.get<{ Params: { projectId: string; designId: string } }>(
     '/projects/:projectId/generated-designs/:designId/image-status',
@@ -942,6 +946,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
         }
 
         // Return both new multi-image format and legacy format for backward compatibility
+        // Also include sales text generation status
         return reply.status(200).send({
           status: design.imageGenerationStatus || 'pending',
           // New multi-image structure
@@ -955,6 +960,9 @@ export default async function projectRoutes(fastify: FastifyInstance) {
           },
           // Legacy single image URL (for backward compatibility)
           imageUrl: (design.generatedImages as any)?.front?.url || design.generatedImageUrl || null,
+          // Sales text generation status
+          salesText: design.salesText || null,
+          salesTextGenerationStatus: design.salesTextGenerationStatus || null,
         });
       } catch (error: any) {
         fastify.log.error({ error }, 'Failed to fetch image status');

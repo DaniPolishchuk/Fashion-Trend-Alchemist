@@ -143,9 +143,8 @@ export const MESSAGES = {
   GENERATE_ATTRIBUTES_BEFORE_CONFIRM:
     'Please generate attributes before confirming and saving the project',
   CONTEXT_INFO:
-    'Optimal range for high quality predictions is between 100 and 2000 items. Higher numbers will increase loading times during enrichment.',
-  CONTEXT_ERROR_MIN_ITEMS:
-    'A minimum of 3 context products is required to create a project.',
+    'For best results, select at least 50 items that are visually similar to your target design. Using too few items or mixing different product categories may lead to poor predictions.',
+  CONTEXT_ERROR_MIN_ITEMS: 'A minimum of 3 context products is required to create a project.',
 } as const;
 
 export const TABLE = {

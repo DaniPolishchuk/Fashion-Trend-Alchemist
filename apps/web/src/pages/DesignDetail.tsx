@@ -249,16 +249,18 @@ function DesignDetail() {
     fetchDesign();
   }, [projectId, designId]);
 
-  // Poll for image status
+  // Poll for image and sales text status
   useEffect(() => {
     if (!projectId || !designId) return;
 
     const needsPolling =
-      generatedImages &&
-      IMAGE_VIEW_ORDER.some((view) => {
-        const status = generatedImages[view].status;
-        return status === 'pending' || status === 'generating';
-      });
+      (generatedImages &&
+        IMAGE_VIEW_ORDER.some((view) => {
+          const status = generatedImages[view].status;
+          return status === 'pending' || status === 'generating';
+        })) ||
+      design?.salesTextGenerationStatus === 'pending' ||
+      design?.salesTextGenerationStatus === 'generating';
 
     if (!needsPolling) {
       if (pollingRef.current) {
@@ -273,6 +275,8 @@ function DesignDetail() {
         const result = await fetchAPI<{
           status: string;
           generatedImages?: BackendGeneratedImages;
+          salesText?: string | null;
+          salesTextGenerationStatus?: 'pending' | 'generating' | 'completed' | 'failed' | null;
         }>(`/api/projects/${projectId}/generated-designs/${designId}/image-status`);
 
         if (result.data) {
@@ -280,9 +284,26 @@ function DesignDetail() {
           if (result.data.generatedImages) {
             setGeneratedImages(transformGeneratedImages(result.data.generatedImages));
           }
+          // Update sales text if it has changed
+          if (
+            result.data.salesText !== undefined &&
+            result.data.salesTextGenerationStatus !== undefined
+          ) {
+            const salesText = result.data.salesText;
+            const salesTextStatus = result.data.salesTextGenerationStatus;
+            setDesign((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    salesText: salesText || null,
+                    salesTextGenerationStatus: salesTextStatus || null,
+                  }
+                : prev
+            );
+          }
         }
       } catch (err) {
-        console.error('Failed to poll image status:', err);
+        console.error('Failed to poll status:', err);
       }
     };
 
@@ -293,7 +314,7 @@ function DesignDetail() {
         pollingRef.current = null;
       }
     };
-  }, [projectId, designId, generatedImages]);
+  }, [projectId, designId, generatedImages, design?.salesTextGenerationStatus]);
 
   // Cleanup timers on unmount
   useEffect(() => {
