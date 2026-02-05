@@ -9,6 +9,7 @@
 
 import OpenAI from 'openai';
 import { visionLlmConfig } from '@fashion/config';
+import type { PromptLogs } from '@fashion/db';
 import {
   type PhotographyCategory,
   type ModelProfile,
@@ -58,11 +59,12 @@ export interface ProductData {
 }
 
 /**
- * Result type for prompt generation with source info
+ * Result type for prompt generation with source info and logs
  */
 export interface PromptGenerationResult {
   prompts: GeneratedPrompts;
   source: 'llm' | 'fallback';
+  logs: PromptLogs;
 }
 
 export type ImageView = 'front' | 'back' | 'model';
@@ -176,10 +178,7 @@ function extractCustomerSegment(
     ...predictedAttributes,
   };
 
-  const segmentKeys = [
-    'article_customer_segment',
-    'customer_segment',
-  ];
+  const segmentKeys = ['article_customer_segment', 'customer_segment'];
 
   for (const key of segmentKeys) {
     if (allAttributes[key]) {
@@ -255,9 +254,17 @@ export function preprocessProductData(
   predictedAttributes: Record<string, string>,
   contextAttributes?: Record<string, string>
 ): ProductData {
-  const productGroup = extractProductGroup(lockedAttributes, predictedAttributes, contextAttributes);
+  const productGroup = extractProductGroup(
+    lockedAttributes,
+    predictedAttributes,
+    contextAttributes
+  );
   const productType = extractProductType(lockedAttributes, predictedAttributes, contextAttributes);
-  const customerSegment = extractCustomerSegment(lockedAttributes, predictedAttributes, contextAttributes);
+  const customerSegment = extractCustomerSegment(
+    lockedAttributes,
+    predictedAttributes,
+    contextAttributes
+  );
 
   const photographyCategory = getPhotographyCategory(productGroup, productType);
   const modelProfile = getModelProfile(customerSegment);
@@ -287,8 +294,16 @@ export function assemblePrompts(components: PromptComponents): GeneratedPrompts 
 
 /**
  * Generate prompt components using LLM
+ * Returns both components and the raw response for logging
  */
-async function generatePromptComponents(productData: ProductData): Promise<PromptComponents> {
+async function generatePromptComponents(
+  productData: ProductData
+): Promise<{
+  components: PromptComponents;
+  systemPrompt: string;
+  userPrompt: string;
+  rawResponse: string;
+}> {
   const openai = new OpenAI({
     apiKey: visionLlmConfig.apiKey,
     baseURL: visionLlmConfig.proxyUrl,
@@ -362,12 +377,13 @@ Return ONLY the JSON object with the structured components.`;
   }
 
   console.log('[PromptGen] LLM components generated successfully');
-  const truncatedDesc = components.productDescription.length > 100
-    ? components.productDescription.substring(0, 100) + '...'
-    : components.productDescription;
+  const truncatedDesc =
+    components.productDescription.length > 100
+      ? components.productDescription.substring(0, 100) + '...'
+      : components.productDescription;
   console.log('[PromptGen] Product description:', truncatedDesc);
 
-  return components;
+  return { components, systemPrompt, userPrompt, rawResponse: responseContent };
 }
 
 /**
@@ -388,7 +404,19 @@ function buildFallbackComponents(productData: ProductData): PromptComponents {
 
   // Build remaining attribute details
   const otherAttrs = Object.entries(attributes)
-    .filter(([key]) => !['specific_color', 'color_family', 'color', 'material', 'fabric_type_base', 'fabric', 'fit', 'style'].includes(key))
+    .filter(
+      ([key]) =>
+        ![
+          'specific_color',
+          'color_family',
+          'color',
+          'material',
+          'fabric_type_base',
+          'fabric',
+          'fit',
+          'style',
+        ].includes(key)
+    )
     .map(([key, value]) => `${key.replace(/_/g, ' ')}: ${value}`)
     .join(', ');
 
@@ -486,15 +514,53 @@ export async function generateImagePromptsWithFallback(
     attributeCount: Object.keys(productData.attributes).length,
   });
 
+  // Initialize base log structure
+  const baseLog: Omit<PromptLogs, 'llmResponse' | 'finalPrompts' | 'error'> = {
+    source: 'llm',
+    model: visionLlmConfig.model,
+    temperature: 0.7,
+    productData: {
+      productType: productData.productType,
+      photographyCategory: productData.photographyCategory,
+      modelProfile: productData.modelProfile.descriptor,
+      attributeCount: Object.keys(productData.attributes).length,
+    },
+    llmRequest: {
+      systemPrompt: '',
+      userPrompt: '',
+    },
+    retries: 0,
+  };
+
   // Try LLM generation with retry
   const MAX_RETRIES = 2;
+  let lastError: string | undefined;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const components = await generatePromptComponents(productData);
+      const { components, systemPrompt, userPrompt, rawResponse } =
+        await generatePromptComponents(productData);
       const prompts = assemblePrompts(components);
-      return { prompts, source: 'llm' };
+
+      // Build complete logs for successful LLM generation
+      const logs: PromptLogs = {
+        ...baseLog,
+        source: 'llm',
+        llmRequest: {
+          systemPrompt,
+          userPrompt,
+        },
+        llmResponse: {
+          raw: rawResponse,
+          parsed: components,
+        },
+        finalPrompts: prompts,
+        retries: attempt - 1,
+      };
+
+      return { prompts, source: 'llm', logs };
     } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
       console.error(`[PromptGen] LLM attempt ${attempt}/${MAX_RETRIES} failed:`, error);
 
       if (attempt < MAX_RETRIES) {
@@ -508,7 +574,21 @@ export async function generateImagePromptsWithFallback(
   console.warn('[PromptGen] LLM failed after retries, using fallback prompts');
   const fallbackComponents = buildFallbackComponents(productData);
   const prompts = assemblePrompts(fallbackComponents);
-  return { prompts, source: 'fallback' };
+
+  // Build logs for fallback generation
+  const fallbackLog: PromptLogs = {
+    ...baseLog,
+    source: 'fallback',
+    llmRequest: {
+      systemPrompt: 'N/A - Fallback template used',
+      userPrompt: 'N/A - Fallback template used',
+    },
+    finalPrompts: prompts,
+    retries: MAX_RETRIES,
+    error: lastError,
+  };
+
+  return { prompts, source: 'fallback', logs: fallbackLog };
 }
 
 // ==================== LEGACY EXPORTS (for backward compatibility) ====================
@@ -521,10 +601,20 @@ export function preprocessAttributes(
   predictedAttributes: Record<string, string>,
   contextAttributes?: Record<string, string>
 ) {
-  const productData = preprocessProductData(lockedAttributes, predictedAttributes, contextAttributes);
+  const productData = preprocessProductData(
+    lockedAttributes,
+    predictedAttributes,
+    contextAttributes
+  );
 
   // Map to legacy format
-  type LegacyCategory = 'Upper Body' | 'Lower Body' | 'Full Body' | 'Footwear' | 'Accessory' | 'Unknown';
+  type LegacyCategory =
+    | 'Upper Body'
+    | 'Lower Body'
+    | 'Full Body'
+    | 'Footwear'
+    | 'Accessory'
+    | 'Unknown';
   const categoryMap: Record<PhotographyCategory, LegacyCategory> = {
     wearable: 'Upper Body',
     footwear: 'Footwear',

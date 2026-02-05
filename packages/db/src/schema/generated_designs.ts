@@ -26,6 +26,44 @@ export interface GeneratedImages {
 }
 
 /**
+ * Type for prompt generation logs - debugging information
+ */
+export interface PromptLogs {
+  source: 'llm' | 'fallback';
+  model: string;
+  temperature: number;
+  productData: {
+    productType: string;
+    photographyCategory: string;
+    modelProfile: string;
+    attributeCount: number;
+  };
+  llmRequest: {
+    systemPrompt: string;
+    userPrompt: string;
+  };
+  llmResponse?: {
+    raw: string;
+    parsed: {
+      productDescription: string;
+      frontPrefix: string;
+      backPrefix: string;
+      modelPrefix: string;
+      frontDetails: string;
+      backDetails: string;
+      modelDetails: string;
+    };
+  };
+  finalPrompts: {
+    front: string;
+    back: string;
+    model: string;
+  };
+  retries: number;
+  error?: string;
+}
+
+/**
  * Generated Designs table - stores AI-generated design outputs
  */
 export const generatedDesigns = pgTable('generated_designs', {
@@ -47,6 +85,8 @@ export const generatedDesigns = pgTable('generated_designs', {
   salesTextGenerationStatus: varchar('sales_text_generation_status', { length: 20 })
     .default('pending')
     .$type<SalesTextStatus>(),
+  // Prompt logs for debugging image generation
+  promptLogs: jsonb('prompt_logs').$type<PromptLogs>(),
   // Creation timestamp
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });

@@ -279,7 +279,12 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
 
       // Validate input with Zod schema
       const validated = PredictRequestSchema.parse(request.body);
-      const { lockedAttributes, aiVariables, successScore: targetSuccessScore, contextAttributes } = validated;
+      const {
+        lockedAttributes,
+        aiVariables,
+        successScore: targetSuccessScore,
+        contextAttributes,
+      } = validated;
 
       // Verify project exists and is active
       const project = await db.query.projects.findFirst({
@@ -590,15 +595,22 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
         // Generate all prompts via LLM (or fallback) BEFORE generating images
         // This ensures consistency across all three views
         fastify.log.info({ designId }, 'Generating image prompts via LLM...');
-        const { prompts, source: promptSource } = await generateImagePromptsWithFallback(
+        const {
+          prompts,
+          source: promptSource,
+          logs: promptLogs,
+        } = await generateImagePromptsWithFallback(
           lockedAttributes,
           predictedAttributes,
           contextAttributes
         );
-        fastify.log.info(
-          { designId, promptSource },
-          `Image prompts generated via ${promptSource}`
-        );
+        fastify.log.info({ designId, promptSource }, `Image prompts generated via ${promptSource}`);
+
+        // Store prompt logs in the database for debugging
+        await db
+          .update(generatedDesigns)
+          .set({ promptLogs } as any)
+          .where(eq(generatedDesigns.id, designId));
 
         // Generate images sequentially for each view using the pre-generated prompts
         for (const view of views) {
@@ -614,7 +626,10 @@ export default async function rpt1Routes(fastify: FastifyInstance) {
 
             // Use the LLM-generated prompt for this view
             const prompt = prompts[view];
-            fastify.log.info({ designId, view, promptLength: prompt.length }, `Using ${promptSource} prompt for ${view}`);
+            fastify.log.info(
+              { designId, view, promptLength: prompt.length },
+              `Using ${promptSource} prompt for ${view}`
+            );
 
             const imageBuffer = await generateImageWithRetry(prompt, 1);
 
