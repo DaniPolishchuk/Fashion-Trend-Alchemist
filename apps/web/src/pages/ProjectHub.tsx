@@ -198,7 +198,18 @@ function ProjectHub() {
         const productTypes = (project.scopeConfig as { productTypes?: string[] } | null)
           ?.productTypes;
         const articleOptions = await fetchArticleAttributes(productTypes);
-        const defaultAttributes = initializeAttributes(articleOptions, project.ontologySchema);
+
+        // Fetch context items to properly determine auto-excluded attributes
+        const contextItemsResult = await fetchAPI<{ items: ContextItem[] }>(
+          `/api/projects/${projectId}/context-items`
+        );
+        const contextItemsData = contextItemsResult.data?.items || [];
+
+        const defaultAttributes = initializeAttributes(
+          articleOptions,
+          project.ontologySchema,
+          contextItemsData
+        );
 
         // Transform design to attributes
         const transformedAttributes = transformDesignToAttributes(design, defaultAttributes);
@@ -244,7 +255,18 @@ function ProjectHub() {
         const productTypes = (project.scopeConfig as { productTypes?: string[] } | null)
           ?.productTypes;
         const articleOptions = await fetchArticleAttributes(productTypes);
-        const defaultAttributes = initializeAttributes(articleOptions, project.ontologySchema);
+
+        // Fetch context items to properly determine auto-excluded attributes
+        const contextItemsResult = await fetchAPI<{ items: ContextItem[] }>(
+          `/api/projects/${projectId}/context-items`
+        );
+        const contextItemsData = contextItemsResult.data?.items || [];
+
+        const defaultAttributes = initializeAttributes(
+          articleOptions,
+          project.ontologySchema,
+          contextItemsData
+        );
 
         // Validate and merge stored state with current schema
         const mergedAttributes = validateAndMergeAttributes(

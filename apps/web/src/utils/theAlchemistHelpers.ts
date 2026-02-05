@@ -30,17 +30,28 @@ export const formatAttributeName = (name: string): string => {
 };
 
 /**
- * Analyze if an attribute has variation across context items
- * Returns true if attribute has multiple unique values, false if all same
+ * Result of attribute variation check
  */
-const hasAttributeVariation = (
+interface VariationCheckResult {
+  hasVariation: boolean;
+  singleValue: string | null; // The actual value when there's no variation
+}
+
+/**
+ * Analyze if an attribute has variation across context items
+ * Returns whether there's variation and the single value if not
+ */
+const checkAttributeVariation = (
   attributeKey: string,
   contextItems: ContextItem[],
   isArticleLevel: boolean
-): boolean => {
-  if (contextItems.length === 0) return true; // Default to variation if no items
+): VariationCheckResult => {
+  if (contextItems.length === 0) {
+    return { hasVariation: true, singleValue: null }; // Default to variation if no items
+  }
 
   const values = new Set<string>();
+  let firstRealValue: string | null = null;
 
   if (isArticleLevel) {
     // Article-level attributes: check all items
@@ -52,18 +63,31 @@ const hasAttributeVariation = (
 
     for (const item of contextItems) {
       const value = item[mappedKey] as string | null;
-      values.add(value || '__NULL__');
-      if (values.size > 1) return true; // Early exit
+      const normalizedValue = value || '__NULL__';
+      values.add(normalizedValue);
+
+      // Track the first real (non-null) value
+      if (value && firstRealValue === null) {
+        firstRealValue = value;
+      }
+
+      if (values.size > 1) {
+        return { hasVariation: true, singleValue: null }; // Early exit
+      }
     }
 
-    return values.size > 1;
+    // No variation - return the single value
+    return {
+      hasVariation: false,
+      singleValue: firstRealValue,
+    };
   } else {
     // Ontology attributes: only check enriched items
     const enrichedItems = contextItems.filter((item) => item.enrichedAttributes !== null);
 
     // Need at least 2 enriched items to determine variation, otherwise default to "has variation"
     if (enrichedItems.length < 2) {
-      return true;
+      return { hasVariation: true, singleValue: null };
     }
 
     // For ontology attributes, strip the "ontology_productType_" prefix to match DB structure
@@ -72,11 +96,24 @@ const hasAttributeVariation = (
 
     for (const item of enrichedItems) {
       const value = item.enrichedAttributes![cleanKey] || null;
-      values.add(value || '__NULL__');
-      if (values.size > 1) return true; // Early exit
+      const normalizedValue = value || '__NULL__';
+      values.add(normalizedValue);
+
+      // Track the first real (non-null) value
+      if (value && firstRealValue === null) {
+        firstRealValue = value;
+      }
+
+      if (values.size > 1) {
+        return { hasVariation: true, singleValue: null }; // Early exit
+      }
     }
 
-    return values.size > 1;
+    // No variation - return the single value
+    return {
+      hasVariation: false,
+      singleValue: firstRealValue,
+    };
   }
 };
 
@@ -142,14 +179,15 @@ export const initializeAttributes = (
   const withoutVariation: AttributeConfig[] = [];
 
   allAttributes.forEach((attr) => {
-    const hasVariation = hasAttributeVariation(attr.key, contextItems, attr.isArticleLevel);
-    if (hasVariation) {
+    const variationResult = checkAttributeVariation(attr.key, contextItems, attr.isArticleLevel);
+    if (variationResult.hasVariation) {
       withVariation.push(attr);
     } else {
       withoutVariation.push({
         ...attr,
         category: ATTRIBUTE_CATEGORIES.NOT_INCLUDED,
         autoExcluded: true, // Mark as auto-excluded (hidden from UI)
+        selectedValue: variationResult.singleValue, // Set to the actual value from context items
       });
     }
   });
@@ -432,10 +470,11 @@ export const transformDesignToAttributes = (
     }
 
     // All other attributes go to Not Included
+    // Preserve selectedValue for auto-excluded attributes (they have the correct value from context items)
     return {
       ...attr,
       category: ATTRIBUTE_CATEGORIES.NOT_INCLUDED,
-      selectedValue: null,
+      selectedValue: attr.autoExcluded ? attr.selectedValue : null,
     };
   });
 };
