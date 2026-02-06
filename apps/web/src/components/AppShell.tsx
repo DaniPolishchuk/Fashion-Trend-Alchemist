@@ -115,14 +115,8 @@ function AppShell({ children }: AppShellProps) {
         <ShellBar
           primaryTitle={BRANDING.PRIMARY_TITLE}
           secondaryTitle={BRANDING.SECONDARY_TITLE}
-          logo={
-            <img
-              src="/logo.svg"
-              alt={BRANDING.LOGO_ALT}
-              className={styles.logo}
-              onClick={handleLogoClick}
-            />
-          }
+          logo={<img src="/logo.svg" alt={BRANDING.LOGO_ALT} className={styles.logo} />}
+          onLogoClick={handleLogoClick}
           searchField={
             <Input placeholder={SEARCH.PLACEHOLDER} showClearIcon className={styles.searchField} />
           }

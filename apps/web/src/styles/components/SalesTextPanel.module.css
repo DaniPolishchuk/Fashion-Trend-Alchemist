@@ -59,7 +59,7 @@
   gap: 0.5rem;
   padding: 1rem;
   border-radius: var(--sapElement_BorderCornerRadius);
-  background: #ffffff;
+  background: transparent;
   border: 1px solid var(--sapList_BorderColor);
 }
 
@@ -181,7 +181,7 @@
 /* Dark theme adjustments */
 @media (prefers-color-scheme: dark) {
   .statusContainer {
-    background: var(--sapInfobar_Background);
+    background: transparent;
     border-color: var(--sapInfobar_BorderColor);
   }
 
