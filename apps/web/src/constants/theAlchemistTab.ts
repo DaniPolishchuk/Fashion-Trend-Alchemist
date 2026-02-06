@@ -23,7 +23,12 @@ export const ARTICLE_ATTRIBUTES = [
 export const DEFAULT_LOCKED = ['product_family', 'pattern_style', 'specific_color'] as const;
 
 // Attributes that start in "Not Included" by default
-export const DEFAULT_NOT_INCLUDED = ['product_group', 'product_type'] as const;
+export const DEFAULT_NOT_INCLUDED = [
+  'product_group',
+  'product_type',
+  'color_intensity',
+  'color_family',
+] as const;
 
 // Maximum AI Variables allowed (RPT-1 Large limit)
 export const MAX_AI_VARIABLES = 10;
@@ -122,7 +127,7 @@ export const TEXT = {
     'Set the desired performance level for the generated design. Higher values target top-performing attribute combinations.',
   TRANSMUTE_BUTTON: 'Transmute (Run RPT-1)',
   TRANSMUTING: 'Transmuting...',
-  TRANSMUTING_MESSAGE: 'Let the SAP-RPT-1 cook...',
+  TRANSMUTING_MESSAGE: 'SAP RPT-1 cooking ...',
   SUCCESS_TITLE: 'Design Created Successfully!',
   ERROR_TITLE: 'Generation Failed',
   NO_ATTRIBUTES: 'No attributes available for this project.',

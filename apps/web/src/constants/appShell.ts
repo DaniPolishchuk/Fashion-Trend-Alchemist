@@ -6,7 +6,7 @@
 // ==================== BRANDING ====================
 export const BRANDING = {
   PRIMARY_TITLE: 'Fashion Trend Alchemist',
-  SECONDARY_TITLE: 'Powered by SAP-RPT-1',
+  SECONDARY_TITLE: 'Powered by SAP RPT-1',
   LOGO_ALT: 'Fashion Trend Alchemist Logo',
   LOGO_HEIGHT: '32px',
 } as const;

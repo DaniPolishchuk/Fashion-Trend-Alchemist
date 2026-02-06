@@ -393,9 +393,9 @@
 /* ==================== DIALOGS ==================== */
 
 .dialogContent {
-  padding: 3rem 2rem;
+  padding: 2rem 2rem;
   text-align: center;
-  height: 200px;
+  min-height: 200px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -404,21 +404,44 @@
 .dialogTitle {
   font-size: 1.5rem;
   font-weight: 600;
-  color: var(--sapContent_LabelColor);
+  color: #912d87;
+  margin-bottom: 1rem;
+  animation: pulseTitle 1.8s ease-in-out infinite;
 }
 
 .dialogIconContainer {
   display: flex;
   flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 0;
 }
 
-.dialogAnimatedIcon {
-  font-size: 4rem;
-  animation:
-    pulseSize 1.5s ease-in-out infinite,
-    cycleColors 6s linear infinite;
-  display: block;
-  margin: 1rem auto;
+.dialogAnimatedFlask {
+  width: 38px;
+  height: auto;
+  animation: pulseFlask 1.8s ease-in-out infinite;
+}
+
+.dialogAnimatedFlask1 {
+  animation-delay: 0s;
+}
+
+.dialogAnimatedFlask2 {
+  animation-delay: 0.3s;
+}
+
+.dialogAnimatedFlask3 {
+  animation-delay: 0.6s;
+}
+
+.dialogAnimatedFlask4 {
+  animation-delay: 0.9s;
+}
+
+.dialogAnimatedFlask5 {
+  animation-delay: 1.2s;
 }
 
 .dialogSuccessTitle {
@@ -565,27 +588,26 @@
 
 /* ==================== ANIMATIONS ==================== */
 
-@keyframes pulseSize {
+@keyframes pulseFlask {
   0%,
   100% {
     transform: scale(1);
+    opacity: 0.3;
   }
   50% {
-    transform: scale(2);
+    transform: scale(1.15);
+    opacity: 1;
   }
 }
 
-@keyframes cycleColors {
-  0% {
-    color: #0070f2; /* Fiori Blue */
-  }
-  33% {
-    color: #107e3e; /* Fiori Green */
-  }
-  66% {
-    color: #bb0000; /* Fiori Red */
-  }
+@keyframes pulseTitle {
+  0%,
   100% {
-    color: #0070f2; /* Back to Blue */
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.03);
+    opacity: 1;
   }
 }

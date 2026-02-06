@@ -649,9 +649,31 @@ function TheAlchemistTab({
             <>
               <Text className={styles.dialogTitle}>{TEXT.TRANSMUTING_MESSAGE}</Text>
               <div className={styles.dialogIconContainer}>
-                <Icon name={ICONS.LAB} className={styles.dialogAnimatedIcon} />
-                <Icon name={ICONS.LAB} className={styles.dialogAnimatedIcon} />
-                <Icon name={ICONS.LAB} className={styles.dialogAnimatedIcon} />
+                <img
+                  src="/alchemist-flask.svg"
+                  alt="Alchemist Flask"
+                  className={`${styles.dialogAnimatedFlask} ${styles.dialogAnimatedFlask1}`}
+                />
+                <img
+                  src="/alchemist-flask.svg"
+                  alt="Alchemist Flask"
+                  className={`${styles.dialogAnimatedFlask} ${styles.dialogAnimatedFlask2}`}
+                />
+                <img
+                  src="/alchemist-flask.svg"
+                  alt="Alchemist Flask"
+                  className={`${styles.dialogAnimatedFlask} ${styles.dialogAnimatedFlask3}`}
+                />
+                <img
+                  src="/alchemist-flask.svg"
+                  alt="Alchemist Flask"
+                  className={`${styles.dialogAnimatedFlask} ${styles.dialogAnimatedFlask4}`}
+                />
+                <img
+                  src="/alchemist-flask.svg"
+                  alt="Alchemist Flask"
+                  className={`${styles.dialogAnimatedFlask} ${styles.dialogAnimatedFlask5}`}
+                />
               </div>
             </>
           ) : transmutingError ? (
