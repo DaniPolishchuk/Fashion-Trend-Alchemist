@@ -33,6 +33,16 @@ export async function fetchAPI<T>(
       ...options,
     });
 
+    // Check for HTML response (authentication redirect)
+    const contentType = response.headers.get('content-type');
+    if (contentType?.includes('text/html')) {
+      // Session expired - automatically reload for re-authentication
+      console.warn('Session expired - reloading page for re-authentication');
+      window.location.reload();
+      // Return a pending promise to prevent further processing
+      return new Promise(() => {});
+    }
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: response.statusText }));
       return { error: errorData.error || `HTTP ${response.status}: ${response.statusText}` };
