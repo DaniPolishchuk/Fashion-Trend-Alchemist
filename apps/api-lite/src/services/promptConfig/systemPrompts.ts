@@ -68,12 +68,17 @@ Example: "Navy Blue Wool Blend Slim Fit Trousers with pleated front, mid-rise wa
 Prefixes must establish the photography style and view. They should end in a way that flows naturally into the productDescription.
 
 Example flow: "[frontPrefix] [productDescription]. [frontDetails]. [suffix]"
-Result: "Ghost mannequin fashion photography, front view of Navy Blue Wool Trousers with pleated front. Displaying front crease and side pockets. Plain white..."
+Result: "3D invisible form fashion photography, front view of Navy Blue Wool Trousers with pleated front. Displaying front crease and side pockets. Plain white..."
 
 ### RULE 6: NO QUALITY SUFFIX
 Do NOT include any quality/background specifications in your output. The following will be appended automatically:
-"Plain white studio background, shadowless, 4K quality, sharp focus, no text, no watermarks, no logos, high-end e-commerce photography."`;
+"Plain white studio background, shadowless, 4K quality, sharp focus, no text, no watermarks, no logos, high-end e-commerce photography."
 
+### RULE 7: STRUCTURAL SAFETY & NEGATIVES (CRITICAL)
+To prevent image generation anomalies (like mannequins appearing in product shots), you must follow these linguistic bans:
+1. **NO "MANNEQUIN"**: Never use the words "mannequin", "dummy", "stand", "torso", or "plastic" in your descriptions.
+2. **NO "SOLID BACK"**: When describing the back view, NEVER say "showing solid back" or "clean back". Instead, use technical terms like "showing rear panel" or "viewed from behind".
+3. **HOLLOW INTERIORS**: For invisible form/ghost shots, always describe the item as a "hollow shell" or having "internal shadow depth" to prove it is empty.`;
 // ==================== CATEGORY-SPECIFIC RULES ====================
 
 /**
@@ -83,38 +88,52 @@ export const CATEGORY_RULES: Record<PhotographyCategory, string> = {
   wearable: `
 ## WEARABLE CATEGORY RULES
 
-### Front/Back View Style
-- Primary: Ghost mannequin (invisible mannequin showing 3D form)
-- Exception: Pants/trousers/shorts use flat lay (overhead, laid flat)
-- Always include in frontDetails/backDetails: "Strictly product only, no human skin visible"
+### 1. PREFIX STRUCTURE (CRITICAL)
+- **Standard Intro:** ALWAYS start with "3D invisible form fashion photography" (DO NOT use "Ghost mannequin").
+- **Exception (Bottoms):** Pants/trousers/shorts use "Professional flat lay photography, overhead view".
+- **View Definition:**
+  - Front: "...front view of [Product Name]..."
+  - Back: "...back view of [Product Name]..."
+  - Model: "Fashion photography, full body shot of [Model Profile]..."
 
-### Model View Style
-- Full body shot of model wearing the garment
-- Add complementary styling that doesn't distract from main product:
-  - Upper body items: Add neutral bottoms and appropriate footwear
-  - Lower body items: Add neutral top
-  - Full body items: Add appropriate footwear only
-  - Swimwear pieces: Add MATCHING swimwear piece (bikini top → matching bikini bottom)
-- Include natural pose description
+### 2. STRUCTURAL COMMANDS & PHYSICS
+- **Back View Phrasing:**
+  - MUST use: "rear panel", "viewed from behind", "rear view".
+  - **FORBIDDEN:** "solid back", "clean back", "back side" (as a noun). These trigger human bodies.
+- **Volume & Physics:**
+  - If Product is **Outerwear** (Coat, Jacket, Parka, Blazer): You MUST add "hollow shell structure" and "internal shadow depth" to the description to prove it is empty.
+  - If Product is **Soft/Knitted** (T-shirt, Sweater): Use "rigid form" or "invisible form".
 
-### Example Output (Hoodie - Menswear):
+### 3. NEGATIVE CONSTRAINTS (MANDATORY)
+- **Front:** Include "...strictly product only, no human skin, no plastic body visible."
+- **Back:** Include "...strictly the back side, no front details, no plastic body visible."
+
+### 4. MODEL VIEW STYLING
+- Full body shot of model wearing the garment.
+- Add complementary styling that doesn't distract:
+  - Upper body: Add neutral bottoms and appropriate footwear.
+  - Lower body: Add neutral top.
+  - Swimwear: Add MATCHING swimwear piece.
+- Include natural pose description.
+
+### Example Output (Parka/Outerwear - High Risk):
 {
-  "productDescription": "Charcoal Grey Cotton Fleece Relaxed Fit Pullover Hoodie with drawstring hood, kangaroo pocket, ribbed hem and ribbed cuffs",
-  "frontPrefix": "Ghost mannequin fashion photography, front view of",
-  "backPrefix": "Ghost mannequin fashion photography, back view of",
-  "modelPrefix": "Fashion photography, full body shot of an adult male model wearing",
-  "frontDetails": "Displayed on invisible form showing kangaroo pocket and drawstring hood detail, strictly product only, no human skin visible",
-  "backDetails": "Displayed on invisible form showing rear panel and hood from behind, strictly the back side, no front pocket visible",
-  "modelDetails": "Styled with black joggers and white sneakers, standing in a natural casual pose"
+  "productDescription": "Dark Red Cotton Knee-length Parka Coat with hooded collar, long sleeves, regular fit",
+  "frontPrefix": "3D invisible form fashion photography, front view of",
+  "backPrefix": "3D invisible form fashion photography, back view of",
+  "modelPrefix": "Fashion photography, full body shot of an adult female model wearing",
+  "frontDetails": "Displayed on invisible form showing hooded collar, hollow interior depth, strictly product only, no human skin, no plastic body visible",
+  "backDetails": "Displayed on invisible form showing rear panel of hood, full rear panel, hollow shell structure, viewed from behind, no front details, no plastic body visible",
+  "modelDetails": "Styled with black slim trousers and black ankle boots, standing in a natural relaxed pose"
 }
 
 ### Example Output (Trousers - Flat Lay):
 {
-  "productDescription": "Navy Blue Wool Blend Slim Fit Chino Trousers with mid-rise waist, pleated front, belt loops and side pockets",
+  "productDescription": "Navy Blue Wool Blend Slim Fit Chino Trousers with mid-rise waist, pleated front",
   "frontPrefix": "Professional flat lay photography, overhead view of",
   "backPrefix": "Professional flat lay photography, overhead back view of",
   "modelPrefix": "Fashion photography, full body shot of an adult male model wearing",
-  "frontDetails": "Laid flat on white surface, neatly pressed, showing front pleats and pocket openings, strictly product only",
+  "frontDetails": "Laid flat on white surface, neatly pressed, showing front pleats, strictly product only, no human skin",
   "backDetails": "Laid flat face down on white surface, showing rear panel and back pockets, strictly the back side",
   "modelDetails": "Styled with a white Oxford shirt and brown leather shoes, standing in a natural pose"
 }`,
