@@ -491,7 +491,37 @@ pnpm lint-staged
 }
 ```
 
-### 19. Add API Documentation with OpenAPI/Swagger
+### 19. Create Unit Tests and CI/CD Testing Pipeline
+
+**Current State:** No automated tests or testing pipeline on GitHub.
+
+**Recommendation:**
+```yaml
+# .github/workflows/test.yml
+name: Test
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+      - run: pnpm install
+      - run: pnpm build
+      - run: pnpm test
+```
+
+**Test Coverage Goals:**
+- Unit tests for utility functions and helpers
+- Integration tests for API endpoints
+- Component tests for critical UI flows
+- E2E tests for main user workflows (optional)
+
+### 20. Add API Documentation with OpenAPI/Swagger
 
 **Current State:** API documented in markdown only.
 
@@ -608,15 +638,81 @@ const SHORTCUTS = {
 };
 ```
 
+### 26. Price & Customer Age Data Integration
+
+**Current State:** Transaction price and customer age data exist in the database but are not utilized in the UI or analysis.
+
+**Recommendation:**
+- Display price distribution for context items
+- Show customer age demographics for selected products
+- Add age-based filtering in Context Builder
+- Include price/age correlations in Data Analysis tab
+
+### 27. First Experience Guide / Onboarding Tour
+
+**Current State:** No guided tour for new users.
+
+**Recommendation:**
+- Implement step-by-step onboarding tour for first-time users
+- Highlight key UI elements and workflows
+- Use a library like `react-joyride` or `intro.js`
+- Cover: Product Selection → Context Builder → Enrichment → Alchemist → Results flow
+
+### 28. System Theme Support (Light/Dark Mode)
+
+**Current State:** Application uses a fixed theme.
+
+**Recommendation:**
+- Detect system preference via `prefers-color-scheme`
+- Add theme toggle in user settings
+- Implement CSS variables for theme colors
+- SAP UI5 Web Components support theming via `setTheme()`
+
+### 29. Internationalization (i18n) / Translation Support
+
+**Current State:** All UI text is hardcoded in English.
+
+**Recommendation:**
+- Extract all user-facing strings to translation files
+- Use `react-i18next` or similar library
+- Support at minimum: English, Japanese (given project context)
+- Consider: German, Chinese for broader SAP ecosystem
+
+---
+
+## Known Bugs
+
+### 30. Enrichment Retry Status Update Issue
+
+**Priority:** Low
+**Type:** Bug (Hard to reproduce)
+
+**Description:** When data enrichment fails for an item and the retry button is triggered, the item status doesn't update from "pending" to "successful" without a full page refresh. Additionally, the progress bar may show incorrect counts (e.g., "0 of 1" or "1 of 1" instead of "49 of 50") when retrying a specific failed item.
+
+**Steps to Reproduce:**
+1. Start enrichment for a project
+2. Wait for an item to fail
+3. Click retry for the failed item
+4. Observe: Status may not update; progress bar shows only the retried item count
+
+**Expected Behavior:**
+- Status should update in real-time after successful retry
+- Progress bar should show cumulative progress across all items
+
+**Potential Fix:**
+- Review SSE event handling in `useEnrichmentSSE.ts`
+- Ensure retry endpoint returns updated status
+- Consider invalidating React Query cache after retry completes
+
 ---
 
 ## Implementation Priority Matrix
 
 | Priority | Item | Effort | Impact |
 |----------|------|--------|--------|
-| **Critical** | User Authentication | High | High |
+| **Critical** | User ID in Data Queries | Medium | High |
 | **Critical** | JSONB Validation | Medium | High |
-| **High** | Unit Tests | High | High |
+| **High** | Unit Tests + CI Pipeline | High | High |
 | **High** | Component Refactoring | Medium | Medium |
 | **High** | Error Handling | Low | Medium |
 | **Medium** | Materialized Views | Medium | High |
@@ -624,7 +720,11 @@ const SHORTCUTS = {
 | **Medium** | Service Layer Extraction | High | Medium |
 | **Lower** | ESLint Setup | Low | Low |
 | **Lower** | API Documentation | Medium | Low |
-| **Lower** | Data Analysis Tab | High | Medium |
+| **Lower** | i18n Translation | High | Medium |
+| **Lower** | System Theme | Medium | Low |
+| **Lower** | Onboarding Tour | Medium | Medium |
+| **Lower** | Price/Age Data Integration | Medium | Medium |
+| **Bug** | Enrichment Retry Status | Low | Low |
 
 ---
 
