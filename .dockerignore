@@ -47,6 +47,7 @@ coverage
 
 # Kubernetes manifests (not needed in image)
 k8s/
+k8s-SeaweedFS-PostgresSQL/
 
 # Images and logos (not needed in backend/build)
 ImagesAndLogos/

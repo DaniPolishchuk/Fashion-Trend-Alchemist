@@ -1,0 +1,29 @@
+# SeaweedFS Helm Chart Values for Kyma
+# Corrected configuration for persistent storage
+
+# 1. Master Server (Topology and metadata coordination)
+master:
+  data:
+    type: 'persistentVolumeClaim'
+    size: '10Gi'
+    storageClass: 'default'
+
+# 2. Volume Server (Where images are stored)
+volume:
+  dataDirs:
+    - name: data1
+      type: 'persistentVolumeClaim'
+      size: '100Gi'
+      storageClass: 'default'
+      maxVolumes: 0
+
+# 3. Filer (Metadata and file system interface)
+filer:
+  data:
+    type: 'persistentVolumeClaim'
+    size: '10Gi'
+    storageClass: 'default'
+
+# 4. Disable default Ingress (using Kyma APIRule instead)
+ingress:
+  enabled: false

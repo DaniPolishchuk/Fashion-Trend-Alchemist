@@ -41,7 +41,7 @@ packages/db/drizzle/
 *.local
 
 # Helm
-values.yaml
+
 
 # Kubernetes secrets (NEVER commit these!)
 k8s/secrets.yaml
