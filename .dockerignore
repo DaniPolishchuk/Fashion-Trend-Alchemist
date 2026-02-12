@@ -61,3 +61,6 @@ pnpm-debug.log*
 .prettierrc
 temp/
 tmp/
+
+PA2/
+packages/db/src/evaluation/

@@ -2,37 +2,20 @@
 
 A TypeScript-based AI-powered fashion analytics platform for analyzing product trends and generating design attributes for future best-sellers.
 
-## 📊 Current Status
+## Project Status: Complete
 
-**All Core Phases Complete! 🎉**
+**All development phases are complete.** This application is a fully functional AI-powered inverse design workstation.
 
-The application currently provides:
+### Implemented Features
 
-- **Phase 1 (✅ COMPLETE)**: Product Analysis
-  - Product type selection and taxonomy browsing
-  - Context builder with advanced filtering
-  - Date range and seasonal filtering
-  - Dynamic attribute filtering with real-time updates
-- **Phase 2 (✅ COMPLETE)**: LLM-based Attribute Enrichment
-  - Vision LLM extracts structured attributes from product images
-  - Parallel processing with configurable concurrency
-  - Real-time progress monitoring via SSE
-  - Retry mechanism for failed enrichments
-- **Phase 3 (✅ COMPLETE)**: RPT-1 Inverse Design Engine
-  - Three-column attribute management (Locked/AI/Not Included)
-  - Success score targeting (0-100%)
-  - SAP AI Core integration with OAuth2 authentication
-  - Velocity-based context with normalized scores
-- **Phase 4 (🚧 IN PROGRESS)**: AI Image Generation
-  - Multi-image generation (front/back/model views)
-  - Per-view status tracking with real-time polling
-  - Design detail page with attribute panels
-  - Magic name generation via LLM
-  - Project and design management (pin/delete/rename)
+- **Phase 1**: Product Analysis - Taxonomy browsing, context builder with advanced filtering
+- **Phase 2**: LLM-based Attribute Enrichment - Vision LLM extracts structured attributes from images
+- **Phase 3**: RPT-1 Inverse Design Engine - Three-column attribute management with SAP AI Core integration
+- **Phase 4**: AI Image Generation - Multi-image generation (front/back/model views)
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ### Monorepo Structure
 
@@ -40,114 +23,44 @@ The application currently provides:
 fashion-trend-alchemist/
 ├── apps/
 │   ├── web/              # React + Vite frontend (SAP UI5 Web Components)
-│   │   ├── public/
-│   │   │   └── logo.svg                        # Application logo
 │   │   └── src/
 │   │       ├── pages/
 │   │       │   ├── Home.tsx                    # Dashboard with projects & collections
-│   │       │   ├── ProductSelection.tsx         # Product type taxonomy browser
-│   │       │   ├── ContextBuilder.tsx           # Context config & project creation
-│   │       │   ├── ProjectHub.tsx               # Project workspace with tabs
-│   │       │   ├── DesignDetail.tsx             # Design detail with multi-image
-│   │       │   └── tabs/                        # ProjectHub tab components
-│   │       │       ├── TheAlchemistTab.tsx      # RPT-1 attribute configuration
-│   │       │       ├── ResultOverviewTab.tsx    # Generated designs list
-│   │       │       ├── EnhancedTableTab.tsx     # Enrichment monitoring
-│   │       │       └── DataAnalysisTab.tsx      # Placeholder
-│   │       ├── components/
-│   │       │   ├── AppShell.tsx                        # SAP Fiori shell wrapper
-│   │       │   ├── AttributeGenerationDialog.tsx       # LLM attribute generation
-│   │       │   ├── AttributeSkeletonLoader.tsx         # Loading skeleton
-│   │       │   ├── CollectionPreviewDialog.tsx         # Collection preview with designs
-│   │       │   ├── CreateCollectionDialog.tsx          # Create new collection
-│   │       │   ├── EnrichmentStatusCard.tsx            # Enrichment status card
-│   │       │   ├── FilterCardItem.tsx                  # Reusable filter card
-│   │       │   ├── HelpDialog.tsx                      # Context-sensitive help dialog
-│   │       │   └── SaveToCollectionPopover.tsx         # Save design to collection
-│   │       ├── constants/                       # Centralized constants per feature
-│   │       │   ├── appShell.ts                  # App shell navigation & UI constants
-│   │       │   ├── attributeDialog.ts           # Attribute generation dialog constants
-│   │       │   ├── contextBuilder.ts            # Context builder page constants
-│   │       │   ├── enhancedTableTab.ts          # Enhanced table tab constants
-│   │       │   ├── home.ts                      # Home page constants
-│   │       │   ├── productSelection.ts          # Product selection constants
-│   │       │   ├── projectHub.ts                # Project hub constants
-│   │       │   ├── resultOverviewTab.ts         # Result overview tab constants
-│   │       │   ├── skeletonLoader.ts            # Skeleton loader constants
-│   │       │   └── theAlchemistTab.ts           # The Alchemist tab constants
-│   │       ├── hooks/                           # Custom React hooks
-│   │       │   ├── useAttributeEditor.ts        # Attribute editing logic
-│   │       │   ├── useContextFilters.ts         # Context filter state management
-│   │       │   ├── useDateRange.ts              # Date range validation & state
-│   │       │   ├── useDebounce.ts               # Debounce hook for inputs
-│   │       │   ├── useEnrichmentSSE.ts          # SSE enrichment progress tracking
-│   │       │   ├── useFilterOptions.ts          # Dynamic filter options fetching
-│   │       │   ├── useOptionsManager.ts         # Attribute options management
-│   │       │   ├── usePersistedSelection.ts     # localStorage persistence
-│   │       │   ├── useProducts.ts               # Product data fetching
-│   │       │   ├── useProjectData.ts            # Project data management
-│   │       │   └── useTheme.ts                  # Theme management
-│   │       ├── services/
-│   │       │   └── api/                         # API client layer
-│   │       │       ├── client.ts                # Base fetch client
-│   │       │       ├── index.ts                 # Aggregated API exports
-│   │       │       ├── attributes.ts            # Attribute generation endpoints
-│   │       │       ├── collections.ts           # Collections endpoints
-│   │       │       ├── filters.ts               # Filter options endpoints
-│   │       │       ├── products.ts              # Product listing endpoints
-│   │       │       ├── projects.ts              # Project CRUD endpoints
-│   │       │       ├── taxonomy.ts              # Taxonomy endpoints
-│   │       │       └── transactions.ts          # Transaction endpoints
-│   │       ├── styles/                          # CSS Modules
-│   │       │   ├── components/                  # Component-specific styles
-│   │       │   │   ├── AppShell.module.css
-│   │       │   │   ├── AttributeGenerationDialog.module.css
-│   │       │   │   └── AttributeSkeletonLoader.module.css
-│   │       │   └── pages/                       # Page-specific styles
-│   │       │       ├── ContextBuilder.module.css
-│   │       │       ├── EnhancedTableTab.module.css
-│   │       │       ├── Home.module.css
-│   │       │       ├── ProductSelection.module.css
-│   │       │       ├── ProjectHub.module.css
-│   │       │       ├── ResultOverviewTab.module.css
-│   │       │       └── TheAlchemistTab.module.css
-│   │       ├── types/                           # Frontend-specific types
-│   │       │   ├── index.ts                     # Type exports
-│   │       │   ├── api.ts                       # API response types
-│   │       │   ├── enhancedTableTab.ts          # Enhanced table types
-│   │       │   ├── resultOverviewTab.ts         # Result overview types
-│   │       │   └── theAlchemistTab.ts           # The Alchemist types
-│   │       ├── utils/                           # Helper functions
-│   │       │   ├── attributeFormatting.ts       # Attribute display formatting
-│   │       │   ├── dateValidation.ts            # Date validation logic
-│   │       │   ├── enhancedTableHelpers.ts      # Enhanced table utilities
-│   │       │   ├── projectTransformers.ts       # Project data transformers
-│   │       │   ├── resultOverviewHelpers.ts     # Result overview utilities
-│   │       │   ├── theAlchemistHelpers.ts       # The Alchemist utilities
-│   │       │   └── urlParams.ts                 # URL parameter helpers
-│   │       ├── config/                          # Frontend configuration
-│   │       │   ├── index.ts                     # Config exports
-│   │       │   └── routes.ts                    # Route definitions
-│   │       ├── App.tsx                          # Root app component
-│   │       ├── main.tsx                         # Entry point
-│   │       └── vite-env.d.ts                    # Vite type definitions
-│   └── api-lite/         # Fastify backend API
-│       └── src/
-│           ├── main.ts                # Main API server with core endpoints
-│           ├── constants.ts           # Backend constants
-│           ├── routes/                # Modular API routes
-│           │   ├── projects.ts        # Project CRUD & context management
-│           │   ├── enrichment.ts      # Vision LLM enrichment
-│           │   ├── rpt1.ts            # RPT-1 predictions via SAP AI Core
-│           │   ├── context-items.ts   # Context items with enrichment status
-│           │   ├── collections.ts     # Collections CRUD (fully implemented)
-│           │   └── design-name.ts     # LLM-based name generation
-│           └── services/
-│               ├── cache.ts           # Redis caching layer
-│               ├── enrichment.ts      # Vision LLM service
-│               ├── imageGeneration.ts # SAP AI Core image generation
-│               ├── salesTextGeneration.ts # LLM sales text generation
-│               └── s3.ts              # SeaweedFS/S3 storage
+│   │       │   ├── ProductSelection.tsx        # Product type taxonomy browser
+│   │       │   ├── ContextBuilder.tsx          # Context config & project creation
+│   │       │   ├── ProjectHub.tsx              # Project workspace with tabs
+│   │       │   ├── DesignDetail.tsx            # Design detail with multi-image
+│   │       │   └── tabs/
+│   │       │       ├── TheAlchemistTab.tsx     # RPT-1 attribute configuration
+│   │       │       ├── ResultOverviewTab.tsx   # Generated designs list
+│   │       │       ├── EnhancedTableTab.tsx    # Enrichment monitoring
+│   │       │       └── DataAnalysisTab.tsx     # Placeholder for analytics
+│   │       ├── components/                     # Reusable UI components
+│   │       ├── constants/                      # Centralized constants
+│   │       ├── hooks/                          # Custom React hooks
+│   │       ├── services/api/                   # API client layer
+│   │       ├── styles/                         # CSS Modules
+│   │       ├── types/                          # Frontend-specific types
+│   │       └── utils/                          # Helper functions
+│   ├── api-lite/         # Fastify backend API
+│   │   └── src/
+│   │       ├── main.ts                # Main API server
+│   │       ├── routes/                # Modular API routes
+│   │       │   ├── projects.ts        # Project CRUD & context management
+│   │       │   ├── enrichment.ts      # Vision LLM enrichment
+│   │       │   ├── rpt1.ts            # RPT-1 predictions via SAP AI Core
+│   │       │   ├── context-items.ts   # Context items with enrichment status
+│   │       │   ├── collections.ts     # Collections CRUD
+│   │       │   ├── design-name.ts     # LLM-based name generation
+│   │       │   └── user.ts            # User endpoints
+│   │       └── services/
+│   │           ├── cache.ts           # Redis caching layer
+│   │           ├── enrichment.ts      # Vision LLM service
+│   │           ├── imageGeneration.ts # SAP AI Core image generation
+│   │           ├── salesTextGeneration.ts # LLM sales text generation
+│   │           ├── promptGeneration.ts    # LLM-based image prompt generation
+│   │           └── s3.ts              # SeaweedFS/S3 storage
+│   └── approuter/        # SAP Approuter for Kyma deployment
 ├── packages/
 │   ├── db/               # Database schemas, queries (Drizzle ORM)
 │   │   └── src/
@@ -155,33 +68,39 @@ fashion-trend-alchemist/
 │   │       └── queries/  # Reusable query functions
 │   ├── types/            # Shared TypeScript types and Zod schemas
 │   └── config/           # Configuration and environment handling
-└── docs/                 # Documentation (PRD, data model, etc.)
+├── k8s/                  # Kubernetes manifests for Kyma deployment
+└── docs/                 # Documentation
 ```
 
 ### Technology Stack
 
-- **Frontend**: React 18 + Vite + SAP UI5 Web Components for React
-- **Backend**: Node.js 18+ with Fastify (modular routes)
-- **Database**: PostgreSQL 16 (cloud-hosted with port forwarding)
-- **ORM**: Drizzle ORM 0.29.5 with type-safe queries
-- **Caching**: Redis (optional, 15-30x performance boost)
-- **AI Integration**:
-  - OpenAI API for LLM text generation (ontology, names)
-  - LiteLLM proxy for Vision LLM (data enrichment)
-  - SAP AI Core for RPT-1 predictions and image generation
-- **Storage**: SeaweedFS/S3 for generated images
-- **Package Manager**: pnpm (workspaces for monorepo)
-- **Language**: TypeScript (strict mode)
+| Layer | Technology | Purpose |
+|-------|------------|---------|
+| **Frontend** | React 18 + Vite | SPA Framework |
+| **UI Library** | SAP UI5 Web Components | Enterprise Fiori design |
+| **State** | TanStack Query | Async server state management |
+| **Backend** | Node.js 18+ with Fastify | High-throughput API server |
+| **Database** | PostgreSQL 16 | Relational DB with JSONB support |
+| **ORM** | Drizzle ORM 0.29.5 | Type-safe SQL queries |
+| **Caching** | Redis | Optional, 15-30x performance boost |
+| **AI - Text** | OpenAI API | LLM for ontology and name generation |
+| **AI - Vision** | LiteLLM Proxy | Vision LLM for data enrichment |
+| **AI - Prediction** | SAP AI Core RPT-1 | Statistical inference engine |
+| **AI - Images** | SAP AI Core Z-Image Turbo | Product image generation |
+| **Storage** | SeaweedFS/S3 | Distributed file storage |
+| **Package Manager** | pnpm (workspaces) | Monorepo management |
+| **Language** | TypeScript (strict) | Full-stack type safety |
+| **Deployment** | SAP Kyma | Kubernetes-based cloud platform |
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
 - Node.js 18+
 - pnpm 8+
-- Access to PostgreSQL database (cloud or local)
+- Access to PostgreSQL database
 - Redis (optional, for caching)
 - OpenAI API key
 - SAP AI Core credentials
@@ -200,7 +119,7 @@ fashion-trend-alchemist/
 
    ```bash
    cp .env.example .env
-   # Edit .env with your database credentials and API keys
+   # Edit .env with your credentials
    ```
 
 3. **Build packages**
@@ -227,437 +146,182 @@ See [QUICKSTART.md](QUICKSTART.md) for detailed setup instructions.
 
 ---
 
-## 🎨 Features
+## Features
 
 ### 1. Home Dashboard
 
-- **Projects Table**:
-  - Displays all projects with status, time period, product group, and generated designs count
-  - Search filtering and pagination (5 items per page)
-  - Pin up to 3 projects to the top for quick access
-  - Delete projects (with automatic image cleanup)
-  - Inline project name editing
-- **Collections Grid**:
-  - Visual 2x2 image thumbnail grid per collection
-  - Click to preview collection contents
-  - Backend API fully implemented (see docs/CollectionMock.md for frontend status)
+- **Projects Table**: Displays projects with status, time period, product group, and generated designs count
+- **Search & Pagination**: Filter projects by name with 5 items per page
+- **Project Pinning**: Pin up to 3 projects for quick access
+- **Project Management**: Delete projects (with automatic image cleanup), inline name editing
+- **Collections Grid**: Visual 2x2 image thumbnail grid per collection with preview dialog
 
 ### 2. Product Selection
 
-- **Taxonomy Browser**: Navigate product types organized by groups
+- **Taxonomy Browser**: Navigate product types organized by groups (e.g., Garment Upper Body, Shoes, Bags)
 - **Multi-Select**: Choose multiple product types for analysis
-- **Visual Interface**: Card-based UI with icons and descriptions
+- **Visual Interface**: Card-based UI with product type icons and descriptions
 - **Persistence**: Selection saved to localStorage
 
-### 3. Context Builder (Unified Workflow)
+### 3. Context Builder
 
-**New unified page combining filtering, preview, and project creation**
+Unified page combining filtering, preview, and project creation.
 
 #### Date & Season Filtering
-
-- **Custom Date Range**: DD/MM format inputs with smart validation
-  - Month-specific day limits (Feb: 28, Apr/Jun/Sep/Nov: 30, others: 31)
-  - Real-time validation with visual feedback
+- **Custom Date Range**: DD/MM format inputs with month-specific validation
 - **Season Quick Select**: Spring, Summer, Autumn, Winter buttons
-- **Cross-year support**: Filters transactions across all years for selected dates
+- **Cross-year Support**: Filters transactions across all years for selected dates
 
 #### Multi-Attribute Filtering
+- **8 Filter Categories**: Pattern/Style, Specific Color, Color Intensity, Color Family, Product Family, Customer Segment, Style Concept, Fabric Type
+- **Multi-Select Dialogs**: Checkbox-based selection with dynamic options
+- **Active Filter Count**: Visual indicator of applied filters
 
-- **8 Filter Categories**:
-  - Pattern/Style, Specific Color, Color Intensity, Color Family
-  - Product Family, Customer Segment, Style Concept, Fabric Type
-- **Multi-Select Dialogs**: Checkbox-based selection with "Apply" action
-- **Dynamic Options**: Filter options update based on current dataset
-- **Active Filter Count**: Shows number of applied filters
-
-#### Context Preview Table
-
+#### Context Preview & Project Creation
 - **Real-time Preview**: See matching articles as you adjust filters
-- **Smart Column Ordering**: Priority attributes first, detail description last
-- **Pagination**: 10 products per page with navigation
-- **Performance**: Optimized with database indexes
+- **Attribute Generation**: LLM-powered ontology generation for selected product types
+- **One-Click Create**: Creates project with velocity calculation (top 25 + worst 25 performers)
 
-#### Attribute Generation
+### 4. Project Hub
 
-- **LLM-Powered**: Generate structured attribute definitions for selected product types
-- **Interactive Dialog**: Provide feedback to refine attributes
-- **Conversation History**: Iterative refinement with context
-- **Required Step**: Must generate attributes before creating project
-
-#### Project Creation
-
-- **One-Click Create**: "Confirm & Create Project" button
-- **Velocity Calculation**: System calculates top 25 + worst 25 performers (or all if ≤50)
-- **Normalized Scores**: Velocity scores normalized to 0-100 scale
-- **Auto-Navigate**: Redirects to ProjectHub after successful creation
-
-### 4. Project Hub (Workspace)
-
-Main workspace with 4 tabs for different workflows:
+Main workspace with 4 tabs:
 
 #### Tab 1: The Alchemist (RPT-1 Configuration)
-
-- **Three-Column Layout**: Locked Attributes | AI Variables | Not Included
-- **Attribute Sources**:
-  - Article attributes from database (product_type, color_family, etc.)
-  - Ontology attributes from LLM generation
-- **AI Variable Limit**: Maximum 10 variables (RPT-1 Large constraint)
+- **Three-Column Layout**: Locked Attributes | AI Variables (max 10) | Not Included
+- **Attribute Sources**: Article attributes (from DB) + Ontology attributes (LLM-generated)
 - **Success Score Slider**: Target performance level (0-100%)
 - **Preview Request**: Shows context summary and query structure
-- **Transmute Button**: Executes RPT-1 prediction via SAP AI Core
-- **Refine Design Flow**: Pre-populate from existing design via URL parameter
+- **Transmute Button**: Executes RPT-1 prediction and generates 3 images
+- **Refine Design Flow**: Pre-populate from existing design
 
 #### Tab 2: Result Overview (Generated Designs)
-
-- **Design List**: Paginated view of all generated designs
-- **Search**: Filter designs by name
-- **Multi-Image Support**: Shows front view thumbnail (with back/model support)
-- **Actions**: Delete and rename designs
-- **Click to View**: Navigate to DesignDetail page
+- **Design List**: Paginated view with search filtering
+- **Multi-Image Support**: Shows front view thumbnail
+- **Actions**: Delete, rename, click to view details
 
 #### Tab 3: Enhanced Table (Enrichment Monitoring)
-
-- **Context Items Table**: All project context items with enrichment status
-- **Collapsible Control Panel**: Status summary and retry controls
+- **Context Items Table**: All project items with enrichment status
 - **Filter Chips**: All/Successful/Pending/Failed quick filters
-- **Sortable Columns**: Velocity score, article ID, product type
 - **Dynamic Columns**: LLM-enriched attributes from ontology
-- **Image Thumbnails**: With fallback placeholder on error
-- **Expandable Rows**: Click to see full details (accordion behavior)
-- **Image Modal**: Full-size image viewer
+- **Image Thumbnails**: With fallback placeholder and modal viewer
 - **CSV Export**: Export all data including enriched attributes
-- **Retry Functionality**: Single item or bulk "Retry All Failed"
+- **Retry Functionality**: Single item or bulk retry
 - **Real-time Updates**: 5-second polling during enrichment
-- **Color-coded Scores**: Green (≥70), gray (40-69), red (<40)
 
-#### Tab 4: Data Analysis (Placeholder)
-
-- Future analytics and insights features
+#### Tab 4: Data Analysis
+- Placeholder for future analytics features
 
 ### 5. Design Detail Page
 
-- **Multi-Image Display**: Front, back, and model views with thumbnail strip
-- **Collapsible Panels**:
-  - Predicted Attributes (expanded by default)
-  - Given Attributes (collapsed by default)
+- **Multi-Image Display**: Front, back, and model/lifestyle views with thumbnail strip
+- **Collapsible Panels**: Predicted Attributes (expanded), Given Attributes (collapsed)
 - **Sales Text Panel**: AI-generated marketing copy with regeneration option
-- **Magic Name Generation**: LLM-powered creative naming with sparkle button
-- **Image Download**: Download functionality per view
-- **Full-size Modal**: Click to zoom any image
+- **Magic Name Generation**: LLM-powered creative naming
+- **Image Download**: Per-view download functionality
 - **Save to Collection**: Add design to existing or new collection
-- **Refine Design**: Button to navigate to TheAlchemistTab with pre-populated attributes
+- **Refine Design**: Navigate to Alchemist tab with pre-populated attributes
 - **Real-time Polling**: Updates image generation status automatically
 
 ---
 
-## 🗄️ Database Schema
+## Database Schema
 
 ### Core Tables
 
-#### Articles (Static Product Catalog)
+| Table | Purpose |
+|-------|---------|
+| `articles` | Static product catalog with attributes |
+| `transactions_train` | Sales data with dates and prices |
+| `customers` | Customer demographics |
+| `projects` | User projects with scope, ontology, and enrichment status |
+| `project_context_items` | Context articles with velocity scores and enriched attributes |
+| `generated_designs` | AI-generated designs with multi-image support |
+| `collections` | User collections for organizing designs |
+| `collection_items` | Junction table linking collections and designs |
 
-```sql
-article_id          VARCHAR PRIMARY KEY
-product_type        VARCHAR    -- Dress, Sweater, etc.
-product_group       VARCHAR    -- Garment Upper body, etc.
-product_family      VARCHAR    -- Knitwear, Trouser, etc.
-style_concept       VARCHAR    -- Contemporary Smart, etc.
-pattern_style       VARCHAR    -- Solid, Check, etc.
-specific_color      VARCHAR    -- Dark Blue, Light Pink, etc.
-color_intensity     VARCHAR    -- Dark, Light, Bright, etc.
-color_family        VARCHAR    -- Blue, Red, etc.
-customer_segment    VARCHAR    -- Menswear, Ladieswear, etc.
-fabric_type_base    VARCHAR    -- Jersey, Woven, etc.
-detail_desc         TEXT       -- Full product description
-```
+### Key JSONB Schemas
 
-#### Transactions Train (Sales Data)
+- `projects.scope_config` - Product types and filter selections
+- `projects.season_config` - Date range configuration (MM-DD format)
+- `projects.ontology_schema` - LLM-generated attribute definitions per product type
+- `project_context_items.enriched_attributes` - Vision LLM extracted attributes
+- `generated_designs.input_constraints` - User-locked attributes + target score
+- `generated_designs.predicted_attributes` - RPT-1 output
+- `generated_designs.generated_images` - Multi-view image URLs and status
 
-```sql
-t_date              DATE       -- Transaction date
-customer_id         VARCHAR    -- Customer identifier
-article_id          VARCHAR    -- FK to articles
-price               NUMERIC    -- Transaction price
-```
-
-#### Customers (Customer Demographics)
-
-```sql
-customer_id         VARCHAR PRIMARY KEY
-age                 INTEGER
-```
-
-#### Projects (User Projects)
-
-```sql
-id                        UUID PRIMARY KEY
-user_id                   UUID       -- FK to users (hardcoded for now)
-name                      VARCHAR    -- Project name
-status                    ENUM       -- draft | active
-scope_config              JSONB      -- Product types and groups
-season_config             JSONB      -- Date range or season
-ontology_schema           JSONB      -- LLM-generated attribute definitions
-enrichment_status         ENUM       -- idle | running | completed | failed
-enrichment_processed      INTEGER    -- Items processed count
-enrichment_total          INTEGER    -- Total items to process
-enrichment_current_article_id VARCHAR -- Currently processing
-enrichment_started_at     TIMESTAMP
-enrichment_completed_at   TIMESTAMP
-is_pinned                 BOOLEAN    -- Pin status
-pinned_at                 TIMESTAMP  -- Pin timestamp
-mismatch_review_completed BOOLEAN    -- Mismatch review status
-velocity_scores_stale     BOOLEAN    -- Whether velocity needs recalculation
-created_at                TIMESTAMP
-deleted_at                TIMESTAMP  -- Soft delete
-```
-
-#### Project Context Items (Context Articles)
-
-```sql
-project_id          UUID       -- FK to projects
-article_id          VARCHAR    -- FK to articles
-velocity_score      DECIMAL    -- Normalized 0-100
-raw_velocity_score  DECIMAL    -- Original velocity for re-normalization
-enriched_attributes JSONB      -- Vision LLM extracted attributes
-enrichment_error    TEXT       -- Error message if failed
-mismatch_confidence INTEGER    -- 0-100, likelihood of product type mismatch
-is_excluded         BOOLEAN    -- Whether excluded from RPT-1 context
-original_is_excluded BOOLEAN   -- Baseline state for change tracking
-```
-
-#### Generated Designs (AI-Generated Outputs)
-
-```sql
-id                      UUID PRIMARY KEY
-project_id              UUID       -- FK to projects
-name                    VARCHAR    -- Design name
-input_constraints       JSONB      -- User-specified locked attributes
-predicted_attributes    JSONB      -- RPT-1 predicted attributes
-generated_images        JSONB      -- Multi-view images (front/back/model)
-generated_image_url     VARCHAR    -- Legacy single image URL
-image_generation_status VARCHAR    -- pending/generating/completed/failed/partial
-sales_text              TEXT       -- AI-generated marketing copy
-sales_text_generation_status VARCHAR -- pending/generating/completed/failed
-created_at              TIMESTAMP
-```
-
-#### Collections (User Collections)
-
-```sql
-id          UUID PRIMARY KEY
-user_id     UUID       -- FK to users
-name        VARCHAR    -- Collection name
-created_at  TIMESTAMP
-```
-
-#### Collection Items (Junction Table)
-
-```sql
-collection_id        UUID  -- FK to collections
-generated_design_id  UUID  -- FK to generated_designs
-```
-
-### Performance Indexes
-
-- `idx_transactions_article_id` on `transactions_train(article_id)`
-- `idx_transactions_t_date` on `transactions_train(t_date)`
-- `idx_transactions_customer_id` on `transactions_train(customer_id)`
-- **9 strategic indexes on articles table** for 5-10x faster filtering (see PERFORMANCE_OPTIMIZATION.md)
+See [docs/DataModel.md](docs/DataModel.md) for detailed schema documentation.
 
 ---
 
-## 🔌 API Reference
+## API Reference
 
-### Core Endpoints
+### Core Endpoints (main.ts)
 
-#### `GET /health`
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Health check |
+| `GET` | `/api/taxonomy` | Product type hierarchy |
+| `GET` | `/api/filters/attributes` | Dynamic filter options |
+| `GET` | `/api/products` | Paginated product list |
+| `POST` | `/api/generate-attributes` | LLM ontology generation |
 
-Health check endpoint.
+### Project Routes (routes/projects.ts)
 
-#### `GET /api/taxonomy`
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/projects` | List all projects |
+| `POST` | `/api/projects` | Create new project |
+| `GET` | `/api/projects/:id` | Get project by ID |
+| `DELETE` | `/api/projects/:id` | Delete project and images |
+| `PATCH` | `/api/projects/:id/pin` | Toggle pin status |
+| `GET` | `/api/projects/:id/preview-context` | Calculate velocity scores |
+| `POST` | `/api/projects/:id/lock-context` | Lock context and create project |
+| `GET` | `/api/projects/:id/generated-designs` | List designs for project |
+| `DELETE` | `/api/projects/:projectId/generated-designs/:designId` | Delete design |
+| `PATCH` | `/api/projects/:projectId/generated-designs/:designId` | Update design |
+| `GET` | `/api/projects/:projectId/generated-designs/:designId/image-status` | Get image generation status |
+| `POST` | `/api/projects/:projectId/generated-designs/:designId/regenerate-sales-text` | Regenerate sales text |
 
-Returns product type hierarchy grouped by product groups.
+### Enrichment Routes (routes/enrichment.ts)
 
-#### `GET /api/filters/attributes`
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/projects/:id/start-enrichment` | Start Vision LLM enrichment |
+| `GET` | `/api/projects/:id/enrichment-progress` | SSE for real-time progress |
+| `GET` | `/api/projects/:id/enrichment-status` | Get current enrichment state |
+| `POST` | `/api/projects/:id/retry-enrichment` | Retry failed items |
 
-Get available filter options based on current filters (dynamically updates).
+### RPT-1 Routes (routes/rpt1.ts)
 
-**Query Parameters:**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/projects/:id/rpt1-preview` | Get context row counts |
+| `POST` | `/api/projects/:id/rpt1-predict` | Execute RPT-1 and generate images |
 
-- `types` (required): Comma-separated product types
-- `season` (optional): spring | summer | autumn | winter
-- `mdFrom` (optional): Start date in MM-DD format
-- `mdTo` (optional): End date in MM-DD format
-- Filter parameters: `filter_productGroup`, `filter_colorFamily`, etc.
+### Collections Routes (routes/collections.ts)
 
-#### `GET /api/products`
-
-Get paginated, filtered product list.
-
-#### `POST /api/generate-attributes`
-
-Generate structured attribute definitions using LLM for selected product types.
-
-### Project Routes
-
-#### `POST /api/projects`
-
-Create new project (draft status).
-
-#### `GET /api/projects`
-
-List all projects with generated designs count and pin status.
-
-#### `GET /api/projects/:id`
-
-Get single project by ID.
-
-#### `GET /api/projects/:id/preview-context`
-
-Calculate velocity scores for context preview (top 25 + worst 25 performers).
-
-#### `POST /api/projects/:id/lock-context`
-
-Lock project context, save articles with normalized velocity scores, and set project to active.
-
-#### `DELETE /api/projects/:id`
-
-Delete project and cleanup all associated images from SeaweedFS.
-
-#### `PATCH /api/projects/:id/pin`
-
-Toggle project pin status (max 3 projects can be pinned).
-
-#### `GET /api/projects/:id/generated-designs`
-
-Get all generated designs for a project.
-
-#### `DELETE /api/projects/:projectId/generated-designs/:designId`
-
-Delete specific design and its images.
-
-#### `PATCH /api/projects/:projectId/generated-designs/:designId`
-
-Update design (e.g., rename).
-
-#### `GET /api/projects/:projectId/generated-designs/:designId/image-status`
-
-Get multi-image generation status for a specific design.
-
-### Enrichment Routes
-
-#### `POST /api/projects/:id/start-enrichment`
-
-Start Vision LLM enrichment for all unenriched context items.
-
-#### `GET /api/projects/:id/enrichment-progress`
-
-Server-Sent Events (SSE) endpoint for real-time enrichment progress updates.
-
-#### `GET /api/projects/:id/enrichment-status`
-
-Get current enrichment state (for page reload recovery).
-
-#### `POST /api/projects/:id/retry-enrichment`
-
-Retry failed enrichment items (optionally specify articleIds array).
-
-#### `GET /api/projects/:id/context-items`
-
-Get all context items with enrichment status for Enhanced Table display.
-
-### RPT-1 Routes
-
-#### `GET /api/projects/:id/rpt1-preview`
-
-Get context row counts for RPT-1 preview.
-
-#### `POST /api/projects/:id/rpt1-predict`
-
-Execute RPT-1 prediction via SAP AI Core (generates 3 images: front/back/model).
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/collections` | List user collections |
+| `POST` | `/api/collections` | Create collection |
+| `GET` | `/api/collections/:id` | Get collection details |
+| `PATCH` | `/api/collections/:id` | Rename collection |
+| `DELETE` | `/api/collections/:id` | Delete collection |
+| `POST` | `/api/collections/:id/items` | Add design to collection |
+| `DELETE` | `/api/collections/:id/items/:designId` | Remove design from collection |
 
 ### Other Routes
 
-#### `GET /api/collections`
-
-List user collections with item counts and preview images.
-
-#### `POST /api/collections`
-
-Create a new collection.
-
-#### `GET /api/collections/:id`
-
-Get collection details with all designs.
-
-#### `PATCH /api/collections/:id`
-
-Rename a collection.
-
-#### `DELETE /api/collections/:id`
-
-Delete a collection.
-
-#### `POST /api/collections/:id/items`
-
-Add a design to a collection.
-
-#### `DELETE /api/collections/:id/items/:designId`
-
-Remove a design from a collection.
-
-#### `POST /api/generate-design-name`
-
-LLM-based creative name generation for designs.
-
-#### `POST /api/projects/:projectId/generated-designs/:designId/regenerate-sales-text`
-
-Regenerate sales text for a design (optionally including image context).
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/generate-design-name` | LLM-based creative naming |
+| `GET` | `/api/projects/:id/context-items` | Get context items with status |
 
 ---
 
-## 📦 Package Details
+## Deployment
 
-### @fashion/db
-
-**Database access layer with Drizzle ORM**
-
-Key exports:
-
-- `pool` - PostgreSQL connection pool
-- `fetchProductTaxonomy()` - Get product type hierarchy
-- Schema definitions for all tables
-- Query functions for analytics, product types, taxonomy
-
-### @fashion/types
-
-**Shared TypeScript type definitions and Zod schemas**
-
-Key types:
-
-- `Taxonomy` - Product type hierarchy structure
-- `FiltersResponse` - Available filter options
-- `ProductsResponse` - Paginated product data
-- `CreateProjectInput` - Project creation input
-- `LockContextInput` - Context locking input
-- Many more for API contracts
-
-### @fashion/config
-
-**Configuration management**
-
-Exports:
-
-- Environment variable validation
-- Database connection configuration
-- API configuration
-- Constants and defaults
-
----
-
-## 🔧 Development
-
-### Running Services
+### Local Development
 
 ```bash
 # API Server (port 3001)
@@ -666,204 +330,84 @@ cd apps/api-lite && pnpm run dev
 # Web Application (port 5173)
 cd apps/web && pnpm run dev
 
-# Redis (optional, for caching)
+# Redis (optional)
 docker run -d -p 6379:6379 --name fashion-redis redis:7-alpine
 ```
 
-### Database Management
+### Kyma Deployment
 
-```bash
-# Generate migrations after schema changes
-pnpm db:generate
+The application deploys to SAP Kyma using a 3-container architecture:
 
-# Apply migrations
-pnpm db:migrate
+1. **Approuter** (port 5000) - XSUAA authentication and request routing
+2. **Frontend** (port 80) - Nginx serving React SPA
+3. **Backend** (port 3001) - Fastify API server
 
-# Open Drizzle Studio (GUI)
-pnpm db:studio
-```
-
-### Code Quality
-
-```bash
-# Format all code
-pnpm format
-
-# Build all packages
-pnpm build
-
-# Type check
-pnpm --recursive run type-check
-```
+See [k8s/README.md](k8s/README.md) for detailed deployment instructions.
 
 ---
 
-## 🎯 User Workflows
+## User Workflows
 
-### Workflow 1: Create a New Project
+### Create a New Project
+1. Home → Create New Project
+2. Product Selection → Select product types
+3. Context Builder → Configure filters, generate attributes
+4. Click "Confirm & Create Project"
 
-1. **Home** → Click "Create New Project"
-2. **Product Selection** → Select product types (e.g., "Dress", "Skirt")
-3. **Context Builder** → Configure filters (date/season, attributes)
-4. **Generate Attributes** → Click "Generate Attributes" button, review and refine
-5. **Create Project** → Click "Confirm & Create Project"
-6. **Automatic Redirect** → Navigate to ProjectHub
+### Generate Designs
+1. ProjectHub → Enhanced Table tab → Start enrichment
+2. The Alchemist tab → Configure locked/AI attributes
+3. Click "Transmute" to generate design
+4. Result Overview tab → View generated designs
 
-### Workflow 2: Enrich Context & Generate Designs
-
-1. **ProjectHub** → Navigate to project from Home
-2. **Enhanced Table Tab** → View context items, start enrichment if needed
-3. **The Alchemist Tab** → Configure locked/AI attributes
-4. **Transmute** → Click "Transmute (Run RPT-1)" to generate design
-5. **Result Overview Tab** → View generated designs
-6. **Design Detail** → Click design to see full details with multi-image views
-
-### Workflow 3: Refine an Existing Design
-
-1. **Design Detail** → View design, click "Refine Design" button
-2. **Automatic Navigation** → Redirect to TheAlchemistTab with pre-populated attributes
-3. **Adjust Attributes** → Modify locked/AI variables as needed
-4. **Generate Again** → Create variation with adjusted parameters
+### Refine an Existing Design
+1. Design Detail → Click "Refine Design"
+2. Alchemist tab opens with pre-populated attributes
+3. Adjust and generate new variation
 
 ---
 
-## 📚 Documentation
+## Documentation
 
-- [QUICKSTART.md](QUICKSTART.md) - Detailed setup and installation guide
-- [CLAUDE.md](CLAUDE.md) - Development guide for AI assistants
-- [docs/PRD.md](docs/PRD.md) - Full product requirements and architecture
+- [QUICKSTART.md](QUICKSTART.md) - Setup and installation guide
+- [docs/PRD.md](docs/PRD.md) - Product requirements document
+- [docs/DataModel.md](docs/DataModel.md) - Database schema and JSONB documentation
 - [docs/Data-summary.md](docs/Data-summary.md) - Dataset structure and semantics
-- [docs/DataModel.md](docs/DataModel.md) - Entity relationship diagrams with JSONB schemas
-- [docs/CollectionMock.md](docs/CollectionMock.md) - Mock collections implementation details
-- [docs/PERFORMANCE_OPTIMIZATION.md](docs/PERFORMANCE_OPTIMIZATION.md) - Performance improvements (Phase 1 & 2)
+- [docs/image-prompt-system-design.md](docs/image-prompt-system-design.md) - Image generation prompt system
+- [docs/prompt-templates-by-product-group.md](docs/prompt-templates-by-product-group.md) - Prompt templates
+- [k8s/README.md](k8s/README.md) - Kyma deployment guide
+- [docs/FUTURE_IMPROVEMENTS.md](docs/FUTURE_IMPROVEMENTS.md) - Code quality improvements for future development
 
 ---
 
-## 🛠️ Tech Stack Details
+## Troubleshooting
 
-### Frontend
-
-- **React 18**: Component-based UI framework
-- **Vite**: Fast build tool and dev server
-- **SAP UI5 Web Components**: Enterprise-grade UI components with Fiori design
-- **React Router 7**: Client-side routing
-- **TypeScript**: Type-safe development
-
-### Backend
-
-- **Fastify**: High-performance web framework
-- **Node.js 18+**: Runtime environment
-- **Modular Routes**: Organized in separate files for maintainability
-- **TypeScript**: Type-safe API development
-- **Redis**: Optional caching layer for 15-30x performance boost
-
-### Database & ORM
-
-- **PostgreSQL 16**: Relational database with JSONB support
-- **Drizzle ORM 0.29.5**: Type-safe SQL query builder
-- **Connection Pooling**: Optimized for concurrent requests
-- **Strategic Indexing**: 9 indexes for 5-10x faster queries
-
-### AI & ML
-
-- **OpenAI API**: Text generation for ontology and names
-- **LiteLLM Proxy**: Vision LLM for data enrichment
-- **SAP AI Core**: RPT-1 predictions and image generation
-- **OAuth2**: Secure authentication with SAP AI Core
-
-### Storage
-
-- **SeaweedFS/S3**: Distributed file storage for generated images
-- **Automatic Cleanup**: Images deleted when designs/projects are removed
-
----
-
-## 🐛 Troubleshooting
-
-### Database Connection Issues
-
-**Cloud Database:**
-
+### Database Connection
 ```bash
 # Test connection
-psql -h your-db-host -p 5432 -U postgres -d fashion_db
-
-# If using port forwarding:
-caffeinate kubectl port-forward statefulset/your-db-instance 5432:5432 -n your-namespace
-```
-
-**Verify Port Forwarding:**
-
-```bash
-# Check if port forwarding is active
-netstat -an | grep 5432
-
-# Test local connection
 psql -h localhost -p 5432 -U postgres -d fashion_db
-```
 
-### API Server Issues
-
-```bash
-# Check if API is running
+# Check API health
 curl http://localhost:3001/health
-
-# Check if port is in use
-lsof -ti:3001
-
-# Restart API server
-cd apps/api-lite && pnpm run dev
 ```
 
-### Redis Cache Issues
-
+### Redis Cache
 ```bash
-# Check if Redis is running
 redis-cli ping
-
-# Start Redis with Docker
-docker run -d -p 6379:6379 --name fashion-redis redis:7-alpine
-
-# View cache statistics
 redis-cli info stats
 ```
 
-### Frontend Issues
-
-```bash
-# Clear browser cache and localStorage
-# Open DevTools -> Application -> Clear storage
-
-# Restart dev server
-cd apps/web && pnpm run dev
-```
-
-### Image Generation Issues
-
-```bash
-# Check SeaweedFS/S3 connection in .env
-# Verify S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY
-
-# Check SAP AI Core credentials
-# Verify AI_API_URL, AUTH_URL, CLIENT_ID, CLIENT_SECRET
-```
+### Image Generation
+- Verify S3 credentials in `.env`
+- Check SAP AI Core credentials
+- Review backend logs for errors
 
 ---
 
-## 🤝 Contributing
-
-1. Create a feature branch
-2. Make changes with proper TypeScript types
-3. Test thoroughly (especially new workflows)
-4. Update documentation as needed
-5. Submit pull request
-
----
-
-## 📄 License
+## License
 
 [License Type] - See LICENSE file for details
 
 ---
 
-**Built with ❤️ using TypeScript, React, PostgreSQL, and AI**
+**Built with TypeScript, React, PostgreSQL, and AI**

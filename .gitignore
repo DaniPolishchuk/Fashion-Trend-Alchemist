@@ -48,3 +48,6 @@ k8s/secrets.yaml
 k8s/vcap-services-job.yaml
 *.kubeconfig
 kubeconfig*
+
+PA2/
+packages/db/src/evaluation/

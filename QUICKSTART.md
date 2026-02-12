@@ -1,11 +1,11 @@
 # Quick Start Guide
 
-Get the Fashion Trend Alchemist running in 5 minutes!
+Get the Fashion Trend Alchemist running locally.
 
 ## Prerequisites
 
 - Node.js 18+ installed
-- pnpm installed (`npm install -g pnpm`)
+- pnpm 8+ installed (`npm install -g pnpm`)
 - Access to a PostgreSQL database (local or cloud)
 - Redis (optional, for caching)
 - API credentials (OpenAI, SAP AI Core)
@@ -34,42 +34,41 @@ PGHOST=localhost          # Or your cloud database host
 PGPORT=5432              # Or your forwarded port
 PGUSER=postgres
 PGPASSWORD=your_password
-PGDATABASE=fashion_db
+PGDATABASE=postgres
+PGMAX=10
 
-# API Configuration
+# Application Configuration
+NODE_ENV=development
 API_PORT=3001
 API_HOST=0.0.0.0
+LOG_LEVEL=info
 
 # Redis Cache (optional - 15-30x performance boost)
 REDIS_URL=redis://localhost:6379
 
-# LLM Integration (for ontology generation)
-LLM_API_URL=https://api.openai.com/v1
-LLM_API_KEY=your_openai_key
-LLM_MODEL=gpt-4
+# SeaweedFS Filer Configuration (for image storage)
+# VITE_ prefix required for frontend access
+VITE_FILER_BASE_URL=https://your-seaweedfs-url.com
+VITE_FILER_BUCKET=images
+VITE_FILER_GENERATED_BUCKET=generatedProducts
 
-# Vision LLM (for data enrichment)
-LITELLM_PROXY_URL=your_litellm_proxy_url
-LITELLM_API_KEY=your_litellm_key
-VISION_LLM_MODEL=gpt-4-vision-preview
-
-# Enrichment Processing
-ENRICHMENT_CONCURRENCY=5
-ENRICHMENT_PROGRESS_INTERVAL_MS=500
+# Vision LLM Configuration (for image enrichment)
+LITELLM_PROXY_URL=https://your-litellm-proxy-url.com/
+LITELLM_API_KEY=your-litellm-api-key
+VISION_LLM_MODEL=sapgenai-gpt-4.1
 
 # RPT-1 / SAP AI Core (for design prediction)
-AI_API_URL=your_sap_ai_core_url
+AI_API_URL=https://api.ai.prod.ap-northeast-1.aws.ml.hana.ondemand.com
 AUTH_URL=your_oauth_url
 CLIENT_ID=your_client_id
 CLIENT_SECRET=your_client_secret
 RESOURCE_GROUP=generative-ai
 
-# S3/SeaweedFS (for image storage)
-S3_ENDPOINT=your_s3_endpoint
-S3_REGION=us-east-1
-S3_ACCESS_KEY_ID=your_access_key
-S3_SECRET_ACCESS_KEY=your_secret_key
-S3_BUCKET=fashion-images
+# Image Generation (SAP AI Core Z-Image Turbo)
+IMAGE_GEN_TOKEN_URL=your_token_url
+IMAGE_GEN_CLIENT_ID=your_client_id
+IMAGE_GEN_CLIENT_SECRET=your_client_secret
+IMAGE_GEN_API_URL=your_api_url
 ```
 
 ### 3. Database Setup
@@ -145,7 +144,7 @@ docker run -d -p 6379:6379 --name fashion-redis redis:7-alpine
 
 ---
 
-## Current Features
+## Application Features
 
 ### Home Dashboard
 - Projects table with search, pagination, and pinning (max 3)
@@ -157,12 +156,10 @@ docker run -d -p 6379:6379 --name fashion-redis redis:7-alpine
 - Visual card-based interface with product type icons
 - Selection persists in browser localStorage
 
-### Context Builder (Unified Workflow)
+### Context Builder
 - **Date Range Filtering**: Enter start/end dates (DD/MM format) with validation
 - **Season Filtering**: Quick-select buttons for Spring/Summer/Autumn/Winter
-- **Multi-Attribute Filtering**:
-  - Pattern/Style, Color Family, Color Intensity, Specific Color
-  - Customer Segment, Product Family, Style Concept, Fabric Type
+- **Multi-Attribute Filtering**: Pattern/Style, Color Family, Color Intensity, Specific Color, Customer Segment, Product Family, Style Concept, Fabric Type
 - **Context Preview Table**: See matching articles with velocity scores
 - **Attribute Generation**: LLM-powered ontology generation for selected product types
 - **Project Creation**: One-click project creation with automatic velocity calculation
@@ -170,7 +167,7 @@ docker run -d -p 6379:6379 --name fashion-redis redis:7-alpine
 ### Project Hub (4 Tabs)
 1. **The Alchemist**: Configure locked/AI attributes, set success score, run RPT-1
 2. **Result Overview**: View generated designs with multi-image support
-3. **Enhanced Table**: Monitor enrichment, review mismatches, manage exclusions
+3. **Enhanced Table**: Monitor enrichment, manage exclusions, export CSV
 4. **Data Analysis**: Placeholder for future analytics
 
 ### Design Detail
@@ -183,7 +180,7 @@ docker run -d -p 6379:6379 --name fashion-redis redis:7-alpine
 
 ---
 
-## Database Schema
+## Database Schema Overview
 
 The system uses the following core tables:
 
@@ -231,7 +228,6 @@ The system uses the following core tables:
 - Context preview and locking
 - Pin management (max 3)
 - Generated designs management
-- Mismatch review and velocity recalculation
 
 ### Enrichment
 - Start/retry enrichment
@@ -284,6 +280,15 @@ redis-cli ping
 redis-cli info stats
 ```
 
+### Build Errors
+
+```bash
+# Clean and rebuild
+rm -rf node_modules/.cache
+pnpm install
+pnpm build
+```
+
 ---
 
 ## Next Steps
@@ -297,10 +302,6 @@ redis-cli info stats
 
 For detailed documentation:
 - [README.md](README.md) - Full feature documentation
-- [CLAUDE.md](CLAUDE.md) - Development guide
 - [docs/PRD.md](docs/PRD.md) - Product requirements
 - [docs/DataModel.md](docs/DataModel.md) - Database schema details
-
----
-
-**Happy analyzing! 🚀**
+- [docs/FUTURE_IMPROVEMENTS.md](docs/FUTURE_IMPROVEMENTS.md) - Code quality improvements

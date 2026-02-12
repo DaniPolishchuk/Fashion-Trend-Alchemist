@@ -503,12 +503,11 @@ whereClauses.push(sql`(${sql.join(monthConditions, sql` OR `)})`);
 
 ## Known Technical Debt (Demo-Appropriate)
 
-1. **Hardcoded User Authentication:** `userId` defaults to `'00000000-0000-0000-0000-000000000000'`
+1. **Hardcoded User ID for Local Development:** Data operations use `userId = '00000000-0000-0000-0000-000000000000'` in local development. Production uses XSUAA authentication via SAP Approuter, but data queries should be updated to use the extracted user ID.
 2. **No JSONB Validation:** Database accepts any JSON structure without schema validation
 3. **Image Storage Dependency:** Images served via SeaweedFS Filer; requires port-forwarding for local dev
-4. **Collections Mock Data:** Collections feature uses mock data (see CollectionMock.md)
 
-These items are **documented as acceptable** for current demo phase but should be addressed before production deployment.
+These items are **documented as acceptable** for current demo phase but should be addressed before production deployment. See [FUTURE_IMPROVEMENTS.md](FUTURE_IMPROVEMENTS.md) for detailed recommendations.
 
 ---
 
