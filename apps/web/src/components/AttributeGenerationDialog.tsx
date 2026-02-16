@@ -3,7 +3,7 @@
  * Refactored with constants, CSS modules, and custom hooks
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   Bar,
@@ -26,6 +26,8 @@ import '@ui5/webcomponents-icons/dist/question-mark.js';
 import '@ui5/webcomponents-icons/dist/history.js';
 import '@ui5/webcomponents-icons/dist/ai.js';
 import '@ui5/webcomponents-icons/dist/da.js';
+import '@ui5/webcomponents-icons/dist/download.js';
+import '@ui5/webcomponents-icons/dist/upload.js';
 
 import { useAttributeEditor } from '../hooks/useAttributeEditor';
 import { useOptionsManager } from '../hooks/useOptionsManager';
@@ -71,6 +73,10 @@ export function AttributeGenerationDialog({
   const [attributes, setAttributes] = useState<any>({});
   const [infoPopupOpen, setInfoPopupOpen] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Refs
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Custom hooks
   const defaultCategory = selectedTypes[0] || 'General';
@@ -103,6 +109,99 @@ export function AttributeGenerationDialog({
     onSave(attributes);
     onClose();
   };
+
+  // Validate ontology structure
+  const validateOntologyStructure = (data: unknown): { valid: boolean; error?: string } => {
+    // Must be a non-null object
+    if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+      return { valid: false, error: TEXT.ERROR_INVALID_STRUCTURE };
+    }
+
+    const keys = Object.keys(data);
+
+    // Must have exactly one top-level key (the category)
+    if (keys.length !== 1) {
+      return { valid: false, error: TEXT.ERROR_INVALID_STRUCTURE };
+    }
+
+    const categoryValue = (data as Record<string, unknown>)[keys[0]];
+
+    // The category value must be a non-null object
+    if (typeof categoryValue !== 'object' || categoryValue === null || Array.isArray(categoryValue)) {
+      return { valid: false, error: TEXT.ERROR_INVALID_STRUCTURE };
+    }
+
+    const attributeKeys = Object.keys(categoryValue);
+
+    // Must contain at least one attribute
+    if (attributeKeys.length === 0) {
+      return { valid: false, error: TEXT.ERROR_EMPTY_ONTOLOGY };
+    }
+
+    // Each attribute value must be an array of strings
+    for (const attrKey of attributeKeys) {
+      const attrValue = (categoryValue as Record<string, unknown>)[attrKey];
+      if (!Array.isArray(attrValue)) {
+        return { valid: false, error: TEXT.ERROR_INVALID_STRUCTURE };
+      }
+      for (const item of attrValue) {
+        if (typeof item !== 'string') {
+          return { valid: false, error: TEXT.ERROR_INVALID_STRUCTURE };
+        }
+      }
+    }
+
+    return { valid: true };
+  };
+
+  // Download ontology handler
+  const handleDownloadOntology = () => {
+    const blob = new Blob([JSON.stringify(attributes, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `ontology-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Upload ontology handler
+  const handleUploadOntology = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadError(null);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target?.result as string);
+        const validation = validateOntologyStructure(data);
+        if (!validation.valid) {
+          setUploadError(validation.error || TEXT.ERROR_INVALID_STRUCTURE);
+          return;
+        }
+        setAttributes(data);
+        setUploadError(null);
+      } catch {
+        setUploadError(TEXT.ERROR_INVALID_JSON);
+      }
+    };
+    reader.readAsText(file);
+
+    // Reset file input so the same file can be selected again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Trigger file input click
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  // Check if attributes exist
+  const hasAttributes = Object.keys(attributes).length > 0;
 
   return (
     <>
@@ -226,16 +325,49 @@ export function AttributeGenerationDialog({
           <div className={styles.rightPanel}>
             <div className={styles.attributesContainer}>
               <div className={styles.attributesHeader}>
-                <Title level="H5">{TEXT.TITLE_GENERATED}</Title>
-                <Button
-                  design="Transparent"
-                  icon={ICONS.ADD}
-                  onClick={attributeEditor.startAddNew}
-                  disabled={attributesLoading}
-                >
-                  {TEXT.BUTTON_ADD_ATTRIBUTE}
-                </Button>
+                <div className={styles.attributesHeaderLeft}>
+                  <Title level="H5">{TEXT.TITLE_GENERATED}</Title>
+                  <Button
+                    design="Transparent"
+                    icon={ICONS.ADD}
+                    onClick={attributeEditor.startAddNew}
+                    disabled={attributesLoading}
+                  >
+                    {TEXT.BUTTON_ADD_ATTRIBUTE}
+                  </Button>
+                </div>
+                <div className={styles.attributesHeaderRight}>
+                  <Button
+                    design="Transparent"
+                    icon={ICONS.DOWNLOAD}
+                    onClick={handleDownloadOntology}
+                    disabled={!hasAttributes || attributesLoading}
+                  >
+                    {TEXT.BUTTON_DOWNLOAD}
+                  </Button>
+                  <Button
+                    design="Transparent"
+                    icon={ICONS.UPLOAD}
+                    onClick={handleUploadClick}
+                    disabled={attributesLoading}
+                  >
+                    {TEXT.BUTTON_UPLOAD}
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={TEXT.FILE_ACCEPT}
+                    onChange={handleUploadOntology}
+                    className={styles.hiddenFileInput}
+                  />
+                </div>
               </div>
+
+              {uploadError && (
+                <div className={styles.uploadErrorMessage}>
+                  <Text>{uploadError}</Text>
+                </div>
+              )}
 
               {attributesLoading ? (
                 <div className={styles.loadingContainer}>

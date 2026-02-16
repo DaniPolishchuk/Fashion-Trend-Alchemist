@@ -50,4 +50,5 @@ k8s/vcap-services-job.yaml
 kubeconfig*
 
 PA2/
+Nils_PA_2/
 packages/db/src/evaluation/
