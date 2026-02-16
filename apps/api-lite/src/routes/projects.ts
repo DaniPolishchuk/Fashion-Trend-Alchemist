@@ -25,7 +25,7 @@ import {
   type PreviewContextQuery,
   type LockContextInput,
 } from '@fashion/types';
-import { API_LIMITS, CONTEXT_CONFIG } from '../constants.js';
+import { API_LIMITS, CONTEXT_CONFIG, PAYLOAD_LIMITS } from '../constants.js';
 
 const HARDCODED_USER_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -309,6 +309,26 @@ export default async function projectRoutes(fastify: FastifyInstance) {
   }>('/projects/:id/lock-context', async (request, reply) => {
     try {
       const { id: projectId } = request.params;
+
+      // Enhanced validation: Check article count before parsing
+      const articleCount = request.body.articles?.length || 0;
+
+      if (articleCount < PAYLOAD_LIMITS.MIN_LOCK_CONTEXT_ITEMS) {
+        return reply.status(400).send({
+          error: 'Insufficient context items',
+          message: `At least ${PAYLOAD_LIMITS.MIN_LOCK_CONTEXT_ITEMS} products are required to create a project`,
+          received: articleCount,
+        });
+      }
+
+      if (articleCount > PAYLOAD_LIMITS.MAX_LOCK_CONTEXT_ITEMS) {
+        return reply.status(400).send({
+          error: 'Too many context items',
+          message: `Maximum ${PAYLOAD_LIMITS.MAX_LOCK_CONTEXT_ITEMS} products allowed per project`,
+          received: articleCount,
+        });
+      }
+
       const validatedInput = LockContextInputSchema.parse(request.body);
 
       // Verify project exists and is in draft status
