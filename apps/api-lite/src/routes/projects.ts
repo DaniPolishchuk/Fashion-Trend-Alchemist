@@ -31,53 +31,45 @@ const HARDCODED_USER_ID = '00000000-0000-0000-0000-000000000000';
 
 /**
  * Re-normalize velocity scores for all included (non-excluded) articles
- * Uses raw velocity scores to properly re-normalize when the included set changes
+ * Uses percentile-based ranking (PERCENT_RANK) for more even distribution
  */
 async function recalculateVelocityScores(projectId: string): Promise<void> {
-  // Get all context items for the project with their RAW velocity scores
-  const items = await db
-    .select({
-      articleId: projectContextItems.articleId,
-      rawVelocityScore: projectContextItems.rawVelocityScore,
-      isExcluded: projectContextItems.isExcluded,
-    })
-    .from(projectContextItems)
-    .where(eq(projectContextItems.projectId, projectId));
+  // Use SQL window function to calculate percentile ranks for included items
+  // PERCENT_RANK() gives 0 for minimum and 1 for maximum, we scale to 0-100
+  const percentileQuery = sql`
+    WITH included_items AS (
+      SELECT 
+        article_id,
+        raw_velocity_score,
+        PERCENT_RANK() OVER (ORDER BY raw_velocity_score ASC) * 100 as percentile_score
+      FROM ${projectContextItems}
+      WHERE project_id = ${projectId}
+      AND is_excluded = false
+    ),
+    all_items AS (
+      SELECT 
+        pci.article_id,
+        pci.raw_velocity_score,
+        pci.is_excluded,
+        COALESCE(ii.percentile_score, 
+          CASE 
+            WHEN pci.raw_velocity_score <= (SELECT MIN(raw_velocity_score) FROM included_items) THEN 0
+            WHEN pci.raw_velocity_score >= (SELECT MAX(raw_velocity_score) FROM included_items) THEN 100
+            ELSE 50
+          END
+        ) as velocity_score
+      FROM ${projectContextItems} pci
+      LEFT JOIN included_items ii ON pci.article_id = ii.article_id
+      WHERE pci.project_id = ${projectId}
+    )
+    UPDATE ${projectContextItems}
+    SET velocity_score = ai.velocity_score
+    FROM all_items ai
+    WHERE ${projectContextItems}.project_id = ${projectId}
+    AND ${projectContextItems}.article_id = ai.article_id
+  `;
 
-  // Filter to only included items
-  const includedItems = items.filter((item) => !item.isExcluded);
-
-  if (includedItems.length === 0) {
-    return; // No included items to normalize
-  }
-
-  // Get min and max RAW velocity scores among included items
-  const rawVelocityScores = includedItems.map((item) => parseFloat(item.rawVelocityScore) || 0);
-  const minVelocity = Math.min(...rawVelocityScores);
-  const maxVelocity = Math.max(...rawVelocityScores);
-  const velocityRange = maxVelocity - minVelocity;
-
-  // Re-normalize ALL items (both included and excluded) based on included items' range
-  // This ensures that when you re-include an item, it gets the correct normalized score
-  // Cap at 100 to handle excluded items with higher raw scores than included max
-  for (const item of items) {
-    const rawVelocity = parseFloat(item.rawVelocityScore) || 0;
-    const calculatedScore =
-      velocityRange === 0 ? 100 : ((rawVelocity - minVelocity) / velocityRange) * 100;
-
-    // Cap at 100 to prevent excluded items from exceeding the scale
-    const normalizedVelocity = Math.min(100, calculatedScore);
-
-    await db
-      .update(projectContextItems)
-      .set({ velocityScore: normalizedVelocity.toFixed(2) })
-      .where(
-        and(
-          eq(projectContextItems.projectId, projectId),
-          eq(projectContextItems.articleId, item.articleId)
-        )
-      );
-  }
+  await db.execute(percentileQuery);
 }
 
 export default async function projectRoutes(fastify: FastifyInstance) {
@@ -221,9 +213,10 @@ export default async function projectRoutes(fastify: FastifyInstance) {
         }
       });
 
-      // Execute velocity calculation query for all matching articles
+      // Execute velocity calculation query with percentile-based scoring
       // Velocity = COUNT(transactions) / (last_transaction_date - first_transaction_date + 1)
       // This measures units sold per day of availability (approximated by first/last sale)
+      // PERCENT_RANK() provides percentile-based normalization for more even distribution
       const allArticlesQuery = db
         .select({
           article_id: articles.articleId,
@@ -239,8 +232,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
           fabric_type_base: articles.fabricTypeBase,
           detail_desc: articles.detailDesc,
           // Raw velocity: transactions per day of availability
-          // Note: DATE - DATE in PostgreSQL returns integer (days), so no EXTRACT needed
-          velocity_score: sql<number>`
+          raw_velocity: sql<number>`
             CASE
               WHEN MAX(${transactionsTrain.tDate})::date = MIN(${transactionsTrain.tDate})::date THEN COUNT(*)::float
               ELSE COUNT(*)::float / (MAX(${transactionsTrain.tDate})::date - MIN(${transactionsTrain.tDate})::date + 1)::float
@@ -269,7 +261,20 @@ export default async function projectRoutes(fastify: FastifyInstance) {
         )
         .orderBy(sql`13 DESC`);
 
-      const allResults = await allArticlesQuery;
+      const velocityResults = await allArticlesQuery;
+
+      // Calculate percentile ranks using PERCENT_RANK window function
+      // This provides more even distribution than min-max normalization
+      const allResults = velocityResults.map((row, index, array) => {
+        // Calculate percentile rank: position / (total - 1) * 100
+        // For single item, percentile is 100
+        const percentileScore = array.length === 1 ? 100 : (index / (array.length - 1)) * 100;
+
+        return {
+          ...row,
+          velocity_score: percentileScore,
+        };
+      });
 
       // Apply context configuration: select top N and worst M performers
       // If total results <= requested amount, return all
@@ -374,26 +379,31 @@ export default async function projectRoutes(fastify: FastifyInstance) {
           })
           .where(eq(projects.id, projectId));
 
-        // Normalize velocity scores to 0-100
-        // Find min and max velocity scores from the input articles
-        const velocityScores = validatedInput.articles.map((a) => a.velocity_score);
-        const minVelocity = Math.min(...velocityScores);
-        const maxVelocity = Math.max(...velocityScores);
-        const velocityRange = maxVelocity - minVelocity;
+        // Calculate percentile-based velocity scores (0-100)
+        // Sort articles by velocity to calculate percentile ranks
+        const sortedArticles = [...validatedInput.articles].sort(
+          (a, b) => a.velocity_score - b.velocity_score
+        );
 
-        // Bulk insert context items with both raw and normalized velocity scores
+        // Create a map of article_id to percentile score
+        const percentileMap = new Map<string, number>();
+        const totalArticles = sortedArticles.length;
+
+        sortedArticles.forEach((article, index) => {
+          // PERCENT_RANK formula: rank / (n - 1) * 100
+          // For single article, percentile is 100
+          const percentileScore = totalArticles === 1 ? 100 : (index / (totalArticles - 1)) * 100;
+          percentileMap.set(article.article_id, percentileScore);
+        });
+
+        // Bulk insert context items with both raw and percentile-based velocity scores
         const contextItems = validatedInput.articles.map((article) => {
-          // Normalize to 0-100 scale
-          // If all articles have the same velocity, assign 100 to all
-          const normalizedVelocity =
-            velocityRange === 0
-              ? 100
-              : ((article.velocity_score - minVelocity) / velocityRange) * 100;
+          const percentileVelocity = percentileMap.get(article.article_id) || 0;
 
           return {
             projectId,
             articleId: article.article_id,
-            velocityScore: normalizedVelocity.toFixed(2), // Store normalized 0-100 score
+            velocityScore: percentileVelocity.toFixed(2), // Store percentile-based 0-100 score
             rawVelocityScore: article.velocity_score.toFixed(2), // Store original raw score for re-normalization
             enrichedAttributes: null,
             originalIsExcluded: false, // Track original state - all items start as included
@@ -402,13 +412,17 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
         await tx.insert(projectContextItems).values(contextItems);
 
+        const velocityScores = validatedInput.articles.map((a) => a.velocity_score);
+        const minVelocity = Math.min(...velocityScores);
+        const maxVelocity = Math.max(...velocityScores);
+
         return {
           success: true,
           locked_count: validatedInput.articles.length,
           velocity_normalization: {
             min_raw: minVelocity,
             max_raw: maxVelocity,
-            normalized_range: '0-100',
+            normalized_range: '0-100 (percentile-based)',
           },
         };
       });
