@@ -77,7 +77,7 @@ export function AttributeGenerationDialog({
   const attributeEditor = useAttributeEditor(attributes, setAttributes, defaultCategory);
   const optionsManager = useOptionsManager(attributes, setAttributes);
 
-  // Sync generated attributes to local state ONLY ONCE when dialog opens
+  // Sync generated attributes to local state when dialog opens or after regeneration
   useEffect(() => {
     if (generatedAttributes && !hasInitialized) {
       setAttributes(generatedAttributes);
@@ -85,12 +85,12 @@ export function AttributeGenerationDialog({
     }
   }, [generatedAttributes, hasInitialized]);
 
-  // Reset initialization flag when dialog closes
+  // Reset initialization flag when dialog closes or when regeneration starts
   useEffect(() => {
-    if (!open) {
+    if (!open || attributesLoading) {
       setHasInitialized(false);
     }
-  }, [open]);
+  }, [open, attributesLoading]);
 
   // Get formatted attribute list
   const attributesList = flattenAttributes(attributes);

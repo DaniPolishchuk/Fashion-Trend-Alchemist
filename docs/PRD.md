@@ -46,17 +46,17 @@ The system follows a **Modern Monorepo Architecture** to ensure type safety acro
 
 ### 3.1 Technical Components
 
-| Layer          | Technology                 | Role                                                                                                                             |
-| -------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **Repo**       | **pnpm Workspace**         | Monorepo structure. Shared `packages/types` folder containing **Zod** schemas for API contracts and DB models.                   |
-| **Frontend**   | **React + Vite**           | SPA Framework.                                                                                                                   |
-| **UI Library** | **SAP UI5 Web Components** | Provides Enterprise/SAP look-and-feel (ShellBar, ObjectPage, AnalyticalTable) without Fiori Elements rigidity.                   |
-| **State**      | **TanStack Query**         | Manages async server state (Projects, Context).                                                                                  |
-| **Batching**   | **p-limit / Promise.all**  | **Client-Side Concurrency Control.** The Frontend manages the queue of 100+ LLM enrichment requests to prevent Backend timeouts. |
-| **Backend**    | **Node.js (Fastify)**      | API Server. Chosen for high-throughput JSON serialization.                                                                       |
-| **Database**   | **PostgreSQL**             | Relational DB. Stores Projects, H&M Static Data, and Generated Designs.                                                          |
-| **ORM**        | **Drizzle ORM**            | Type-safe SQL builder.                                                                                                           |
-| **AI Layer**   | **SAP AI Core + External APIs**          | OpenAI/LiteLLM (Text/Vision LLM), SAP AI Core RPT-1 (Inference), SAP AI Core Image Gen.                                                                       |
+| Layer          | Technology                      | Role                                                                                                                             |
+| -------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **Repo**       | **pnpm Workspace**              | Monorepo structure. Shared `packages/types` folder containing **Zod** schemas for API contracts and DB models.                   |
+| **Frontend**   | **React + Vite**                | SPA Framework.                                                                                                                   |
+| **UI Library** | **SAP UI5 Web Components**      | Provides Enterprise/SAP look-and-feel (ShellBar, ObjectPage, AnalyticalTable) without Fiori Elements rigidity.                   |
+| **State**      | **TanStack Query**              | Manages async server state (Projects, Context).                                                                                  |
+| **Batching**   | **p-limit / Promise.all**       | **Client-Side Concurrency Control.** The Frontend manages the queue of 100+ LLM enrichment requests to prevent Backend timeouts. |
+| **Backend**    | **Node.js (Fastify)**           | API Server. Chosen for high-throughput JSON serialization.                                                                       |
+| **Database**   | **PostgreSQL**                  | Relational DB. Stores Projects, H&M Static Data, and Generated Designs.                                                          |
+| **ORM**        | **Drizzle ORM**                 | Type-safe SQL builder.                                                                                                           |
+| **AI Layer**   | **SAP AI Core + External APIs** | OpenAI/LiteLLM (Text/Vision LLM), SAP AI Core RPT-1 (Inference), SAP AI Core Image Gen.                                          |
 
 ### 3.2 Data Flow Diagram (Mermaid)
 
@@ -396,48 +396,49 @@ All routes use the `/api` prefix. Routes are organized in modular files under `a
 
 ### Group 1: Project Management (`routes/projects.ts`)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/projects` | List all projects with generated designs count, pin status |
-| `POST` | `/projects` | Create new project (draft status) |
-| `GET` | `/projects/:id` | Get single project by ID |
-| `PATCH` | `/projects/:id` | Update project details (e.g., name) |
-| `DELETE` | `/projects/:id` | Delete project and cleanup images from SeaweedFS |
-| `PATCH` | `/projects/:id/pin` | Toggle pin status (max 3 pinned) |
-| `GET` | `/projects/:id/preview-context` | Calculate velocity scores for context preview |
-| `POST` | `/projects/:id/lock-context` | Lock context, save top 25 + worst 25 articles |
-| `GET` | `/projects/:id/generated-designs` | List all generated designs for project |
-| `DELETE` | `/projects/:projectId/generated-designs/:designId` | Delete design and its images |
-| `PATCH` | `/projects/:projectId/generated-designs/:designId` | Update design (rename) |
-| `GET` | `/projects/:projectId/generated-designs/:designId/image-status` | Get multi-image generation status |
-| `POST` | `/projects/:projectId/generated-designs/:designId/regenerate-sales-text` | Regenerate sales copy |
-| `PATCH` | `/projects/:id/mismatch-review` | Bulk update exclusions, mark review complete |
-| `PATCH` | `/projects/:id/context-items/:articleId/exclude` | Toggle single article exclusion |
-| `POST` | `/projects/:id/recalculate-velocity` | Re-normalize velocity scores |
+| Method   | Endpoint                                                                 | Description                                                |
+| -------- | ------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| `GET`    | `/projects`                                                              | List all projects with generated designs count, pin status |
+| `POST`   | `/projects`                                                              | Create new project (draft status)                          |
+| `GET`    | `/projects/:id`                                                          | Get single project by ID                                   |
+| `PATCH`  | `/projects/:id`                                                          | Update project details (e.g., name)                        |
+| `DELETE` | `/projects/:id`                                                          | Delete project and cleanup images from SeaweedFS           |
+| `PATCH`  | `/projects/:id/pin`                                                      | Toggle pin status (max 3 pinned)                           |
+| `GET`    | `/projects/:id/preview-context`                                          | Calculate velocity scores for context preview              |
+| `POST`   | `/projects/:id/lock-context`                                             | Lock context, save top 25 + worst 25 articles              |
+| `GET`    | `/projects/:id/generated-designs`                                        | List all generated designs for project                     |
+| `DELETE` | `/projects/:projectId/generated-designs/:designId`                       | Delete design and its images                               |
+| `PATCH`  | `/projects/:projectId/generated-designs/:designId`                       | Update design (rename)                                     |
+| `GET`    | `/projects/:projectId/generated-designs/:designId/image-status`          | Get multi-image generation status                          |
+| `POST`   | `/projects/:projectId/generated-designs/:designId/regenerate-sales-text` | Regenerate sales copy                                      |
+| `PATCH`  | `/projects/:id/mismatch-review`                                          | Bulk update exclusions, mark review complete               |
+| `PATCH`  | `/projects/:id/context-items/:articleId/exclude`                         | Toggle single article exclusion                            |
+| `POST`   | `/projects/:id/recalculate-velocity`                                     | Re-normalize velocity scores                               |
 
 ### Group 2: Enrichment (`routes/enrichment.ts`)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/projects/:id/start-enrichment` | Start Vision LLM enrichment |
-| `GET` | `/projects/:id/enrichment-progress` | SSE endpoint for real-time progress |
-| `GET` | `/projects/:id/enrichment-status` | Get current enrichment state |
-| `POST` | `/projects/:id/retry-enrichment` | Retry failed items |
+| Method | Endpoint                            | Description                         |
+| ------ | ----------------------------------- | ----------------------------------- |
+| `POST` | `/projects/:id/start-enrichment`    | Start Vision LLM enrichment         |
+| `GET`  | `/projects/:id/enrichment-progress` | SSE endpoint for real-time progress |
+| `GET`  | `/projects/:id/enrichment-status`   | Get current enrichment state        |
+| `POST` | `/projects/:id/retry-enrichment`    | Retry failed items                  |
 
 ### Group 3: Context Items (`routes/context-items.ts`)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/projects/:id/context-items` | Get all context items with enrichment status |
+| Method | Endpoint                      | Description                                  |
+| ------ | ----------------------------- | -------------------------------------------- |
+| `GET`  | `/projects/:id/context-items` | Get all context items with enrichment status |
 
 ### Group 4: RPT-1 Prediction (`routes/rpt1.ts`)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/projects/:id/rpt1-preview` | Get context row counts for preview |
+| Method | Endpoint                     | Description                         |
+| ------ | ---------------------------- | ----------------------------------- |
+| `GET`  | `/projects/:id/rpt1-preview` | Get context row counts for preview  |
 | `POST` | `/projects/:id/rpt1-predict` | Execute RPT-1 and generate 3 images |
 
 **Request Body for `/rpt1-predict`:**
+
 ```json
 {
   "lockedAttributes": { "article_color_family": "Blue" },
@@ -448,36 +449,36 @@ All routes use the `/api` prefix. Routes are organized in modular files under `a
 
 ### Group 5: Collections (`routes/collections.ts`)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/collections` | List user collections with preview images |
-| `POST` | `/collections` | Create a new collection |
-| `GET` | `/collections/:id` | Get collection details with all designs |
-| `PATCH` | `/collections/:id` | Rename a collection |
-| `DELETE` | `/collections/:id` | Delete a collection |
-| `POST` | `/collections/:id/items` | Add a design to a collection |
-| `DELETE` | `/collections/:id/items/:designId` | Remove a design from a collection |
+| Method   | Endpoint                           | Description                               |
+| -------- | ---------------------------------- | ----------------------------------------- |
+| `GET`    | `/collections`                     | List user collections with preview images |
+| `POST`   | `/collections`                     | Create a new collection                   |
+| `GET`    | `/collections/:id`                 | Get collection details with all designs   |
+| `PATCH`  | `/collections/:id`                 | Rename a collection                       |
+| `DELETE` | `/collections/:id`                 | Delete a collection                       |
+| `POST`   | `/collections/:id/items`           | Add a design to a collection              |
+| `DELETE` | `/collections/:id/items/:designId` | Remove a design from a collection         |
 
-*Note: Backend fully implemented. Frontend partially complete (see docs/CollectionMock.md)*
+_Note: Backend fully implemented. Frontend partially complete (see docs/CollectionMock.md)_
 
 ### Group 6: Design Name (`routes/design-name.ts`)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
+| Method | Endpoint                | Description                        |
+| ------ | ----------------------- | ---------------------------------- |
 | `POST` | `/generate-design-name` | LLM-based creative name generation |
 
 ### Group 7: Core Endpoints (`main.ts`)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/health` | Health check |
-| `GET` | `/taxonomy` | Product type hierarchy |
-| `GET` | `/transactions/count` | Count filtered transactions |
-| `GET` | `/articles/count` | Count distinct articles by product type |
-| `GET` | `/filters/attributes` | Dynamic filter options |
-| `GET` | `/products` | Paginated product listing with filters |
-| `POST` | `/generate-attributes` | LLM-based ontology generation |
-| `POST` | `/cache/invalidate` | Manual cache clearing (Redis) |
+| Method | Endpoint               | Description                             |
+| ------ | ---------------------- | --------------------------------------- |
+| `GET`  | `/health`              | Health check                            |
+| `GET`  | `/taxonomy`            | Product type hierarchy                  |
+| `GET`  | `/transactions/count`  | Count filtered transactions             |
+| `GET`  | `/articles/count`      | Count distinct articles by product type |
+| `GET`  | `/filters/attributes`  | Dynamic filter options                  |
+| `GET`  | `/products`            | Paginated product listing with filters  |
+| `POST` | `/generate-attributes` | LLM-based ontology generation           |
+| `POST` | `/cache/invalidate`    | Manual cache clearing (Redis)           |
 
 ---
 
@@ -511,7 +512,113 @@ All routes use the `/api` prefix. Routes are organized in modular files under `a
 
 ---
 
-## 9. Implementation Status
+## 9. ML Model Evaluation: RPT-1 vs XGBoost vs CatBoost
+
+### 9.1 Overview
+
+To validate and benchmark RPT-1's prediction quality, two gradient-boosted tree models were trained and evaluated on the same H&M transaction data using identical metrics. The evaluation used **10 PostgreSQL test tables** across two split strategies and five product types.
+
+| Model        | Type                                         | Training Data        | Test Split      |
+| ------------ | -------------------------------------------- | -------------------- | --------------- |
+| **RPT-1**    | Rule-based LLM scoring (SAP AI Core)         | N/A (inference only) | Both splits     |
+| **XGBoost**  | Gradient Boosted Trees                       | 80% random train set | 20% random test |
+| **CatBoost** | Gradient Boosted Trees (native categoricals) | 2018-2019 seasons    | 2020 season     |
+
+**Evaluation pipeline:** `packages/db/src/evaluation/generate_comparison.py`  
+**Full report:** `packages/db/src/evaluation/three_model_comparison.md`  
+**Metrics JSON:** `packages/db/src/evaluation/three_model_metrics.json`
+
+### 9.2 Feature Engineering (XGBoost & CatBoost)
+
+Both ML models were trained on article-level features extracted from the existing schema:
+
+| Feature                 | Type        | Description              |
+| ----------------------- | ----------- | ------------------------ |
+| `product_type`          | Categorical | One of 5 product types   |
+| `color_family`          | Categorical | 20+ colour families      |
+| `pattern_style`         | Categorical | Graphical appearance     |
+| `customer_segment`      | Categorical | Ladies / Men / Baby      |
+| `fabric_type_base`      | Categorical | Main fabric composition  |
+| `price` (median)        | Numerical   | Median transaction price |
+| `customer_age` (median) | Numerical   | Median buyer age         |
+| `days_on_sale`          | Numerical   | Active selling days      |
+| `transaction_count`     | Numerical   | Total sales volume       |
+
+Target: `success_score` (normalized velocity, 0–100)
+
+### 9.3 Results — Seasonal Split (2018-19 → 2020)
+
+Harder evaluation: models trained on 2018-2019 data, tested on 2020 (temporal distribution shift).
+
+| Product Type | n (test) | RPT-1 RMSE | RPT-1 R²   | CatBoost RMSE | CatBoost R² | XGBoost RMSE | XGBoost R² |
+| ------------ | -------- | ---------- | ---------- | ------------- | ----------- | ------------ | ---------- |
+| Sweater      | 1,621    | 30.74      | -0.133     | **29.42**     | **-0.038**  | 30.53        | -0.117     |
+| Dress        | 3,788    | 29.55      | -0.048     | **28.20**     | **+0.046**  | 29.23        | -0.025     |
+| T-shirt      | 847      | 30.68      | -0.127     | **28.71**     | **+0.013**  | 29.46        | -0.039     |
+| Trousers     | 2,238    | 29.65      | -0.054     | **28.62**     | **+0.018**  | 28.74        | +0.010     |
+| Blouse       | 1,799    | 29.82      | -0.066     | **29.03**     | **-0.010**  | 29.83        | -0.066     |
+| **Average**  | —        | **30.09**  | **-0.086** | **28.80**     | **+0.006**  | **29.56**    | **-0.047** |
+
+**Key finding:** All models struggle with temporal shift. CatBoost's native categorical handling gives it a consistent R² advantage (~+0.08 over RPT-1). All models maintain strong NDCG (0.92–0.93).
+
+### 9.4 Results — Random 80/20 Split
+
+Fairer evaluation: random 80/20 split preserves distribution across seasons.
+
+| Product Type | n (test) | RPT-1 RMSE | RPT-1 R²   | XGBoost RMSE | XGBoost R² | CatBoost RMSE | CatBoost R² |
+| ------------ | -------- | ---------- | ---------- | ------------ | ---------- | ------------- | ----------- |
+| Sweater      | 572      | 27.43      | +0.101     | **24.80**    | **+0.264** | 24.76         | +0.267      |
+| Dress        | 1,069    | 28.28      | +0.042     | 25.02        | +0.250     | **25.03**     | **+0.250**  |
+| T-shirt      | 280      | 26.15      | +0.185     | **23.85**    | **+0.322** | 24.51         | +0.284      |
+| Trousers     | 649      | 30.10      | -0.084     | **25.81**    | **+0.203** | 25.99         | +0.192      |
+| Blouse       | 559      | 27.11      | +0.121     | 24.31        | +0.293     | **24.28**     | **+0.295**  |
+| **Average**  | —        | **27.81**  | **+0.073** | **24.76**    | **+0.266** | **24.91**     | **+0.258**  |
+
+**Key finding:** On a fair split, both XGBoost and CatBoost achieve R²≈0.26 vs RPT-1's R²≈0.07 — a **3.6× improvement** in explained variance.
+
+### 9.5 NDCG (Ranking Quality) Summary
+
+NDCG measures how well each model ranks articles by their actual success score. Values closer to 1.0 are better.
+
+| Split                   | RPT-1      | XGBoost | CatBoost   |
+| ----------------------- | ---------- | ------- | ---------- |
+| Seasonal (2018-19→2020) | 0.9225     | 0.9232  | **0.9243** |
+| Random 80/20            | **0.9497** | 0.9461  | 0.9449     |
+
+**Key finding:** All three models achieve near-identical NDCG (>0.92). RPT-1 scores slightly higher on the 80/20 random split, suggesting its LLM-based scoring is highly competitive for _ranking_ but less precise for _absolute score regression_.
+
+### 9.6 Key Insights
+
+1. **Regression vs Ranking Trade-off:** RPT-1 is optimized for ranking (NDCG ≈ 0.95) but produces near-random absolute score regression on a seasonal split (R² ≈ -0.09). ML models learn the distributional patterns that LLM attribute scoring misses.
+
+2. **Temporal Distribution Shift:** The 2020 season shows meaningfully different popularity patterns from 2018-2019. All models degrade on the seasonal split. This is an inherent property of fashion data and not a model deficiency.
+
+3. **CatBoost Advantage on Categoricals:** CatBoost's native handling of high-cardinality categorical features (colour families, fabric types) provides consistent R² gains of +0.08 over RPT-1 even on the hard seasonal split.
+
+4. **XGBoost on Random Split:** XGBoost achieves the best R² for T-shirts (+0.322) and Trousers (+0.203) on the fair 80/20 split, demonstrating strong performance when train/test distributions match.
+
+5. **Business Recommendations:**
+   - Use **RPT-1** for inverse design generation (attribute prediction) — its strength is semantic reasoning about design attributes, not raw velocity regression.
+   - Use **XGBoost/CatBoost** as complementary tools for _retrospective_ success-score estimation and buyer analytics.
+   - For future work, a **hybrid approach** (RPT-1 attributes as ML features) may capture both semantic and distributional signals.
+
+### 9.7 Generated Artefacts
+
+| File                                                           | Description                                              |
+| -------------------------------------------------------------- | -------------------------------------------------------- |
+| `packages/db/src/evaluation/three_model_comparison.md`         | Full markdown report with all tables and charts          |
+| `packages/db/src/evaluation/three_model_metrics.json`          | Raw metrics JSON for all models × splits × product types |
+| `packages/db/src/evaluation/charts/overall_heatmap.png`        | Model × metric summary heatmap                           |
+| `packages/db/src/evaluation/charts/r2_comparison.png`          | R² grouped bar chart by product type                     |
+| `packages/db/src/evaluation/charts/rmse_comparison.png`        | RMSE grouped bar chart                                   |
+| `packages/db/src/evaluation/charts/ndcg_comparison.png`        | NDCG grouped bar chart                                   |
+| `packages/db/src/evaluation/charts/error_dist_seasonal.png`    | Violin plot of absolute errors (seasonal)                |
+| `packages/db/src/evaluation/charts/error_dist_random80_20.png` | Violin plot of absolute errors (80/20)                   |
+| `packages/db/src/evaluation/generate_comparison.py`            | Reproducible comparison script                           |
+
+---
+
+## 10. Implementation Status
 
 ### All Phases Complete
 

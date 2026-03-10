@@ -65,3 +65,7 @@ tmp/
 
 PA2/
 packages/db/src/evaluation/
+
+Fashion-Trend-Alchemist-Blog/
+
+packages/db/migrations/
