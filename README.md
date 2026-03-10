@@ -1,12 +1,66 @@
-# Fashion Trend Alchemist
+<div align="center">
+  <img src="docs/Graphics&Photos/FTA-Title.png" alt="Fashion Trend Alchemist" width="100%" style="max-width: 800px; border-radius: 8px;"/>
+  
+  <p align="center">
+    <strong>AI-Powered Inverse Design Workstation for Fashion Analytics</strong><br/>
+    <em>Leveraging SAP AI Core, SAP Kyma, and Enterprise AI to predict future best-sellers</em>
+  </p>
+  
+  <p align="center">
+    <a href="#about">About</a> •
+    <a href="#system-visualization">System Visualization</a> •
+    <a href="#architecture">Architecture</a> •
+    <a href="#getting-started">Getting Started</a> •
+    <a href="#features--screenshots">Features</a> •
+    <a href="#sap-technology-integration">SAP Technologies</a> •
+    <a href="#deployment">Deployment</a> •
+    <a href="#documentation">Documentation</a>
+  </p>
+  
+  <p align="center">
+    <img src="https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white"/>
+    <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB"/>
+    <img src="https://img.shields.io/badge/SAP_UI5-0FAAFF?style=for-the-badge&logo=sap&logoColor=white"/>
+    <img src="https://img.shields.io/badge/SAP_Kyma-0FAAFF?style=for-the-badge&logo=sap&logoColor=white"/>
+    <img src="https://img.shields.io/badge/SAP_AI_Core-0FAAFF?style=for-the-badge&logo=sap&logoColor=white"/>
+    <img src="https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white"/>
+    <img src="https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white"/>
+  </p>
+</div>
 
-A TypeScript-based AI-powered fashion analytics platform for analyzing product trends and generating design attributes for future best-sellers.
+---
 
-## Project Status: Complete
+# Table of Contents
 
-**All development phases are complete.** This application is a fully functional AI-powered inverse design workstation.
+- [About](#about)
+- [System Visualization](#system-visualization)
+- [Architecture](#architecture)
+  - [Technical Architecture](#technical-architecture)
+  - [Monorepo Structure](#monorepo-structure)
+  - [Technology Stack](#technology-stack)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Quick Setup](#quick-setup)
+- [Features & Screenshots](#features--screenshots)
+- [SAP Technology Integration](#sap-technology-integration)
+- [Database Schema](#database-schema)
+- [API Reference](#api-reference)
+- [Deployment](#deployment)
+- [User Workflows](#user-workflows)
+- [Documentation](#documentation)
+- [Troubleshooting](#troubleshooting)
 
-### Implemented Features
+---
+
+# About
+
+**Fashion Trend Alchemist** is a TypeScript-based AI-powered fashion analytics platform that combines historical sales data analysis with cutting-edge machine learning to generate design attributes for future best-sellers. Built on SAP's enterprise technology stack, it provides a complete inverse design workstation for fashion professionals.
+
+## Project Status
+
+✅ **All development phases are complete.** This application is a fully functional AI-powered inverse design workstation.
+
+**Implemented Features:**
 
 - **Phase 1**: Product Analysis - Taxonomy browsing, context builder with advanced filtering
 - **Phase 2**: LLM-based Attribute Enrichment - Vision LLM extracts structured attributes from images
@@ -15,9 +69,23 @@ A TypeScript-based AI-powered fashion analytics platform for analyzing product t
 
 ---
 
-## Architecture
+# System Visualization
 
-### Monorepo Structure
+![System Visualization](docs/Graphics&Photos/FTA_Visualization.png)
+
+_Complete workflow from product selection through AI-powered design generation_
+
+---
+
+# Architecture
+
+## Technical Architecture
+
+![Technical Architecture](docs/Graphics&Photos/FTA_TechnicalArchitecture.png)
+
+_System architecture showing the integration of frontend, backend, AI services, and data storage layers_
+
+## Monorepo Structure
 
 ```
 fashion-trend-alchemist/
@@ -72,31 +140,31 @@ fashion-trend-alchemist/
 └── docs/                 # Documentation
 ```
 
-### Technology Stack
+## Technology Stack
 
-| Layer | Technology | Purpose |
-|-------|------------|---------|
-| **Frontend** | React 18 + Vite | SPA Framework |
-| **UI Library** | SAP UI5 Web Components | Enterprise Fiori design |
-| **State** | TanStack Query | Async server state management |
-| **Backend** | Node.js 18+ with Fastify | High-throughput API server |
-| **Database** | PostgreSQL 16 | Relational DB with JSONB support |
-| **ORM** | Drizzle ORM 0.29.5 | Type-safe SQL queries |
-| **Caching** | Redis | Optional, 15-30x performance boost |
-| **AI - Text** | OpenAI API | LLM for ontology and name generation |
-| **AI - Vision** | LiteLLM Proxy | Vision LLM for data enrichment |
-| **AI - Prediction** | SAP AI Core RPT-1 | Statistical inference engine |
-| **AI - Images** | SAP AI Core Z-Image Turbo | Product image generation |
-| **Storage** | SeaweedFS/S3 | Distributed file storage |
-| **Package Manager** | pnpm (workspaces) | Monorepo management |
-| **Language** | TypeScript (strict) | Full-stack type safety |
-| **Deployment** | SAP Kyma | Kubernetes-based cloud platform |
+| Layer               | Technology                | Purpose                              |
+| ------------------- | ------------------------- | ------------------------------------ |
+| **Frontend**        | React 18 + Vite           | SPA Framework                        |
+| **UI Library**      | SAP UI5 Web Components    | Enterprise Fiori design              |
+| **State**           | TanStack Query            | Async server state management        |
+| **Backend**         | Node.js 18+ with Fastify  | High-throughput API server           |
+| **Database**        | PostgreSQL 16             | Relational DB with JSONB support     |
+| **ORM**             | Drizzle ORM 0.29.5        | Type-safe SQL queries                |
+| **Caching**         | Redis                     | Optional, 15-30x performance boost   |
+| **AI - Text**       | OpenAI API                | LLM for ontology and name generation |
+| **AI - Vision**     | LiteLLM Proxy             | Vision LLM for data enrichment       |
+| **AI - Prediction** | SAP AI Core RPT-1         | Statistical inference engine         |
+| **AI - Images**     | SAP AI Core Z-Image Turbo | Product image generation             |
+| **Storage**         | SeaweedFS/S3              | Distributed file storage             |
+| **Package Manager** | pnpm (workspaces)         | Monorepo management                  |
+| **Language**        | TypeScript (strict)       | Full-stack type safety               |
+| **Deployment**      | SAP Kyma                  | Kubernetes-based cloud platform      |
 
 ---
 
-## Getting Started
+# Getting Started
 
-### Prerequisites
+## Prerequisites
 
 - Node.js 18+
 - pnpm 8+
@@ -105,7 +173,7 @@ fashion-trend-alchemist/
 - OpenAI API key
 - SAP AI Core credentials
 
-### Quick Setup
+## Quick Setup
 
 1. **Clone and install**
 
@@ -146,100 +214,210 @@ See [QUICKSTART.md](QUICKSTART.md) for detailed setup instructions.
 
 ---
 
-## Features
+# Features & Screenshots
 
-### 1. Home Dashboard
+This section showcases the complete user workflow from project creation to AI-generated design results.
+
+## 1. Home Dashboard
+
+![Home Dashboard](docs/Graphics&Photos/HomePage.png)
+
+**What it does:** The landing page where users can view all their projects in a table with search, pagination, and pinning capabilities (up to 3 pinned projects). The page also displays collections in a visual grid format with 2x2 image thumbnails per collection.
+
+**Key Features:**
 
 - **Projects Table**: Displays projects with status, time period, product group, and generated designs count
 - **Search & Pagination**: Filter projects by name with 5 items per page
 - **Project Pinning**: Pin up to 3 projects for quick access
-- **Project Management**: Delete projects (with automatic image cleanup), inline name editing
+- **Project Management**: Delete projects with automatic image cleanup, inline name editing
 - **Collections Grid**: Visual 2x2 image thumbnail grid per collection with preview dialog
 
-### 2. Product Selection
+---
 
-- **Taxonomy Browser**: Navigate product types organized by groups (e.g., Garment Upper Body, Shoes, Bags)
+## 2. Product Selection & Project Setup
+
+![Product Selection](docs/Graphics&Photos/ProjectCreation.png)
+
+**What it does:** Shows the initial project creation flow where users select product types from a hierarchical taxonomy browser organized by groups (e.g., Garment Upper Body, Shoes, Bags, Accessories).
+
+**Key Features:**
+
+- **Taxonomy Browser**: Navigate product types organized by groups
 - **Multi-Select**: Choose multiple product types for analysis
 - **Visual Interface**: Card-based UI with product type icons and descriptions
 - **Persistence**: Selection saved to localStorage
 
-### 3. Context Builder
+---
 
-Unified page combining filtering, preview, and project creation.
+## 3. Context Builder
 
-#### Date & Season Filtering
-- **Custom Date Range**: DD/MM format inputs with month-specific validation
-- **Season Quick Select**: Spring, Summer, Autumn, Winter buttons
-- **Cross-year Support**: Filters transactions across all years for selected dates
+![Context Builder](docs/Graphics&Photos/ContextBuild.png)
 
-#### Multi-Attribute Filtering
-- **8 Filter Categories**: Pattern/Style, Specific Color, Color Intensity, Color Family, Product Family, Customer Segment, Style Concept, Fabric Type
-- **Multi-Select Dialogs**: Checkbox-based selection with dynamic options
-- **Active Filter Count**: Visual indicator of applied filters
+**What it does:** The unified configuration hub where users define their project parameters to identify which historical products should be analyzed for trend patterns.
 
-#### Context Preview & Project Creation
-- **Real-time Preview**: See matching articles as you adjust filters
-- **Attribute Generation**: LLM-powered ontology generation for selected product types
-- **One-Click Create**: Creates project with velocity calculation (top 25 + worst 25 performers)
+**Key Features:**
 
-### 4. Project Hub
+- **Date & Season Filtering:** Custom date ranges, season quick-select buttons, cross-year support
+- **Multi-Attribute Filtering:** 8 filter categories with multi-select dialogs
+- **Context Preview:** Real-time preview showing matching article count
+- **One-Click Create:** Creates project with velocity calculation (top 25 + worst 25 performers)
 
-Main workspace with 4 tabs:
+---
 
-#### Tab 1: The Alchemist (RPT-1 Configuration)
-- **Three-Column Layout**: Locked Attributes | AI Variables (max 10) | Not Included
-- **Attribute Sources**: Article attributes (from DB) + Ontology attributes (LLM-generated)
-- **Success Score Slider**: Target performance level (0-100%)
-- **Preview Request**: Shows context summary and query structure
-- **Transmute Button**: Executes RPT-1 prediction and generates 3 images
-- **Refine Design Flow**: Pre-populate from existing design
+## 4. AI Attribute Generation
 
-#### Tab 2: Result Overview (Generated Designs)
-- **Design List**: Paginated view with search filtering
-- **Multi-Image Support**: Shows front view thumbnail
-- **Actions**: Delete, rename, click to view details
+![Ontology Generation](docs/Graphics&Photos/OntologyGeneration.png)
 
-#### Tab 3: Enhanced Table (Enrichment Monitoring)
-- **Context Items Table**: All project items with enrichment status
-- **Filter Chips**: All/Successful/Pending/Failed quick filters
-- **Dynamic Columns**: LLM-enriched attributes from ontology
-- **Image Thumbnails**: With fallback placeholder and modal viewer
+**What it does:** Dialog displaying the LLM-powered ontology generation process that creates custom attribute definitions based on the selected product types.
+
+**Key Features:**
+
+- **Automatic Schema Generation**: Uses OpenAI to generate product-specific attributes
+- **Product-Type Specific**: Different schemas for bags vs. dresses vs. shoes
+- **Real-time Feedback**: Shows generation progress
+
+---
+
+## 5. Enrichment Monitoring
+
+![Enhanced Table](docs/Graphics&Photos/EnhancedTable.png)
+
+**What it does:** Displays all context items (historical products) in an interactive table showing their enrichment status. This is where raw product images are transformed into structured data through Vision LLM processing.
+
+**Key Features:**
+
+- **Context Items Table**: All project items with enrichment status (Pending/Successful/Failed)
+- **Filter Chips**: Quick status filtering
+- **Dynamic Columns**: LLM-enriched attributes from the project ontology
 - **CSV Export**: Export all data including enriched attributes
-- **Retry Functionality**: Single item or bulk retry
-- **Real-time Updates**: 5-second polling during enrichment
+- **Retry Functionality**: Single item or bulk retry for failed enrichments
 
-#### Tab 4: Data Analysis
-- Placeholder for future analytics features
+---
 
-### 5. Design Detail Page
+## 6. The Alchemist Tab - Configuration
+
+![The Alchemist Configuration](docs/Graphics&Photos/Alchemist.png)
+
+**What it does:** The RPT-1 configuration interface where users control the inverse design process through a three-column drag-and-drop layout.
+
+**Key Features:**
+
+- **Three-Column Layout**: Locked Attributes | AI Variables (max 10) | Not Included
+- **Success Score Slider**: Target performance level (0-100%)
+- **Transmute Button**: Executes RPT-1 prediction and generates 3 images (front/back/model)
+
+---
+
+## 7. The Alchemist Tab - After Generation
+
+![Design Created](docs/Graphics&Photos/Design-Created.png)
+
+**What it does:** Shows the Alchemist interface immediately after clicking "Transmute" - displays the AI's predicted attributes alongside the image generation status.
+
+**Key Features:**
+
+- **RPT-1 Predicted Attributes**: Display of AI-recommended design features
+- **Real-time Image Generation Status**: Track progress of multi-view generation
+- **Multi-Image Tracking**: Front, back, and model view generation monitoring
+
+---
+
+## 8. Design Detail View
+
+![Design Detail](docs/Graphics&Photos/GeneratedProject.png)
+
+**What it does:** The complete design detail page showing all aspects of a generated design with multi-view images, attributes, and AI-generated marketing copy.
+
+**Key Features:**
 
 - **Multi-Image Display**: Front, back, and model/lifestyle views with thumbnail strip
 - **Collapsible Panels**: Predicted Attributes (expanded), Given Attributes (collapsed)
 - **Sales Text Panel**: AI-generated marketing copy with regeneration option
 - **Magic Name Generation**: LLM-powered creative naming
-- **Image Download**: Per-view download functionality
-- **Save to Collection**: Add design to existing or new collection
+- **Save to Collection**: Add design to existing or create new collection
 - **Refine Design**: Navigate to Alchemist tab with pre-populated attributes
-- **Real-time Polling**: Updates image generation status automatically
 
 ---
 
-## Database Schema
+# SAP Technology Integration
 
-### Core Tables
+This platform leverages multiple SAP technologies to provide enterprise-grade AI capabilities:
 
-| Table | Purpose |
-|-------|---------|
-| `articles` | Static product catalog with attributes |
-| `transactions_train` | Sales data with dates and prices |
-| `customers` | Customer demographics |
-| `projects` | User projects with scope, ontology, and enrichment status |
+<table>
+<tr>
+<td width="50%">
+
+**SAP AI Core**
+
+_Enterprise AI/ML Runtime Platform_
+
+- **RPT-1 Model**: Statistical inference engine for inverse design predictions
+- **Z-Image Turbo**: High-performance image generation service
+- **Scalable ML Workflows**: Managed AI model deployment and orchestration
+- **Enterprise Security**: Built-in compliance and data governance
+
+</td>
+<td width="50%">
+
+**SAP Kyma**
+
+_Cloud-Native Application Platform_
+
+- **Kubernetes-Based**: Scalable container orchestration
+- **Serverless Functions**: Event-driven architecture support
+- **Service Mesh**: Advanced networking and observability
+- **Multi-Cloud Ready**: Flexible deployment options
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**SAP UI5 Web Components**
+
+_Enterprise UI Framework_
+
+- **Fiori Design System**: Consistent SAP user experience
+- **Accessibility**: WCAG 2.1 AA compliant components
+- **Responsive Design**: Mobile-first approach
+- **Theme Support**: Customizable enterprise themes
+
+</td>
+<td width="50%">
+
+**SAP BTP Services**
+
+_Business Technology Platform Integration_
+
+- **XSUAA**: Authentication and authorization
+- **PostgreSQL**: Managed database service
+- **Redis**: High-performance caching layer
+- **S3-Compatible Storage**: Distributed file management
+
+</td>
+</tr>
+</table>
+
+> **Why SAP?** By leveraging SAP's enterprise technology stack, Fashion Trend Alchemist ensures production-ready scalability, security, and integration capabilities required for enterprise fashion analytics deployments.
+
+---
+
+# Database Schema
+
+## Core Tables
+
+| Table                   | Purpose                                                       |
+| ----------------------- | ------------------------------------------------------------- |
+| `articles`              | Static product catalog with attributes                        |
+| `transactions_train`    | Sales data with dates and prices                              |
+| `customers`             | Customer demographics                                         |
+| `projects`              | User projects with scope, ontology, and enrichment status     |
 | `project_context_items` | Context articles with velocity scores and enriched attributes |
-| `generated_designs` | AI-generated designs with multi-image support |
-| `collections` | User collections for organizing designs |
-| `collection_items` | Junction table linking collections and designs |
+| `generated_designs`     | AI-generated designs with multi-image support                 |
+| `collections`           | User collections for organizing designs                       |
+| `collection_items`      | Junction table linking collections and designs                |
 
-### Key JSONB Schemas
+## Key JSONB Schemas
 
 - `projects.scope_config` - Product types and filter selections
 - `projects.season_config` - Date range configuration (MM-DD format)
@@ -253,75 +431,68 @@ See [docs/DataModel.md](docs/DataModel.md) for detailed schema documentation.
 
 ---
 
-## API Reference
+# API Reference
 
-### Core Endpoints (main.ts)
+## Core Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/health` | Health check |
-| `GET` | `/api/taxonomy` | Product type hierarchy |
-| `GET` | `/api/filters/attributes` | Dynamic filter options |
-| `GET` | `/api/products` | Paginated product list |
+| Method | Endpoint                   | Description             |
+| ------ | -------------------------- | ----------------------- |
+| `GET`  | `/health`                  | Health check            |
+| `GET`  | `/api/taxonomy`            | Product type hierarchy  |
+| `GET`  | `/api/filters/attributes`  | Dynamic filter options  |
+| `GET`  | `/api/products`            | Paginated product list  |
 | `POST` | `/api/generate-attributes` | LLM ontology generation |
 
-### Project Routes (routes/projects.ts)
+## Project Routes
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/projects` | List all projects |
-| `POST` | `/api/projects` | Create new project |
-| `GET` | `/api/projects/:id` | Get project by ID |
-| `DELETE` | `/api/projects/:id` | Delete project and images |
-| `PATCH` | `/api/projects/:id/pin` | Toggle pin status |
-| `GET` | `/api/projects/:id/preview-context` | Calculate velocity scores |
-| `POST` | `/api/projects/:id/lock-context` | Lock context and create project |
-| `GET` | `/api/projects/:id/generated-designs` | List designs for project |
-| `DELETE` | `/api/projects/:projectId/generated-designs/:designId` | Delete design |
-| `PATCH` | `/api/projects/:projectId/generated-designs/:designId` | Update design |
-| `GET` | `/api/projects/:projectId/generated-designs/:designId/image-status` | Get image generation status |
-| `POST` | `/api/projects/:projectId/generated-designs/:designId/regenerate-sales-text` | Regenerate sales text |
+| Method   | Endpoint                                                                     | Description                     |
+| -------- | ---------------------------------------------------------------------------- | ------------------------------- |
+| `GET`    | `/api/projects`                                                              | List all projects               |
+| `POST`   | `/api/projects`                                                              | Create new project              |
+| `GET`    | `/api/projects/:id`                                                          | Get project by ID               |
+| `DELETE` | `/api/projects/:id`                                                          | Delete project and images       |
+| `PATCH`  | `/api/projects/:id/pin`                                                      | Toggle pin status               |
+| `GET`    | `/api/projects/:id/preview-context`                                          | Calculate velocity scores       |
+| `POST`   | `/api/projects/:id/lock-context`                                             | Lock context and create project |
+| `GET`    | `/api/projects/:id/generated-designs`                                        | List designs for project        |
+| `DELETE` | `/api/projects/:projectId/generated-designs/:designId`                       | Delete design                   |
+| `PATCH`  | `/api/projects/:projectId/generated-designs/:designId`                       | Update design                   |
+| `GET`    | `/api/projects/:projectId/generated-designs/:designId/image-status`          | Get image generation status     |
+| `POST`   | `/api/projects/:projectId/generated-designs/:designId/regenerate-sales-text` | Regenerate sales text           |
 
-### Enrichment Routes (routes/enrichment.ts)
+## Enrichment Routes
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/projects/:id/start-enrichment` | Start Vision LLM enrichment |
-| `GET` | `/api/projects/:id/enrichment-progress` | SSE for real-time progress |
-| `GET` | `/api/projects/:id/enrichment-status` | Get current enrichment state |
-| `POST` | `/api/projects/:id/retry-enrichment` | Retry failed items |
+| Method | Endpoint                                | Description                  |
+| ------ | --------------------------------------- | ---------------------------- |
+| `POST` | `/api/projects/:id/start-enrichment`    | Start Vision LLM enrichment  |
+| `GET`  | `/api/projects/:id/enrichment-progress` | SSE for real-time progress   |
+| `GET`  | `/api/projects/:id/enrichment-status`   | Get current enrichment state |
+| `POST` | `/api/projects/:id/retry-enrichment`    | Retry failed items           |
 
-### RPT-1 Routes (routes/rpt1.ts)
+## RPT-1 Routes
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/projects/:id/rpt1-preview` | Get context row counts |
+| Method | Endpoint                         | Description                       |
+| ------ | -------------------------------- | --------------------------------- |
+| `GET`  | `/api/projects/:id/rpt1-preview` | Get context row counts            |
 | `POST` | `/api/projects/:id/rpt1-predict` | Execute RPT-1 and generate images |
 
-### Collections Routes (routes/collections.ts)
+## Collections Routes
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/collections` | List user collections |
-| `POST` | `/api/collections` | Create collection |
-| `GET` | `/api/collections/:id` | Get collection details |
-| `PATCH` | `/api/collections/:id` | Rename collection |
-| `DELETE` | `/api/collections/:id` | Delete collection |
-| `POST` | `/api/collections/:id/items` | Add design to collection |
+| Method   | Endpoint                               | Description                   |
+| -------- | -------------------------------------- | ----------------------------- |
+| `GET`    | `/api/collections`                     | List user collections         |
+| `POST`   | `/api/collections`                     | Create collection             |
+| `GET`    | `/api/collections/:id`                 | Get collection details        |
+| `PATCH`  | `/api/collections/:id`                 | Rename collection             |
+| `DELETE` | `/api/collections/:id`                 | Delete collection             |
+| `POST`   | `/api/collections/:id/items`           | Add design to collection      |
 | `DELETE` | `/api/collections/:id/items/:designId` | Remove design from collection |
-
-### Other Routes
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/generate-design-name` | LLM-based creative naming |
-| `GET` | `/api/projects/:id/context-items` | Get context items with status |
 
 ---
 
-## Deployment
+# Deployment
 
-### Local Development
+## Local Development
 
 ```bash
 # API Server (port 3001)
@@ -334,7 +505,7 @@ cd apps/web && pnpm run dev
 docker run -d -p 6379:6379 --name fashion-redis redis:7-alpine
 ```
 
-### Kyma Deployment
+## Kyma Deployment
 
 The application deploys to SAP Kyma using a 3-container architecture:
 
@@ -346,28 +517,31 @@ See [k8s/README.md](k8s/README.md) for detailed deployment instructions.
 
 ---
 
-## User Workflows
+# User Workflows
 
-### Create a New Project
+## Create a New Project
+
 1. Home → Create New Project
 2. Product Selection → Select product types
 3. Context Builder → Configure filters, generate attributes
 4. Click "Confirm & Create Project"
 
-### Generate Designs
+## Generate Designs
+
 1. ProjectHub → Enhanced Table tab → Start enrichment
 2. The Alchemist tab → Configure locked/AI attributes
 3. Click "Transmute" to generate design
 4. Result Overview tab → View generated designs
 
-### Refine an Existing Design
+## Refine an Existing Design
+
 1. Design Detail → Click "Refine Design"
 2. Alchemist tab opens with pre-populated attributes
 3. Adjust and generate new variation
 
 ---
 
-## Documentation
+# Documentation
 
 - [QUICKSTART.md](QUICKSTART.md) - Setup and installation guide
 - [docs/PRD.md](docs/PRD.md) - Product requirements document
@@ -376,13 +550,14 @@ See [k8s/README.md](k8s/README.md) for detailed deployment instructions.
 - [docs/image-prompt-system-design.md](docs/image-prompt-system-design.md) - Image generation prompt system
 - [docs/prompt-templates-by-product-group.md](docs/prompt-templates-by-product-group.md) - Prompt templates
 - [k8s/README.md](k8s/README.md) - Kyma deployment guide
-- [docs/FUTURE_IMPROVEMENTS.md](docs/FUTURE_IMPROVEMENTS.md) - Code quality improvements for future development
+- [docs/FUTURE_IMPROVEMENTS.md](docs/FUTURE_IMPROVEMENTS.md) - Code quality improvements
 
 ---
 
-## Troubleshooting
+# Troubleshooting
 
-### Database Connection
+## Database Connection
+
 ```bash
 # Test connection
 psql -h localhost -p 5432 -U postgres -d fashion_db
@@ -391,22 +566,18 @@ psql -h localhost -p 5432 -U postgres -d fashion_db
 curl http://localhost:3001/health
 ```
 
-### Redis Cache
+## Redis Cache
+
 ```bash
 redis-cli ping
 redis-cli info stats
 ```
 
-### Image Generation
+## Image Generation
+
 - Verify S3 credentials in `.env`
 - Check SAP AI Core credentials
 - Review backend logs for errors
-
----
-
-## License
-
-[License Type] - See LICENSE file for details
 
 ---
 

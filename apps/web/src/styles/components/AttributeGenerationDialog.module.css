@@ -145,6 +145,32 @@
   margin-bottom: 1rem;
 }
 
+.attributesHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.attributesHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.hiddenFileInput {
+  display: none;
+}
+
+.uploadErrorMessage {
+  color: var(--sapNegativeColor);
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: var(--sapErrorBackground);
+  border: 1px solid var(--sapErrorBorderColor);
+  border-radius: 0.25rem;
+}
+
 .loadingContainer {
   display: flex;
   justify-content: center;

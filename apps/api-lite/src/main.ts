@@ -25,6 +25,7 @@ import { cache, CACHE_TTL } from './services/cache.js';
 
 const fastify = Fastify({
   logger: true,
+  bodyLimit: 52428800, // 50MB limit to support large project payloads (e.g., 2000 products)
 });
 
 // Enable CORS for web app

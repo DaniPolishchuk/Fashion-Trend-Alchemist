@@ -37,6 +37,16 @@ export const TEXT = {
   BUTTON_REGENERATE: 'Regenerate',
   BUTTON_ADD_ATTRIBUTE: 'Add Attribute',
   BUTTON_GOT_IT: 'Got it',
+  BUTTON_DOWNLOAD: 'Download',
+  BUTTON_UPLOAD: 'Upload',
+
+  // Ontology Upload/Download
+  ERROR_INVALID_JSON: 'Invalid JSON format',
+  ERROR_INVALID_STRUCTURE: 'Invalid ontology structure',
+  ERROR_EMPTY_ONTOLOGY: 'Empty ontology',
+
+  // File Input
+  FILE_ACCEPT: '.json,application/json',
 
   // Configuration Panel
   SECTION_CONFIG_SCOPE: 'Configuration Scope',
@@ -105,6 +115,8 @@ export const ICONS = {
   AI: 'ai',
   DECLINE: 'decline',
   DA: 'da',
+  DOWNLOAD: 'download',
+  UPLOAD: 'upload',
 } as const;
 
 // ==================== SIZES ====================

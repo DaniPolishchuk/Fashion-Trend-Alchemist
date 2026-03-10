@@ -54,6 +54,20 @@ export const API_LIMITS = {
 } as const;
 
 /**
+ * Payload size limits for request validation
+ */
+export const PAYLOAD_LIMITS = {
+  /** Maximum request body size in bytes (50MB) */
+  MAX_BODY_SIZE: 50 * 1024 * 1024,
+  /** Maximum number of products in lock-context request */
+  MAX_LOCK_CONTEXT_ITEMS: 2000,
+  /** Minimum number of products in lock-context request */
+  MIN_LOCK_CONTEXT_ITEMS: 3,
+  /** Maximum project name length */
+  MAX_PROJECT_NAME_LENGTH: 255,
+} as const;
+
+/**
  * Cache TTL Configuration
  */
 export const CACHE_TTL_MS = {
