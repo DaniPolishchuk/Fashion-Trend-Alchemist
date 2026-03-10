@@ -96,15 +96,23 @@ jobs:
       - name: Configure Kubernetes
         run: |
           mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG_BASE64 }}" | base64 -d > ~/.kube/config
+          printf '%s' "${{ secrets.KUBECONFIG_BASE64 }}" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
+
+      - name: Debug kubeconfig
+        run: |
+          echo "Kubeconfig file size: $(wc -c < ~/.kube/config) bytes"
+          echo "Kubeconfig structure:"
+          grep -E '^\S' ~/.kube/config || echo "ERROR: kubeconfig appears empty or malformed"
+          echo "Current context: $(kubectl config current-context 2>&1)"
+          echo "Cluster server: $(kubectl config view -o jsonpath='{.clusters[0].cluster.server}' 2>&1)"
 
       - name: Verify cluster connection
         run: |
-          echo "## 🔌 Cluster Connection" >> $GITHUB_STEP_SUMMARY
+          echo "## Cluster Connection" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          kubectl cluster-info
           echo "Connected to Kubernetes cluster" >> $GITHUB_STEP_SUMMARY
-          kubectl cluster-info >> $GITHUB_STEP_SUMMARY 2>&1 || true
 
       - name: Restart Application Pods
         run: |
