@@ -72,31 +72,31 @@ export function AttributeGenerationDialog({
   // Local state for managing attributes
   const [attributes, setAttributes] = useState<any>({});
   const [infoPopupOpen, setInfoPopupOpen] = useState(false);
-  const [hasInitialized, setHasInitialized] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const lastSyncedAttributesRef = useRef<any>(null);
 
   // Custom hooks
   const defaultCategory = selectedTypes[0] || 'General';
   const attributeEditor = useAttributeEditor(attributes, setAttributes, defaultCategory);
   const optionsManager = useOptionsManager(attributes, setAttributes);
 
-  // Sync generated attributes to local state when dialog opens or after regeneration
+  // Sync generated attributes to local state when new data arrives (initial or after regeneration)
   useEffect(() => {
-    if (generatedAttributes && !hasInitialized) {
+    if (generatedAttributes && !attributesLoading && generatedAttributes !== lastSyncedAttributesRef.current) {
       setAttributes(generatedAttributes);
-      setHasInitialized(true);
+      lastSyncedAttributesRef.current = generatedAttributes;
     }
-  }, [generatedAttributes, hasInitialized]);
+  }, [generatedAttributes, attributesLoading]);
 
-  // Reset initialization flag when dialog closes or when regeneration starts
+  // Reset sync tracking when dialog closes
   useEffect(() => {
-    if (!open || attributesLoading) {
-      setHasInitialized(false);
+    if (!open) {
+      lastSyncedAttributesRef.current = null;
     }
-  }, [open, attributesLoading]);
+  }, [open]);
 
   // Get formatted attribute list
   const attributesList = flattenAttributes(attributes);
